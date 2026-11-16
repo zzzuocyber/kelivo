@@ -51,6 +51,7 @@ import '../api/providers/google_gemini.dart';
 import '../api/providers/openai/responses_history.dart';
 import '../../models/message_part.dart';
 import '../../models/conversation.dart';
+import 'conversation_background.dart';
 import '../../models/conversation_mcp_settings.dart';
 import '../../models/workspace_binding.dart';
 import '../../../utils/sandbox_path_resolver.dart';
@@ -2194,12 +2195,18 @@ class ChatService extends ChangeNotifier {
     _temporaryImageSettings.remove(id);
     _temporaryCompressionSettings.remove(id);
     if (!_initialized) return;
+    // 对话自己的背景图跟着一起清掉，避免留下孤儿文件。
+    final conversationBackground = ConversationBackground.pathOf(
+      getConversation(id),
+    );
     _contextCompression?.forget(id);
 
     final deleted =
         await _deleteDraftConversation(id) ||
         await _deletePersistedConversation(id);
     if (!deleted) return;
+
+    await ConversationBackground.deleteManagedFile(conversationBackground);
 
     // Delete orphaned files (not referenced by any remaining conversation)
     await _cleanupOrphanUploads();

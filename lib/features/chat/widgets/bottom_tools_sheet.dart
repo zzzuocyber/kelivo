@@ -9,6 +9,9 @@ import '../../../core/models/skills_binding.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../core/services/chat/conversation_background.dart';
+import '../../../shared/widgets/snackbar.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/services/haptics.dart';
 import '../../../core/services/skills/skills_service.dart';
 import '../../../icons/lucide_adapter.dart';
@@ -292,6 +295,56 @@ class _LearningAndClearSectionState extends State<_LearningAndClearSection> {
     );
   }
 
+  Future<void> _pickConversationBackground() async {
+    final id = widget.conversationId;
+    if (id == null) return;
+    final chat = context.read<ChatService>();
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        imageQuality: 85,
+      );
+      if (file == null || !mounted) return;
+      await ConversationBackgroundService(chat).setImage(id, file.path);
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        message: '已设置对话背景图',
+        type: NotificationType.success,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        message: '设置失败：$error',
+        type: NotificationType.error,
+      );
+    }
+  }
+
+  Future<void> _clearConversationBackground() async {
+    final id = widget.conversationId;
+    if (id == null) return;
+    final chat = context.read<ChatService>();
+    if (ConversationBackground.pathOf(chat.getConversation(id)) == null) {
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        message: '当前没有对话背景图',
+        type: NotificationType.info,
+      );
+      return;
+    }
+    await ConversationBackgroundService(chat).clear(id);
+    if (!mounted) return;
+    showAppSnackBar(
+      context,
+      message: '已删除对话背景图，恢复助手背景',
+      type: NotificationType.success,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -300,6 +353,11 @@ class _LearningAndClearSectionState extends State<_LearningAndClearSection> {
     final injections = context.watch<InstructionInjectionProvider>();
     final skills = context.watch<SkillsService>();
     final chat = context.watch<ChatService>();
+    final followsAssistant = ConversationBackground.followsAssistant(
+      widget.conversationId == null
+          ? null
+          : chat.getConversation(widget.conversationId!),
+    );
     final assistant = _assistant(listen: true);
     final hasOcrModel =
         settings.ocrModelProvider != null && settings.ocrModelId != null;
@@ -455,6 +513,37 @@ class _LearningAndClearSectionState extends State<_LearningAndClearSection> {
           },
           trailing: chevron,
         ),
+        if (widget.conversationId != null) ...[
+          const SizedBox(height: 8),
+          ToolsSheetRow(
+            icon: Lucide.Image,
+            label: '对话背景图',
+            subtitle: followsAssistant ? '跟随助手背景' : '使用本对话的图片',
+            onTap: () {
+              Haptics.light();
+              _pickConversationBackground();
+            },
+            onLongPress: () {
+              Haptics.light();
+              _clearConversationBackground();
+            },
+            trailing: Transform.scale(
+              scale: 0.78,
+              child: Switch.adaptive(
+                value: followsAssistant,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (value) {
+                  Haptics.light();
+                  if (value) {
+                    _clearConversationBackground();
+                  } else {
+                    _pickConversationBackground();
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

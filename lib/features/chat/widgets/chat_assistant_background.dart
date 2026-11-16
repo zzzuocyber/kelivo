@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../utils/sandbox_path_resolver.dart';
+import 'chat_background_resolver.dart';
 import 'chat_gradient_background.dart';
 import 'frosted/chat_frosted_backdrop.dart';
 
@@ -41,7 +42,10 @@ class ChatAssistantBackground extends StatelessWidget {
     if (assistant?.useGradientBackground ?? false) {
       return ChatGradientBackground(pinned: pinnedToBackdrop);
     }
-    final wallpaper = _buildWallpaper(context, assistant?.background);
+    final wallpaper = _buildWallpaper(
+      context,
+      resolveChatBackgroundPath(context),
+    );
     if (!pinnedToBackdrop) return wallpaper;
 
     final scope = ChatFrostedBackdropScope.maybeOf(context)!;

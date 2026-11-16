@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/providers/assistant_provider.dart';
 import '../../../../core/providers/settings_provider.dart';
+import '../chat_background_resolver.dart';
 import '../../../../utils/sandbox_path_resolver.dart';
 import '../chat_gradient_background.dart';
 
@@ -102,9 +103,8 @@ class ChatBackdropSpec {
     final size = MediaQuery.sizeOf(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final disableAnimations = MediaQuery.disableAnimationsOf(context);
-    final backgroundRaw = context.select<AssistantProvider, String>(
-      (p) => (p.currentAssistant?.background ?? '').trim(),
-    );
+    // 对话自定义背景优先，其次助手背景。
+    final backgroundRaw = resolveChatBackgroundPath(context);
     final useGradientBackground = context.select<AssistantProvider, bool>(
       (p) => p.currentAssistant?.useGradientBackground ?? false,
     );
