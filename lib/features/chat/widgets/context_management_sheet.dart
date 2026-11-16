@@ -20,6 +20,7 @@ class ContextManagementSheet extends StatelessWidget {
     this.onImages,
     this.onOperations,
     this.onPurgeImages,
+    this.onPurgeToolImages,
   });
 
   final VoidCallback? onCompress;
@@ -30,8 +31,11 @@ class ContextManagementSheet extends StatelessWidget {
   final VoidCallback? onImages;
   final VoidCallback? onOperations;
 
-  /// 清空本对话全部图片（图片片段），消息与卡片保留。
+  /// 清空本对话全部聊天图片（消息里的图片片段），消息与卡片保留。
   final VoidCallback? onPurgeImages;
+
+  /// 清空本对话全部工具图片（工具卡片里的图片地址）。
+  final VoidCallback? onPurgeToolImages;
 
   @override
   Widget build(BuildContext context) {
@@ -105,10 +109,19 @@ class ContextManagementSheet extends StatelessWidget {
                   if (onPurgeImages != null)
                     ContextActionRow(
                       icon: Lucide.ImageOff,
-                      label: '清空全部图片',
+                      label: '清空全部聊天图片',
                       onTap: () {
                         Haptics.light();
                         onPurgeImages?.call();
+                      },
+                    ),
+                  if (onPurgeToolImages != null)
+                    ContextActionRow(
+                      icon: Lucide.ImageOff,
+                      label: '清空全部工具图片',
+                      onTap: () {
+                        Haptics.light();
+                        onPurgeToolImages?.call();
                       },
                     ),
                   ContextActionRow(
