@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../database/business_preferences.dart';
 import '../models/world_book.dart';
+import '../models/world_book_grouping.dart';
 import '../services/world_book_store.dart';
 
 class WorldBookProvider with ChangeNotifier {
@@ -44,10 +45,20 @@ class WorldBookProvider with ChangeNotifier {
 
   List<WorldBook> activeBooksFor(String? assistantId, {List<String>? bookIds}) {
     final ids = (bookIds ?? activeBookIdsFor(assistantId)).toSet();
-    return _books
+    final selected = _books
         .where((book) => book.enabled && ids.contains(book.id))
         .toList(growable: false);
+    // Injection order follows the visible grouping: group label first, then the
+    // order dragged inside each group. Priority still wins over this (entries
+    // are sorted by priority later).
+    return orderWorldBooksByGroup(selected);
   }
+
+  /// Books split by group label, in display order.
+  Map<String, List<WorldBook>> get groupedBooks => groupWorldBooks(_books);
+
+  /// Group labels in display order. Ungrouped (empty) comes first.
+  List<String> get groupNames => worldBookGroupNames(_books);
 
   bool isBookCollapsed(String id) => _collapsedBooks[id] ?? false;
 
@@ -164,6 +175,46 @@ class WorldBookProvider with ChangeNotifier {
         notifyListeners();
         await _store.save(_books);
       });
+
+  /// Reorders books inside one group only, mirroring the instruction
+  /// injection behaviour: the group buckets keep their stored order and only
+  /// the target group's own slots are rewritten.
+  Future<void> reorderBooksWithinGroup({
+    required String group,
+    required int oldIndex,
+    required int newIndex,
+  }) => _serializeBookOperation(() async {
+    if (_books.isEmpty) return;
+    final target = normalizeWorldBookGroup(group);
+    final indices = <int>[];
+    for (int i = 0; i < _books.length; i++) {
+      if (normalizeWorldBookGroup(_books[i].group) == target) indices.add(i);
+    }
+    if (indices.isEmpty) return;
+    if (oldIndex < 0 || oldIndex >= indices.length) return;
+    if (newIndex < 0 || newIndex > indices.length) return;
+
+    final list = List<WorldBook>.from(_books);
+    final moved = list.removeAt(indices[oldIndex]);
+
+    // Recompute the group slots after removal.
+    final after = <int>[];
+    for (int i = 0; i < list.length; i++) {
+      if (normalizeWorldBookGroup(list[i].group) == target) after.add(i);
+    }
+
+    final int insertAt;
+    if (newIndex >= after.length) {
+      insertAt = after.isEmpty ? list.length : after.last + 1;
+    } else {
+      insertAt = after[newIndex];
+    }
+    list.insert(insertAt, moved);
+
+    _books = list;
+    notifyListeners();
+    await _store.save(_books);
+  });
 
   Future<void> reorderEntries({
     required String bookId,

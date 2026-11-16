@@ -354,6 +354,7 @@ class _DesktopWorldBookPaneState extends State<DesktopWorldBookPane> {
                           (current) => current.copyWith(
                             name: edited.name,
                             description: edited.description,
+                            group: edited.group,
                             enabled: edited.enabled,
                           ),
                         );
@@ -1109,6 +1110,7 @@ class _WorldBookEditDialogState extends State<_WorldBookEditDialog> {
                       id: id,
                       name: _nameController.text.trim(),
                       description: _descController.text.trim(),
+                      group: base?.group ?? '',
                       enabled: _enabled,
                       entries: base?.entries ?? const <WorldBookEntry>[],
                     ),

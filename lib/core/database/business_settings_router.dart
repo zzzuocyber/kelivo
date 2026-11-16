@@ -63,6 +63,7 @@ final class BusinessKeyRegistry {
     'instruction_injection_group_collapsed_v1',
     'world_books_active_ids_by_assistant_v1',
     'world_books_collapsed_v1',
+    'world_book_group_collapsed_v1',
     'search_common_v1',
     'search_selected_v1',
     'search_enabled_v1',

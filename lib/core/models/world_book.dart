@@ -184,6 +184,11 @@ class WorldBook {
   final String id;
   final String name;
   final String description;
+
+  /// Optional free-text group label. Books sharing the same trimmed label are
+  /// shown as one group; the label also decides which group is injected first
+  /// (see `orderWorldBooksByGroup`). Empty means "ungrouped", which sorts first.
+  final String group;
   final bool enabled;
   final List<WorldBookEntry> entries;
 
@@ -193,6 +198,7 @@ class WorldBook {
     required this.id,
     this.name = '',
     this.description = '',
+    this.group = '',
     this.enabled = true,
     this.entries = const <WorldBookEntry>[],
   });
@@ -201,6 +207,7 @@ class WorldBook {
     String? id,
     String? name,
     String? description,
+    String? group,
     bool? enabled,
     List<WorldBookEntry>? entries,
   }) {
@@ -208,6 +215,7 @@ class WorldBook {
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
+      group: group ?? this.group,
       enabled: enabled ?? this.enabled,
       entries: entries ?? this.entries,
     );
@@ -217,6 +225,7 @@ class WorldBook {
     'id': id,
     'name': name,
     'description': description,
+    'group': group,
     'enabled': enabled,
     'entries': entries.map((e) => e.toJson()).toList(growable: false),
   };
@@ -233,6 +242,7 @@ class WorldBook {
       id: (json['id'] as String?) ?? '',
       name: (json['name'] as String?) ?? '',
       description: (json['description'] as String?) ?? '',
+      group: (json['group'] as String?) ?? '',
       enabled: (json['enabled'] as bool?) ?? true,
       entries: entries,
     );
