@@ -82,11 +82,6 @@ class ConversationSystemPromptButton extends StatelessWidget {
         child: button,
       );
     }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: button,
-      ),
-    );
+    return button;
   }
 }

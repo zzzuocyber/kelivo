@@ -85,6 +85,7 @@ import '../widgets/learning_prompt_sheet.dart';
 import '../widgets/scroll_nav_buttons.dart';
 import '../widgets/message_list_view.dart';
 import '../widgets/chat_input_section.dart';
+import '../widgets/conversation_note_button.dart';
 import '../widgets/conversation_system_prompt_button.dart';
 import '../widgets/chat_input_overlay_layout.dart';
 import '../widgets/chat_selection_app_bar.dart';
@@ -1417,14 +1418,33 @@ class _HomePageState extends State<HomePage>
     required EdgeInsetsGeometry dividerPadding,
   }) {
     final assistant = context.watch<AssistantProvider>().currentAssistant;
-    final promptFooter =
-        assistant?.allowConversationSystemPrompt == true &&
-            !_controller.isCurrentConversationLoading &&
-            !_controller.selecting
-        ? ConversationSystemPromptButton(
-            assistantId: assistant!.id,
-            conversationId: _controller.currentConversation?.id,
-            backgroundImageActive: _assistantBackgroundActive(context),
+    final footerVisible =
+        !_controller.isCurrentConversationLoading && !_controller.selecting;
+    final footerConversationId = _controller.currentConversation?.id;
+    final footerBackgroundActive = _assistantBackgroundActive(context);
+    final promptFooter = footerVisible
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (assistant?.allowConversationSystemPrompt == true) ...[
+                    ConversationSystemPromptButton(
+                      assistantId: assistant!.id,
+                      conversationId: footerConversationId,
+                      backgroundImageActive: footerBackgroundActive,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  ConversationNoteButton(
+                    assistantId: assistant?.id,
+                    conversationId: footerConversationId,
+                    backgroundImageActive: footerBackgroundActive,
+                  ),
+                ],
+              ),
+            ),
           )
         : null;
     final conversationId = _controller.currentConversation?.id;
