@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import '../../models/conversation.dart';
-import '../../utils/app_directories.dart';
+import '../../../utils/app_directories.dart';
 import 'chat_service.dart';
 
 /// 对话级背景图。
