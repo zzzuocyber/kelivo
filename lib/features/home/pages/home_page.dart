@@ -2312,7 +2312,9 @@ class _HomePageState extends State<HomePage>
         title: const Text('清空全部聊天图片'),
         content: Text(
           '本对话共有 $total 张聊天图片（你上传的 + AI 生成的）。\n\n'
-          '消息和卡片都会保留，只删除图片本身。删除后无法恢复。',
+          '消息和卡片都会保留，只删除图片本身。\n'
+          '工具卡片里的图片不在这里，请用下一行的「清空全部工具图片」。\n'
+          '删除后无法恢复。',
         ),
         actions: [
           TextButton(
@@ -2385,7 +2387,8 @@ class _HomePageState extends State<HomePage>
       builder: (dialogContext) => AlertDialog(
         title: const Text('清空全部工具图片'),
         content: Text(
-          '本对话共有 $total 张工具图片（工具返回的图片、浏览器缩略图）。\n\n'
+          '本对话共有 $total 张工具图片（工具返回的图片、浏览器缩略图）。\n'
+          '不含你上传的图和 AI 生成的图，那些用「清空全部聊天图片」。\n\n'
           '工具卡片和文字结果都会保留，只删除图片。删除后无法恢复。',
         ),
         actions: [
