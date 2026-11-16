@@ -19,6 +19,7 @@ class ContextManagementSheet extends StatelessWidget {
     this.draftText = '',
     this.onImages,
     this.onOperations,
+    this.onPurgeImages,
   });
 
   final VoidCallback? onCompress;
@@ -28,6 +29,9 @@ class ContextManagementSheet extends StatelessWidget {
   final String draftText;
   final VoidCallback? onImages;
   final VoidCallback? onOperations;
+
+  /// 清空本对话全部图片（图片片段），消息与卡片保留。
+  final VoidCallback? onPurgeImages;
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +101,15 @@ class ContextManagementSheet extends StatelessWidget {
                       label: l10n.imageContextTitle,
                       onTap: onImages,
                       showChevron: true,
+                    ),
+                  if (onPurgeImages != null)
+                    ContextActionRow(
+                      icon: Lucide.ImageOff,
+                      label: '清空全部图片',
+                      onTap: () {
+                        Haptics.light();
+                        onPurgeImages?.call();
+                      },
                     ),
                   ContextActionRow(
                     icon: Lucide.Eraser,
