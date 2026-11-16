@@ -1,3 +1,6 @@
+import 'package:markstream/markstream_core.dart';
+
+import 'markdown_code_spans.dart';
 import 'protected_text.dart';
 import '../core/models/assistant.dart';
 import '../core/models/assistant_regex.dart';
@@ -45,7 +48,9 @@ ProtectedText applyAssistantRegexesProtected(
   if (input.text.isEmpty || assistant == null || assistant.regexRules.isEmpty) {
     return input;
   }
-  var out = input;
+  var out = target == AssistantRegexTransformTarget.visual
+      ? withMarkdownCodeProtection(input)
+      : input;
   for (final (regex, replacement) in _activeRules(assistant, scope, target)) {
     out = out.replaceAllMapped(
       regex,
@@ -100,4 +105,23 @@ String _expandReplacement(String replacement, Match match) {
     // Return original reference if group doesn't exist
     return m.group(0)!;
   });
+}
+
+
+/// 把 Markdown 里的代码区间加入保护区。
+///
+/// 视觉正则替换出来的是 HTML 标记，代码块与行内代码按原样显示、不解析 HTML，
+/// 于是标记会变成可见的乱码。这里让所有视觉正则都跳过这些区间。
+ProtectedText withMarkdownCodeProtection(ProtectedText input) {
+  final extra = markdownCodeSpans(input.text);
+  if (extra.isEmpty) return input;
+  final ranges = <SourceSpan>[...input.ranges, ...extra]
+    ..sort((a, b) => a.start.compareTo(b.start));
+  return ProtectedText(
+    input.text,
+    ranges,
+    offsets: input.offsets,
+    beforeInsertion: input.beforeInsertion,
+    sourceMap: input.sourceMap,
+  );
 }

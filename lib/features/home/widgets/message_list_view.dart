@@ -25,6 +25,7 @@ import '../../../core/models/message_part.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/assistant_regex.dart';
 import '../../../utils/assistant_regex.dart';
+import '../../../utils/protected_text.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/selection_scroll_container.dart';
 import '../../chat/widgets/chat_message_widget.dart';
@@ -1094,12 +1095,13 @@ class _MessageListViewState extends State<MessageListView> {
     String text, {
     AssistantRegexScope scope = AssistantRegexScope.assistant,
   }) {
-    return applyAssistantRegexes(
-      text,
+    // 与渲染保持一致：代码区间不参与视觉正则。
+    return applyAssistantRegexesProtected(
+      ProtectedText(text, const []),
       assistant: widget.assistant,
       scope: scope,
       target: AssistantRegexTransformTarget.visual,
-    );
+    ).text;
   }
 
   bool _isPendingApproval({

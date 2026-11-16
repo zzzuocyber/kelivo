@@ -1608,12 +1608,13 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         assistant == null ||
         assistant.regexRules.isEmpty ||
         widget.message.isStreaming) {
-      return applyAssistantRegexes(
-        input,
+      // 生成过程中不做缓存，但仍然要保护代码区间，否则半截代码会被改写。
+      return applyAssistantRegexesProtected(
+        ProtectedText(input, const []),
         assistant: assistant,
         scope: scope,
         target: AssistantRegexTransformTarget.visual,
-      );
+      ).text;
     }
     final signature = _visualRegexSignature(assistant);
     if (signature != _visualRegexMemoSignature) {
@@ -1623,12 +1624,12 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
     if (_visualRegexMemo.length >= 8) _visualRegexMemo.clear();
     return _visualRegexMemo.putIfAbsent(
       '${scope.index}\u0000$input',
-      () => applyAssistantRegexes(
-        input,
+      () => applyAssistantRegexesProtected(
+        ProtectedText(input, const []),
         assistant: assistant,
         scope: scope,
         target: AssistantRegexTransformTarget.visual,
-      ),
+      ).text,
     );
   }
 
