@@ -2084,7 +2084,7 @@ class _UploadManager extends StatefulWidget {
   State<_UploadManager> createState() => _UploadManagerState();
 }
 
-enum _StorageImageFilter { all, chat, tool, avatar }
+enum _StorageImageFilter { all, chat, tool, avatar, temporaryBackground }
 
 enum _StorageEntrySort { newest, oldest, largest, smallest }
 
@@ -2142,10 +2142,7 @@ class _UploadManagerState extends State<_UploadManager> {
         _entries = list;
         _visibleEntries = _buildVisibleEntries();
         _loadFailure = null;
-        final paths = _visibleEntries
-            .where((e) => !e.isInUse)
-            .map((e) => e.path)
-            .toSet();
+        final paths = _visibleEntries.map((e) => e.path).toSet();
         _selected.removeWhere((p) => !paths.contains(p));
       });
     } catch (error, stack) {
@@ -2197,6 +2194,8 @@ class _UploadManagerState extends State<_UploadManager> {
         _StorageImageFilter.tool => entry.imageKind == StorageImageKind.tool,
         _StorageImageFilter.avatar =>
           entry.imageKind == StorageImageKind.avatar,
+        _StorageImageFilter.temporaryBackground =>
+          entry.imageKind == StorageImageKind.temporaryBackground,
       };
     }).toList();
 
@@ -2230,7 +2229,7 @@ class _UploadManagerState extends State<_UploadManager> {
   }
 
   void _toggleSelect(String path) {
-    if (_loading || !_visibleEntries.any((e) => e.path == path && !e.isInUse)) {
+    if (_loading || !_visibleEntries.any((e) => e.path == path)) {
       return;
     }
     setState(() {
@@ -2246,7 +2245,7 @@ class _UploadManagerState extends State<_UploadManager> {
     setState(() {
       _selected
         ..clear()
-        ..addAll(entries.where((e) => !e.isInUse).map((e) => e.path));
+        ..addAll(entries.map((e) => e.path));
     });
   }
 
@@ -2271,6 +2270,11 @@ class _UploadManagerState extends State<_UploadManager> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(l10n.storageAttachmentDeleteConfirm(count)),
+              const SizedBox(height: 8),
+              Text(
+                '标着「使用中」的图片也会一起删掉。删掉后，聊天记录里对应的图片会显示图片破损，头像与背景会变回默认样式。',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
               const SizedBox(height: 20),
               Wrap(
                 spacing: 10,
@@ -2301,6 +2305,7 @@ class _UploadManagerState extends State<_UploadManager> {
       final deleted = await StorageUsageService.deleteUploadFiles(
         pathsToDelete,
         images: widget.images,
+        force: true,
         generationActive:
             context.read<ChatService?>()?.hasTransientGeneration ?? false,
         protectedPaths:
@@ -2437,7 +2442,7 @@ class _UploadManagerState extends State<_UploadManager> {
               : l10n.storageSpaceSelectAll,
           icon: _selectMode ? Lucide.XCircle : Lucide.CheckSquare,
           backgroundColor: cs.primary,
-          enabled: !_loading && !_deleting && entries.any((e) => !e.isInUse),
+          enabled: !_loading && !_deleting && entries.isNotEmpty,
           onTap: _selectMode ? _clearSelection : () => _selectAll(entries),
         ),
         IosTileButton(
@@ -2476,7 +2481,9 @@ class _UploadManagerState extends State<_UploadManager> {
               ),
               const SizedBox(height: 8),
               Text(
-                l10n.storageAttachmentProtectedHint,
+                widget.images
+                    ? '标着「使用中」的图片也能勾选、也能删除；删掉后聊天里会显示图片破损。'
+                    : l10n.storageAttachmentProtectedHint,
                 style: TextStyle(
                   fontSize: 12.5,
                   color: cs.onSurface.withValues(alpha: 0.7),
@@ -2539,7 +2546,7 @@ class _UploadManagerState extends State<_UploadManager> {
                   selected: selected,
                   onToggle: () => _toggleSelect(e.path),
                   onTap: () {
-                    if (_selectMode && !e.isInUse) {
+                    if (_selectMode) {
                       _toggleSelect(e.path);
                     } else {
                       _openImageViewer(entries, index);
@@ -2562,7 +2569,7 @@ class _UploadManagerState extends State<_UploadManager> {
                   selected: selected,
                   fmtBytes: widget.fmtBytes,
                   onTap: () {
-                    if (_selectMode && !e.isInUse) {
+                    if (_selectMode) {
                       _toggleSelect(e.path);
                     } else {
                       _openFile(e.path);
@@ -2610,6 +2617,7 @@ class _StorageImageOrganizer extends StatelessWidget {
             (_StorageImageFilter.chat, l10n.storageSpaceImageTypeChat),
             (_StorageImageFilter.tool, l10n.storageSpaceImageTypeTool),
             (_StorageImageFilter.avatar, l10n.storageSpaceImageTypeAvatar),
+            (_StorageImageFilter.temporaryBackground, '临时背景'),
           ],
           onChanged: onImageChanged,
         ),
@@ -2807,21 +2815,25 @@ class _ImageTile extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (entry.isInUse)
+                  const Positioned(
+                    top: 6,
+                    left: 6,
+                    child: _StorageInUseLabel(),
+                  ),
                 Positioned(
                   top: 6,
                   right: 6,
-                  child: entry.isInUse
-                      ? const _StorageInUseLabel()
-                      : IosCheckbox(
-                          value: selected,
-                          size: 20,
-                          hitTestSize: 22,
-                          borderWidth: 1.6,
-                          activeColor: cs.primary,
-                          borderColor: cs.primary.withValues(alpha: 0.55),
-                          onChanged: (_) => onToggle(),
-                          enableHaptics: false,
-                        ),
+                  child: IosCheckbox(
+                    value: selected,
+                    size: 20,
+                    hitTestSize: 22,
+                    borderWidth: 1.6,
+                    activeColor: cs.primary,
+                    borderColor: cs.primary.withValues(alpha: 0.55),
+                    onChanged: (_) => onToggle(),
+                    enableHaptics: false,
+                  ),
                 ),
               ],
             ),
@@ -2897,7 +2909,7 @@ class _StorageInUseLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Tooltip(
-      message: AppLocalizations.of(context)!.storageAttachmentProtectedHint,
+      message: '这张图正被聊天记录或头像背景引用，删除后那边会显示图片破损。',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
@@ -2951,19 +2963,20 @@ class _FileRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            if (entry.isInUse)
-              const _StorageInUseLabel()
-            else
-              IosCheckbox(
-                value: selected,
-                size: 20,
-                hitTestSize: 22,
-                borderWidth: 1.6,
-                activeColor: cs.primary,
-                borderColor: cs.primary.withValues(alpha: 0.55),
-                onChanged: (_) => onToggle(),
-                enableHaptics: false,
-              ),
+            IosCheckbox(
+              value: selected,
+              size: 20,
+              hitTestSize: 22,
+              borderWidth: 1.6,
+              activeColor: cs.primary,
+              borderColor: cs.primary.withValues(alpha: 0.55),
+              onChanged: (_) => onToggle(),
+              enableHaptics: false,
+            ),
+            if (entry.isInUse) ...[
+              const SizedBox(width: 8),
+              const _StorageInUseLabel(),
+            ],
             const SizedBox(width: 10),
             Icon(
               Lucide.Paperclip,

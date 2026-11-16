@@ -53,6 +53,7 @@ Future<void> deleteSessionAttachmentCopies(
   required Directory sessionsDirectory,
   Set<String> protectedPaths = const {},
   bool generationActive = false,
+  bool force = false,
 }) => WorkspaceFileCoordinator.run(sessionsDirectory.path, () async {
   if (!await sessionsDirectory.exists()) return;
   final sources = sourcePaths
@@ -113,6 +114,7 @@ Future<void> deleteSessionAttachmentCopies(
     sessionCopies: true,
     protectedPaths: protectedPaths,
     generationActive: generationActive,
+    force: force,
   );
 });
 

@@ -21,7 +21,6 @@ import '../../chat/controllers/quote_editing_controller.dart';
 import '../../chat/widgets/quote_interaction_scope.dart';
 import '../../../core/models/quote_ref.dart';
 import '../../../core/services/chat/chat_service.dart';
-import '../../../core/services/chat/conversation_image_purge.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
@@ -2244,20 +2243,6 @@ class _HomePageState extends State<HomePage>
                       },
                     );
                   },
-            onPurgeImages: imageConversationId == null
-                ? null
-                : () async {
-                    await Navigator.of(ctx).maybePop();
-                    if (!mounted) return;
-                    await _purgeConversationImages(imageConversationId);
-                  },
-            onPurgeToolImages: imageConversationId == null
-                ? null
-                : () async {
-                    await Navigator.of(ctx).maybePop();
-                    if (!mounted) return;
-                    await _purgeConversationToolImages(imageConversationId);
-                  },
             conversationId: _controller.currentConversation?.id,
             draftText: formatQuotedMessage(
               _inputController.text,
@@ -2277,157 +2262,6 @@ class _HomePageState extends State<HomePage>
         );
       },
     );
-  }
-
-  /// 清空当前对话里的全部图片：只摘掉图片片段，消息与卡片保留。
-  Future<void> _purgeConversationImages(String conversationId) async {
-    final l10n = AppLocalizations.of(context)!;
-    final purger = ConversationImagePurger(context.read<ChatService>());
-    int total = 0;
-    try {
-      total = await purger.countChatImages(conversationId);
-    } catch (error) {
-      debugPrint('[ImagePurge] Count failed: $error');
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: '读取图片失败',
-        type: NotificationType.error,
-      );
-      return;
-    }
-    if (!mounted) return;
-    if (total == 0) {
-      showAppSnackBar(
-        context,
-        message: '本对话没有图片',
-        type: NotificationType.info,
-      );
-      return;
-    }
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('清空全部聊天图片'),
-        content: Text(
-          '本对话共有 $total 张聊天图片（你上传的 + AI 生成的）。\n\n'
-          '消息和卡片都会保留，只删除图片本身。\n'
-          '工具卡片里的图片不在这里，请用下一行的「清空全部工具图片」。\n'
-          '删除后无法恢复。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.homePageCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              '删除',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
-
-    try {
-      final result = await purger.purgeChatImages(conversationId);
-      if (!mounted) return;
-      final skipped = result.skippedStreamingMessages;
-      showAppSnackBar(
-        context,
-        message: skipped == 0
-            ? '已删除 ${result.removedImages} 张图片'
-            : '已删除 ${result.removedImages} 张图片（$skipped 条生成中的消息已跳过）',
-        type: NotificationType.success,
-      );
-    } catch (error) {
-      debugPrint('[ImagePurge] Purge failed: $error');
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: '删除失败：$error',
-        type: NotificationType.error,
-      );
-    }
-  }
-
-  /// 清空当前对话里的全部工具图片：只摘掉工具卡片里的图片地址。
-  Future<void> _purgeConversationToolImages(String conversationId) async {
-    final l10n = AppLocalizations.of(context)!;
-    final purger = ConversationImagePurger(context.read<ChatService>());
-    int total = 0;
-    try {
-      total = await purger.countToolImages(conversationId);
-    } catch (error) {
-      debugPrint('[ToolImagePurge] Count failed: $error');
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: '读取工具图片失败',
-        type: NotificationType.error,
-      );
-      return;
-    }
-    if (!mounted) return;
-    if (total == 0) {
-      showAppSnackBar(
-        context,
-        message: '本对话没有工具图片',
-        type: NotificationType.info,
-      );
-      return;
-    }
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('清空全部工具图片'),
-        content: Text(
-          '本对话共有 $total 张工具图片（工具返回的图片、浏览器缩略图）。\n'
-          '不含你上传的图和 AI 生成的图，那些用「清空全部聊天图片」。\n\n'
-          '工具卡片和文字结果都会保留，只删除图片。删除后无法恢复。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.homePageCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              '删除',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
-
-    try {
-      final result = await purger.purgeToolImages(conversationId);
-      if (!mounted) return;
-      final skipped = result.skippedStreamingMessages;
-      showAppSnackBar(
-        context,
-        message: skipped == 0
-            ? '已删除 ${result.removedImages} 张工具图片'
-            : '已删除 ${result.removedImages} 张工具图片（$skipped 条生成中的消息已跳过）',
-        type: NotificationType.success,
-      );
-    } catch (error) {
-      debugPrint('[ToolImagePurge] Purge failed: $error');
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: '删除失败：$error',
-        type: NotificationType.error,
-      );
-    }
   }
 
   void _handleDesktopCompressContext() async {

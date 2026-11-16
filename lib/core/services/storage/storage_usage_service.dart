@@ -841,12 +841,14 @@ abstract final class StorageUsageService {
     required bool images,
     Set<String> protectedPaths = const {},
     bool generationActive = false,
+    bool force = false,
   }) => AttachmentFileLock.synchronized(
     () => _deleteUploadFiles(
       paths,
       images: images,
       protectedPaths: protectedPaths,
       generationActive: generationActive,
+      force: force,
     ),
   );
 
@@ -855,11 +857,13 @@ abstract final class StorageUsageService {
     required bool images,
     required Set<String> protectedPaths,
     required bool generationActive,
+    bool force = false,
   }) async {
     final removedPaths = await StorageAttachmentUsage.deleteUnusedFiles(
       paths.where((path) => _isImageExt(path) == images),
       protectedPaths: protectedPaths,
       generationActive: generationActive,
+      force: force,
     );
     if (removedPaths.isNotEmpty) {
       await deleteSessionAttachmentCopies(
@@ -867,6 +871,7 @@ abstract final class StorageUsageService {
         sessionsDirectory: await AppDirectories.getSessionsDirectory(),
         protectedPaths: protectedPaths,
         generationActive: generationActive,
+        force: force,
       );
     }
     return removedPaths.length;

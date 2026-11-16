@@ -18,7 +18,7 @@ import '../../../utils/app_directories.dart';
 import '../../../utils/kelivo_file_uri.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 
-enum StorageImageKind { chat, tool, avatar }
+enum StorageImageKind { chat, tool, avatar, temporaryBackground }
 
 /// One persisted snapshot for association labels and deletion protection.
 /// Message parts cover references whose asset-index backfill is still pending.
@@ -27,6 +27,7 @@ class StorageAttachmentUsage {
     _appearance = _resolveSet(_references.appearance);
     _tools = _resolveSet(_references.tools);
     _chat = _resolveSet(_references.chat);
+    _temporaryBackground = _resolveSet(_references.temporaryBackgrounds);
     _protected = _resolveSet(_references.protected);
     for (final entry in _references.conversations.entries) {
       for (final path in _paths(entry.key, _root)) {
@@ -42,7 +43,11 @@ class StorageAttachmentUsage {
 
   final String _root;
   final _AttachmentReferences _references;
-  late final Set<String> _appearance, _tools, _chat, _protected;
+  late final Set<String> _appearance,
+      _tools,
+      _chat,
+      _temporaryBackground,
+      _protected;
   final _conversations = <String, Map<String, String>>{};
   final _pending = <String, DateTime>{};
 
@@ -108,12 +113,14 @@ class StorageAttachmentUsage {
       return true;
     }
     return _appearance.contains(normalized) ||
+        _temporaryBackground.contains(normalized) ||
         _protected.contains(normalized) ||
         _conversations.containsKey(normalized);
   }
 
   bool hasReferencesWithin(String directory) => {
     ..._appearance,
+    ..._temporaryBackground,
     ..._protected,
     ..._conversations.keys,
   }.any((path) => p.equals(directory, path) || p.isWithin(directory, path));
@@ -131,6 +138,7 @@ class StorageAttachmentUsage {
     Set<String> protectedPaths = const {},
     bool sessionCopies = false,
     bool generationActive = false,
+    bool force = false,
   }) async {
     final root = (await AppDirectories.getContentDirectory()).path;
     final databasePath = p.join(
@@ -181,8 +189,8 @@ class StorageAttachmentUsage {
           }
           final real = File(normalized).resolveSymbolicLinksSync();
           if (!realRoots.any((dir) => p.isWithin(dir, real))) continue;
-          if (usage.isInUse(normalized) ||
-              usage.isInUse(real) ||
+          if ((!force &&
+                  (usage.isInUse(normalized) || usage.isInUse(real))) ||
               protected.contains(normalized) ||
               protected.contains(real)) {
             continue;
@@ -302,6 +310,16 @@ class StorageAttachmentUsage {
     bool contains(Set<String> paths) =>
         paths.contains(normalized) ||
         (realPath != null && paths.contains(p.normalize(realPath)));
+    // 临时背景单独成类，必须先于头像与背景判断。
+    if (contains(_temporaryBackground)) {
+      return StorageImageKind.temporaryBackground;
+    }
+    if (p.isWithin(p.join(_root, 'images'), normalized)) {
+      final name = p.basename(normalized);
+      if (name.startsWith('conversation_background_')) {
+        return StorageImageKind.temporaryBackground;
+      }
+    }
     if (contains(_appearance) ||
         p.isWithin(p.join(_root, 'avatars'), normalized)) {
       return StorageImageKind.avatar;
@@ -358,6 +376,7 @@ class _AttachmentReferences {
   final appearance = <String>{};
   final tools = <String>{};
   final chat = <String>{};
+  final temporaryBackgrounds = <String>{};
   final protected = <String>{};
   final conversations = <String, Map<String, String>>{};
   final pending = <String, int>{};
@@ -589,6 +608,30 @@ _AttachmentReferences _readReferences(
         .isNotEmpty;
     void associate(String uri, String id, String title) {
       result.conversations.putIfAbsent(uri, () => {})[id] = title;
+    }
+
+    // 临时背景：对话自己设定的背景图。键名与 ConversationBackground 保持一致
+    // （background.path / background.mode），此处只读字符串，避免服务层互相引用。
+    // 记进引用表有两个用处：单独归类成「临时背景」；算作使用中，
+    // 免得「清理未使用」把正在用的背景图删掉。
+    for (final row in database.select(
+      'SELECT id, title, extras_json FROM conversation_rows '
+      "WHERE instr(extras_json, 'background.path') > 0",
+    )) {
+      Object? decoded;
+      try {
+        decoded = jsonDecode(row['extras_json'] as String);
+      } on FormatException {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      if (decoded['background.mode'] == 'assistant') continue;
+      final background = decoded['background.path'];
+      if (background is! String) continue;
+      final path = background.trim();
+      if (path.isEmpty) continue;
+      result.temporaryBackgrounds.add(path);
+      associate(path, row['id'] as String, row['title'] as String);
     }
 
     // Read every version and fork one row at a time. Tool payloads can be large.
