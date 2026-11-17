@@ -32,6 +32,9 @@ import '../../simulator/widgets/simulator_ending_card.dart';
 import '../../simulator/widgets/simulator_status_panel.dart';
 import '../../simulator/widgets/simulator_scene_panel.dart';
 import '../../simulator/widgets/simulator_option_bar.dart';
+import '../../simulator/widgets/simulator_settings_sheet.dart';
+import '../../simulator/widgets/simulator_top_bar.dart';
+import '../../simulator/pages/simulator_list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, Clipboard, ClipboardData, LogicalKeyboardKey;
@@ -55,6 +58,7 @@ import '../../../core/providers/instruction_injection_provider.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/models/quick_phrase.dart';
 import '../../../core/models/chat_input_data.dart';
+import '../../../core/models/chat_message.dart';
 import '../../../core/models/compress_context_options.dart';
 import '../../../core/services/android_process_text.dart';
 import '../../../core/services/incoming_share_service.dart';
@@ -72,6 +76,7 @@ import '../../../desktop/world_book_popover.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../chat/widgets/bottom_tools_sheet.dart';
 import '../../chat/widgets/chat_tools_sheet.dart';
+import '../../chat/widgets/message_export_sheet.dart';
 import '../../chat/utils/ensure_conversation.dart';
 import '../../chat/widgets/context_management_sheet.dart';
 import '../../chat/widgets/reasoning_level_sheet.dart';
@@ -94,6 +99,8 @@ import '../widgets/message_list_view.dart';
 import '../widgets/chat_input_section.dart';
 import '../widgets/conversation_note_button.dart';
 import '../widgets/conversation_system_prompt_button.dart';
+import '../widgets/conversation_system_prompt_editor.dart';
+import '../widgets/conversation_title_builder.dart';
 import '../widgets/chat_input_overlay_layout.dart';
 import '../widgets/chat_selection_app_bar.dart';
 import '../widgets/chat_selection_action_bar.dart';
@@ -1134,6 +1141,8 @@ class _HomePageState extends State<HomePage>
               onToggleSelectAll: _controller.toggleSelectAll,
               onInvertSelection: _controller.invertSelection,
             )
+          : SimulatorMeta.isSimulator(_controller.currentConversation)
+          ? _buildSimulatorTopBar(context)
           : null,
       body: _chatFindShortcuts(
         _wrapWithDropTarget(_buildMobileBody(context, cs)),
@@ -1270,58 +1279,67 @@ class _HomePageState extends State<HomePage>
         : null;
 
     return SafeArea(
-      child: Stack(
-        children: [
-          Column(
-            children: [
-              SimulatorScenePanel(path: scene, onEdit: _simulatorEditScene),
-              if (status != null)
-                SimulatorStatusPanel(
-                  sections: SimulatorBlocks.statusSections(status),
-                ),
-              Expanded(
-                child: _buildMessageListView(
-                  context,
-                  topContentPadding: AppSpacing.xs,
-                  bottomContentPadding: AppSpacing.xs,
-                  dividerPadding: const EdgeInsets.symmetric(
-                    vertical: 6,
-                    horizontal: AppSpacing.sm,
+      // 窄栏是透明浮在正文上的（Scaffold 开了 extendBodyBehindAppBar），
+      // 这里空出它那一档高度（含状态栏），场景图才不会钻到栏底下。
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(top: SimulatorTopBar.clearanceOf(context)),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                SimulatorScenePanel(path: scene, onEdit: _simulatorEditScene),
+                if (status != null)
+                  SimulatorStatusPanel(
+                    sections: SimulatorBlocks.statusSections(status),
+                  ),
+                Expanded(
+                  child: _buildMessageListView(
+                    context,
+                    topContentPadding: AppSpacing.xs,
+                    bottomContentPadding: AppSpacing.xs,
+                    dividerPadding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: AppSpacing.sm,
+                    ),
                   ),
                 ),
-              ),
-              SimulatorOptionBar(
-                options: options,
-                onSend: (value) =>
-                    _controller.sendMessage(ChatInputData(text: value)),
-              ),
-            ],
-          ),
-          if (ending != null)
-            Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.45),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: SimulatorEndingCard(markdown: ending),
-                  ),
+                SimulatorOptionBar(
+                  options: options,
+                  onSend: (value) =>
+                      _controller.sendMessage(ChatInputData(text: value)),
                 ),
-              ),
+              ],
             ),
-        ],
+            if (ending != null)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: SimulatorEndingCard(markdown: ending),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
   static const String simulatorSceneKey = 'simulator.scene';
 
-  String _simulatorLastReply() {
+  ChatMessage? _simulatorLastAssistantMessage() {
     for (final message in _controller.messages.reversed) {
-      if (message.role == 'assistant') return message.content;
+      if (message.role == 'assistant') return message;
     }
-    return '';
+    return null;
   }
+
+  String _simulatorLastReply() =>
+      _simulatorLastAssistantMessage()?.content ?? '';
 
   Future<void> _simulatorEditScene() async {
     final conversation = _controller.currentConversation;
@@ -1363,6 +1381,90 @@ class _HomePageState extends State<HomePage>
       }
       return next;
     });
+  }
+
+  // ============================================================================
+  // 模拟器窄栏：← 标题 ↻ ⚙
+  // ============================================================================
+
+  PreferredSizeWidget _buildSimulatorTopBar(BuildContext context) {
+    return SimulatorTopBar(
+      title: ConversationTitleBuilder(
+        conversationId: _controller.currentConversation?.id,
+        isTemporary: false,
+        builder: (context, title) => Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: AppFontWeights.medium,
+          ),
+        ),
+      ),
+      onBack: _openSimulatorList,
+      onRegenerate: _simulatorRegenerateLastReply,
+      onSettings: _openSimulatorSettings,
+      canRegenerate: _simulatorLastAssistantMessage() != null,
+    );
+  }
+
+  /// `←`：回模拟器列表页；挑了一条就切过去，没挑就留在原处。
+  Future<void> _openSimulatorList() async {
+    _controller.dismissKeyboard();
+    final id = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const SimulatorListPage()),
+    );
+    if (!mounted || id == null) return;
+    if (id == _controller.currentConversation?.id) return;
+    await _controller.switchConversationAnimated(id);
+  }
+
+  /// `↻`：把最后一条回复重写。走的是消息菜单里那个同款重生成，
+  /// 所以确认弹窗、版本记录、流式都跟普通聊天一致。
+  void _simulatorRegenerateLastReply() {
+    final message = _simulatorLastAssistantMessage();
+    if (message == null) return;
+    unawaited(_controller.regenerateAtMessage(message));
+  }
+
+  /// `⚙`：五行面板，每一行都接聊天页现成的入口。
+  Future<void> _openSimulatorSettings() async {
+    final conversation = _controller.currentConversation;
+    if (conversation == null) return;
+    _controller.dismissKeyboard();
+    await showSimulatorSettingsSheet(
+      context,
+      onModel: () => showModelSelectSheet(context, controller: _controller),
+      onSystemPrompt: () => editConversationSystemPrompt(
+        context,
+        conversationId: conversation.id,
+      ),
+      onWorldBook: () => unawaited(_openWorldBookPopover()),
+      onInjection: () => unawaited(_openInstructionInjectionPopover()),
+      onExport: () => unawaited(_exportSimulatorRecord(conversation.id)),
+    );
+  }
+
+  /// 导出这条记录：复用整段会话的导出面板（就是多选后那个批量导出）。
+  /// 走折叠后的消息，版本组只取当前选中的那一条，避免导出重复分支。
+  Future<void> _exportSimulatorRecord(String conversationId) async {
+    final chat = context.read<ChatService>();
+    final conversation = chat.getConversation(conversationId);
+    if (conversation == null) return;
+    final collapsed = await _controller
+        .loadAllCollapsedMessagesForCurrentConversation();
+    if (!mounted) return;
+    final stored = await chat.loadMessagesByIds([
+      for (final message in collapsed) message.id,
+    ]);
+    if (!mounted || stored.isEmpty) return;
+    await showChatExportSheet(
+      context,
+      conversation: conversation,
+      selectedMessages: stored,
+    );
   }
 
   Widget _buildTabletLayout(

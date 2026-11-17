@@ -6,6 +6,7 @@ import '../../../core/models/conversation.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../icons/lucide_adapter.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../theme/design_tokens.dart';
 import '../simulator_meta.dart';
 
@@ -73,6 +74,7 @@ class SimulatorListPage extends StatelessWidget {
                   conversation: conversation,
                   turns: _turnCount(chat, conversation.id),
                   onOpen: () => Navigator.of(context).pop(conversation.id),
+                  onRename: () => _rename(context, conversation),
                   onConvert: () async {
                     await chat.updateConversationExtras(
                       conversation.id,
@@ -87,6 +89,38 @@ class SimulatorListPage extends StatelessWidget {
               },
             ),
     );
+  }
+
+  /// 重命名：跟侧边栏那条菜单同款弹窗，只改标题。
+  Future<void> _rename(BuildContext context, Conversation conversation) async {
+    final chat = context.read<ChatService>();
+    final l10n = AppLocalizations.of(context)!;
+    final controller = TextEditingController(text: conversation.title);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.sideDrawerMenuRename),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(hintText: l10n.sideDrawerRenameHint),
+          onSubmitted: (_) => Navigator.of(ctx).pop(true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.sideDrawerCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.sideDrawerOK),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await chat.renameConversation(conversation.id, controller.text.trim());
+    }
   }
 
   int _turnCount(ChatService chat, String conversationId) {
@@ -106,6 +140,7 @@ class _SimulatorTile extends StatelessWidget {
     required this.conversation,
     required this.turns,
     required this.onOpen,
+    required this.onRename,
     required this.onConvert,
     required this.onDelete,
   });
@@ -113,6 +148,7 @@ class _SimulatorTile extends StatelessWidget {
   final Conversation conversation;
   final int turns;
   final VoidCallback onOpen;
+  final VoidCallback onRename;
   final VoidCallback onConvert;
   final VoidCallback onDelete;
 
@@ -182,10 +218,12 @@ class _SimulatorTile extends StatelessWidget {
               color: cs.onSurface.withValues(alpha: 0.5),
             ),
             onSelected: (value) {
+              if (value == 'rename') onRename();
               if (value == 'convert') onConvert();
               if (value == 'delete') onDelete();
             },
             itemBuilder: (context) => const [
+              PopupMenuItem<String>(value: 'rename', child: Text('重命名')),
               PopupMenuItem<String>(value: 'convert', child: Text('转为普通对话')),
               PopupMenuItem<String>(value: 'delete', child: Text('删除')),
             ],
