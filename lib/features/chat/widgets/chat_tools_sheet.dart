@@ -28,6 +28,7 @@ import 'package:Kelivo/theme/app_semantic_colors.dart';
 
 import 'tools_sheet_row.dart';
 import 'image_recall_control.dart';
+import 'local_path_picker.dart';
 import '../../mcp/widgets/mcp_server_avatar.dart';
 import '../../mcp/widgets/mcp_tool_connection_status.dart';
 import '../../mcp/utils/mcp_tool_groups.dart';
@@ -39,6 +40,7 @@ Future<void> showChatToolsSheet(
   BuildContext context, {
   required String assistantId,
   String? conversationId,
+  ValueChanged<String>? onInsertText,
 }) async {
   if (context
           .read<AssistantProvider>()
@@ -63,6 +65,7 @@ Future<void> showChatToolsSheet(
       assistantId: assistantId,
       conversationId: conversationId,
       onClose: () => Navigator.of(sheetContext).maybePop(),
+      onInsertText: onInsertText,
     ),
   );
 }
@@ -73,16 +76,23 @@ class ChatToolsSheet extends StatefulWidget {
     required this.assistantId,
     this.conversationId,
     this.onClose,
+    this.onInsertText,
   });
 
   final String assistantId;
   final String? conversationId;
   final VoidCallback? onClose;
 
+  /// Puts text into the composer at the cursor. Used by the local path pickers.
+  final ValueChanged<String>? onInsertText;
+
   static const Key localGroupKey = ValueKey<String>('chat-tools-group-local');
   static const Key mcpGroupKey = ValueKey<String>('chat-tools-group-mcp');
   static const Key workspaceGroupKey = ValueKey<String>(
     'chat-tools-group-workspace',
+  );
+  static const Key localPathsGroupKey = ValueKey<String>(
+    'chat-tools-group-local-paths',
   );
   static Key localToolKey(String id) =>
       ValueKey<String>('chat-tools-local-$id');
@@ -93,17 +103,19 @@ class ChatToolsSheet extends StatefulWidget {
   State<ChatToolsSheet> createState() => _ChatToolsSheetState();
 }
 
-enum _ToolsGroupId { local, mcp, workspace }
+enum _ToolsGroupId { local, mcp, workspace, paths }
 
 /// Which groups are open, remembered across sheets and restarts.
 const String _expandedGroupsKey = 'display_chat_tools_expanded_groups_v1';
 
 /// Until the user folds something themselves: local tools are the longest
 /// list, so they start folded; the two groups the sheet is usually opened for
-/// start open.
+/// start open. The local path pickers are a short, three-row block and start
+/// open so they are visible without an extra tap.
 const Set<_ToolsGroupId> _defaultExpandedGroups = <_ToolsGroupId>{
   _ToolsGroupId.mcp,
   _ToolsGroupId.workspace,
+  _ToolsGroupId.paths,
 };
 
 class _ChatToolsSheetState extends State<ChatToolsSheet> {
@@ -208,6 +220,21 @@ class _ChatToolsSheetState extends State<ChatToolsSheet> {
                               onClose: widget.onClose,
                             ),
                           ),
+                          // Android only: the pickers walk shared storage,
+                          // which has no counterpart elsewhere.
+                          if (Theme.of(context).platform ==
+                              TargetPlatform.android)
+                            SliverToBoxAdapter(
+                              child: _LocalPathGroup(
+                                expanded: _expanded.contains(
+                                  _ToolsGroupId.paths,
+                                ),
+                                onToggle: () =>
+                                    _toggleGroup(_ToolsGroupId.paths),
+                                onInsertText: widget.onInsertText,
+                                onClose: widget.onClose,
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -649,6 +676,62 @@ class _McpGroup extends StatelessWidget {
               );
             },
           ),
+      ],
+    );
+  }
+}
+
+class _LocalPathGroup extends StatelessWidget {
+  const _LocalPathGroup({
+    required this.expanded,
+    required this.onToggle,
+    this.onInsertText,
+    this.onClose,
+  });
+
+  final bool expanded;
+  final VoidCallback onToggle;
+  final ValueChanged<String>? onInsertText;
+  final VoidCallback? onClose;
+
+  Future<void> _pick(BuildContext context, LocalPathKind kind) async {
+    Haptics.light();
+    final path = await pickLocalPath(context, kind: kind);
+    if (path == null || !context.mounted) return;
+    onInsertText?.call(localPathInsertion(kind, path));
+    onClose?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ToolsGroup(
+      key: ChatToolsSheet.localPathsGroupKey,
+      title: '本地路径提取',
+      summary: expanded ? null : '图片 / 文件 / 文件夹',
+      expanded: expanded,
+      onToggle: onToggle,
+      children: [
+        ToolsSheetRow(
+          key: const ValueKey<String>('chat-tools-local-paths-image'),
+          icon: Lucide.Image,
+          label: '图片链接',
+          subtitle: '插入成图片，聊天里直接显示，不上传',
+          onTap: () => unawaited(_pick(context, LocalPathKind.image)),
+        ),
+        ToolsSheetRow(
+          key: const ValueKey<String>('chat-tools-local-paths-file'),
+          icon: Lucide.FileText,
+          label: '文件链接',
+          subtitle: '只把文件路径写进输入框',
+          onTap: () => unawaited(_pick(context, LocalPathKind.file)),
+        ),
+        ToolsSheetRow(
+          key: const ValueKey<String>('chat-tools-local-paths-folder'),
+          icon: Lucide.FolderOpen,
+          label: '文件夹链接',
+          subtitle: '只把文件夹路径写进输入框',
+          onTap: () => unawaited(_pick(context, LocalPathKind.folder)),
+        ),
       ],
     );
   }

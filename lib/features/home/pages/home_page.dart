@@ -949,6 +949,14 @@ class _HomePageState extends State<HomePage>
     if (!mounted) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+    _insertTextAtCursor(trimmed);
+  }
+
+  /// Inserts [text] at the composer's cursor, replacing any selection.
+  ///
+  /// Nothing is trimmed and nothing is sent: the user still presses send.
+  void _insertTextAtCursor(String text) {
+    if (!mounted || text.isEmpty) return;
     final current = _inputController.text;
     final selection = _inputController.selection;
     final start = (selection.start >= 0 && selection.start <= current.length)
@@ -960,10 +968,10 @@ class _HomePageState extends State<HomePage>
             selection.end >= start)
         ? selection.end
         : start;
-    final next = current.replaceRange(start, end, trimmed);
+    final next = current.replaceRange(start, end, text);
     _inputController.value = _inputController.value.copyWith(
       text: next,
-      selection: TextSelection.collapsed(offset: start + trimmed.length),
+      selection: TextSelection.collapsed(offset: start + text.length),
       composing: TextRange.empty,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1733,6 +1741,7 @@ class _HomePageState extends State<HomePage>
             context,
             assistantId: a.id,
             conversationId: _controller.currentConversation?.id,
+            onInsertText: _insertTextAtCursor,
           );
         }
       },
