@@ -18,8 +18,9 @@ import 'package:Kelivo/theme/theme_factory.dart'
 /// 浅色配色（白底深字），其余内容（正文、标题、列表、任务框、链接、代码高亮
 /// 以外的语法色）保持夜间不变。
 ///
-/// 例外：引用块的竖线与分割线在夜间这套里按「白字白线」算，落在浅色气泡上
-/// 看不见，所以气泡是浅底时改用浅色主题的那两个颜色（009）。
+/// 例外：引用块竖线、分割线、链接、提示框、任务框边线在夜间这套里按「白字白线」
+/// 或夜间强调色算，落在浅色气泡上看不见或发灰，所以气泡是浅底时改用浅色主题
+/// 对应的颜色（009、010）。
 ///
 /// 做法：用 App 自己的浅色主题配色再算一套 Markstream 主题，只从里面挑出
 /// 这四类元素的配色（外加卡片内部工具条用到的 chrome），覆盖到夜间主题上；
@@ -134,16 +135,30 @@ MarkstreamTheme mapMarkdownTheme(
     colors: theme.colors.copyWith(ink2: light.colors.ink2),
   );
 
-  // 引用块的竖线与分割线按「白字白线」算，落在浅色气泡上等于隐身。
-  // 只有气泡本身是浅底（正文用深色字）时才换成浅色模式那份颜色，深底气泡不动。
+  // 下面这几样在夜间这套里是按「白字白线」或夜间强调色算出来的，落在浅色气泡上
+  // 不是隐身就是发灰。只有气泡本身是浅底（正文用深色字）时才换成浅色模式那份，
+  // 深底气泡保持夜间原样。
   final proseInk = resolved.body.color ?? scheme.onSurface;
-  if (proseInk.computeLuminance() < 0.5) {
-    return resolved.copyWith(
-      quote: resolved.quote.copyWith(barColor: light.quote.barColor),
-      ruleColor: light.ruleColor,
-    );
-  }
-  return resolved;
+  if (proseInk.computeLuminance() >= 0.5) return resolved;
+  return resolved.copyWith(
+    // 引用块的竖线。
+    quote: resolved.quote.copyWith(barColor: light.quote.barColor),
+    // 分割线。
+    ruleColor: light.ruleColor,
+    // 链接：颜色与下划线整份用浅色的。
+    link: light.link,
+    // 提示框：备注走 accent，提示走 tip，警告走 warning，谨慎与危险走 danger，
+    // 重要走 important。背景与边框是这几个色按透明度算出来的，换色即可。
+    colors: resolved.colors.copyWith(
+      accent: light.colors.accent,
+      tip: light.colors.tip,
+      warning: light.colors.warning,
+      danger: light.colors.danger,
+      important: light.colors.important,
+    ),
+    // 任务清单没勾上时那个方框的边线。
+    task: resolved.task.copyWith(borderColor: light.task.borderColor),
+  );
 }
 
 /// 取 App 当前的浅色配色（和白天模式用的是同一份），按设置缓存。
