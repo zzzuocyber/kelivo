@@ -290,6 +290,8 @@ class SettingsProvider extends ChangeNotifier {
       'display_new_chat_after_delete_v1';
   static const String _displayEnterToSendOnMobileKey =
       'display_enter_to_send_on_mobile_v1';
+  // 「」 key in the composer: what a single tap inserts.
+  static const String _composerQuickSymbolKey = 'composer_quick_symbol_v1';
   static const String _displayLongPasteAsFileKey =
       'display_long_paste_as_file_v1';
   static const String _displayLongPasteAsFileThresholdKey =
@@ -1151,6 +1153,10 @@ class SettingsProvider extends ChangeNotifier {
       await prefs.setBool(_displayEnterToSendOnMobileKey, _enterToSendOnMobile);
     } else {
       _enterToSendOnMobile = enterToSendPref;
+    }
+    final quickSymbolPref = prefs.getString(_composerQuickSymbolKey);
+    if (quickSymbolPref != null && quickSymbolPref.isNotEmpty) {
+      _composerQuickSymbol = quickSymbolPref;
     }
     _longPasteAsFile = prefs.getBool(_displayLongPasteAsFileKey) ?? true;
     _longPasteAsFileThreshold =
@@ -5229,6 +5235,26 @@ Requirements:
     notifyListeners();
     final prefs = _preferences;
     await prefs.setBool(_displayEnterToSendOnMobileKey, v);
+  }
+
+  // Composer quick symbol: the text one tap of the 「」 key inserts.
+  static const String defaultComposerQuickSymbol = '「」';
+  static const List<String> composerQuickSymbolPresets = <String>[
+    '「」',
+    '【】',
+    '（）',
+    '『』',
+    '>',
+  ];
+  String _composerQuickSymbol = defaultComposerQuickSymbol;
+  String get composerQuickSymbol => _composerQuickSymbol;
+  Future<void> setComposerQuickSymbol(String v) async {
+    final value = v.trim().isEmpty ? defaultComposerQuickSymbol : v.trim();
+    if (_composerQuickSymbol == value) return;
+    _composerQuickSymbol = value;
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setString(_composerQuickSymbolKey, value);
   }
 
   static const int defaultLongPasteAsFileThreshold = 5000;

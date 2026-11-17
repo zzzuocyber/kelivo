@@ -856,21 +856,11 @@ class _ChatInputBarState extends State<ChatInputBar>
   // so attachments, tools and send stay in reach while editing long text.
   static const int _collapsedMaxLines = 5;
   static const double _expandButtonExtent = 28; // 16 glyph + 2 × 6 padding
-  // Quick symbol key: a small 「」 button in the composer's bottom-right corner
-  // opens a one-row palette above the input box. The key and the palette sit
-  // inside TextFieldTapRegion so inserting text never drops focus nor the
+  // Quick symbol key: one tap inserts the symbol from
+  // SettingsProvider.composerQuickSymbol, a long press replaces it. The key
+  // sits inside TextFieldTapRegion so the tap never drops focus nor the
   // keyboard. Mobile only; the text column always reserves the width.
-  static const List<String> _quickSymbols = <String>[
-    '「」',
-    '【】',
-    '（）',
-    '『』',
-    '>',
-  ];
-  // Entries that wrap: the caret lands between the two halves.
-  static const Set<String> _quickSymbolPairs = <String>{'「」', '【】', '（）', '『』'};
-  static const double _quickSymbolButtonExtent = 28;
-  bool _quickSymbolsOpen = false;
+  static const double _quickSymbolButtonExtent = 30;
   bool get _quickSymbolsEnabled => PlatformUtils.isMobile;
   bool _isExpanded = false;
   bool _canExpand = false;
@@ -2254,9 +2244,6 @@ class _ChatInputBarState extends State<ChatInputBar>
         _finishingVoice) {
       return;
     }
-    if (_quickSymbolsOpen) {
-      setState(() => _quickSymbolsOpen = false);
-    }
     if (widget.mediaController?.draftStore != null &&
         _docs.any(
           (doc) =>
@@ -3189,70 +3176,14 @@ class _ChatInputBarState extends State<ChatInputBar>
     setState(() {});
   }
 
-  // ---------------------------------------------------------------------------
-  // Quick symbols
-  // ---------------------------------------------------------------------------
-
-  /// One row above the composer: tap a mark to insert it at the caret. The row
-  /// stays open so several marks can be tapped in a row; the text field keeps
-  /// focus throughout because the whole row lives in a TextFieldTapRegion.
-  Widget _buildQuickSymbolBar(ThemeData theme, Color fillColor, bool isDark) {
-    final borderColor = isDark
-        ? theme.colorScheme.onSurface.withValues(alpha: 0.10)
-        : theme.colorScheme.outline.withValues(alpha: 0.20);
-    final markColor = theme.colorScheme.onSurface.withValues(alpha: 0.72);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Align(
-        alignment: AlignmentDirectional.centerStart,
-        child: TextFieldTapRegion(
-          child: CodeEditorTapRegion(
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs,
-                vertical: 1,
-              ),
-              decoration: BoxDecoration(
-                color: fillColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor, width: 1),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final symbol in _quickSymbols)
-                    IosIconButton(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xs,
-                        vertical: AppSpacing.xxs,
-                      ),
-                      color: markColor,
-                      onTap: _composerLocked
-                          ? null
-                          : () => _insertQuickSymbol(symbol),
-                      builder: (c) => Text(
-                        symbol,
-                        style: TextStyle(fontSize: 14, height: 1.15, color: c),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Inserts [symbol] at the caret, replacing any selection. A wrapped mark
-  /// leaves the caret between its halves; a lone mark leaves it after.
+  /// Inserts [symbol] at the caret, replacing any selection. A two-part mark
+  /// leaves the caret between its halves; a single mark leaves it after.
   void _insertQuickSymbol(String symbol) {
     if (_composerLocked) return;
     final value = _controller.value;
     final selection = value.selection;
-    final caretAfterStart = _quickSymbolPairs.contains(symbol)
-        ? 1
-        : symbol.length;
+    // Two code points always mean a wrapping pair: the caret lands between.
+    final caretAfterStart = symbol.runes.length > 1 ? 1 : symbol.length;
     if (!selection.isValid) {
       final text = '${value.text}$symbol';
       _controller.value = value.copyWith(
@@ -3278,6 +3209,24 @@ class _ChatInputBarState extends State<ChatInputBar>
       focusNode.requestFocus();
     }
     _ensureCaretVisible();
+  }
+
+  /// Long press: pick what a single tap inserts. Presets plus free text,
+  /// stored in settings so the choice survives restarts and backups.
+  Future<void> _editQuickSymbol() async {
+    final settings = context.read<SettingsProvider>();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => _QuickSymbolPickerSheet(
+        current: settings.composerQuickSymbol,
+        onPick: (value) {
+          unawaited(settings.setComposerQuickSymbol(value));
+          Navigator.of(sheetContext).pop();
+        },
+      ),
+    );
+    widget.focusNode?.requestFocus();
   }
 
   Future<File> _reservePastedTextFile(Directory dir) async {
@@ -4679,10 +4628,6 @@ class _ChatInputBarState extends State<ChatInputBar>
                 ),
                 const SizedBox(height: AppSpacing.xs),
               ],
-              // Sits above the input box, outside it, so opening it grows the
-              // composer upward instead of squeezing the text area.
-              if (_quickSymbolsEnabled && _quickSymbolsOpen)
-                _buildQuickSymbolBar(theme, inputFillColor, isDark),
               Flexible(
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -4850,6 +4795,12 @@ class _ChatInputBarState extends State<ChatInputBar>
                                     fit: expandedLayout
                                         ? StackFit.expand
                                         : StackFit.loose,
+                                    // The quick symbol key sits a fixed
+                                    // distance above the bottom edge, which
+                                    // can poke a pixel or two past the top
+                                    // edge of a single-line field. Let it
+                                    // paint instead of cutting the glyph.
+                                    clipBehavior: Clip.none,
                                     children: [
                                       Padding(
                                         padding: EdgeInsetsDirectional.fromSTEB(
@@ -5059,14 +5010,21 @@ class _ChatInputBarState extends State<ChatInputBar>
                                             ),
                                           ),
                                         ),
-                                      // Quick symbol key: anchored to the
-                                      // bottom-right so the expand button can
-                                      // appear and disappear above it without
-                                      // moving it. Same TapRegion wrapping as
-                                      // above, so the tap never drops focus.
+                                      // Quick symbol key: pinned at a fixed
+                                      // height above the box's bottom edge,
+                                      // which is where the middle of a
+                                      // two-line box sits. The box grows
+                                      // upward, so this spot never moves --
+                                      // not on three lines, not in full
+                                      // screen editing -- and the expand
+                                      // button up at the top edge can never
+                                      // touch it. One tap inserts the stored
+                                      // symbol; a long press replaces it. Same
+                                      // TapRegion wrapping as above, so the tap
+                                      // never drops focus nor the keyboard.
                                       if (_quickSymbolsEnabled)
                                         PositionedDirectional(
-                                          bottom: 2,
+                                          bottom: 16,
                                           end: 6,
                                           child: CodeEditorTapRegion(
                                             child: TextFieldTapRegion(
@@ -5074,25 +5032,29 @@ class _ChatInputBarState extends State<ChatInputBar>
                                                 padding: const EdgeInsets.all(
                                                   4,
                                                 ),
+                                                onLongPress: _composerLocked
+                                                    ? null
+                                                    : () => _editQuickSymbol(),
                                                 color: theme
                                                     .colorScheme
                                                     .onSurface
-                                                    .withValues(
-                                                      alpha: _quickSymbolsOpen
-                                                          ? 0.75
-                                                          : 0.45,
-                                                    ),
+                                                    .withValues(alpha: 0.50),
                                                 onTap: _composerLocked
                                                     ? null
-                                                    : () => setState(
-                                                        () => _quickSymbolsOpen =
-                                                            !_quickSymbolsOpen,
+                                                    : () => _insertQuickSymbol(
+                                                        settings
+                                                            .composerQuickSymbol,
                                                       ),
                                                 builder: (c) => Text(
-                                                  '「」',
+                                                  settings.composerQuickSymbol,
+                                                  maxLines: 1,
+                                                  softWrap: false,
+                                                  overflow: TextOverflow.clip,
                                                   style: TextStyle(
-                                                    fontSize: 12,
-                                                    height: 1.1,
+                                                    fontSize: 13,
+                                                    height: 1.15,
+                                                    fontWeight: FontWeight.w600,
+                                                    letterSpacing: -0.5,
                                                     color: c,
                                                   ),
                                                 ),
@@ -5930,4 +5892,134 @@ class _DraftImageTapTargetState extends State<_DraftImageTapTarget> {
       ),
     ),
   );
+}
+
+/// Sheets for the composer's quick symbol key: tap a preset, or type a mark
+/// of your own. The chosen value is persisted in settings.
+class _QuickSymbolPickerSheet extends StatefulWidget {
+  const _QuickSymbolPickerSheet({required this.current, required this.onPick});
+
+  final String current;
+  final ValueChanged<String> onPick;
+
+  @override
+  State<_QuickSymbolPickerSheet> createState() =>
+      _QuickSymbolPickerSheetState();
+}
+
+class _QuickSymbolPickerSheetState extends State<_QuickSymbolPickerSheet> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _pick(String value) {
+    if (value.trim().isEmpty) return;
+    widget.onPick(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final preset
+                    in SettingsProvider.composerQuickSymbolPresets)
+                  _QuickSymbolChip(
+                    symbol: preset,
+                    selected: preset == widget.current,
+                    onTap: () => _pick(preset),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: '自己打一个',
+                      isDense: true,
+                    ),
+                    onSubmitted: _pick,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _pick(_controller.text),
+                  child: const Text('替换'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickSymbolChip extends StatelessWidget {
+  const _QuickSymbolChip({
+    required this.symbol,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String symbol;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        decoration: BoxDecoration(
+          color: selected
+              ? theme.colorScheme.primary.withValues(alpha: 0.14)
+              : theme.colorScheme.onSurface.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          symbol,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface.withValues(alpha: 0.80),
+          ),
+        ),
+      ),
+    );
+  }
 }
