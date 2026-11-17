@@ -54,6 +54,8 @@ import '../../../desktop/desktop_settings_navigation_bus.dart';
 import 'dart:async';
 import '../../chat/widgets/context_compression_status.dart';
 import '../../../features/search/services/global_session_search_service.dart';
+import '../../../features/simulator/pages/simulator_list_page.dart';
+import '../../../features/simulator/simulator_meta.dart';
 import '../controllers/chat_actions.dart';
 import '../utils/model_display_helper.dart';
 import 'assistant_avatar.dart';
@@ -1471,6 +1473,8 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     final resolvedOwnerIds = <String, String?>{};
     // Single pass: filter assistant + query, split pinned/rest via ChatItem.isPinned.
     for (final c in chatService.getAllConversations()) {
+      // Simulations live in their own list; keep the chat list readable.
+      if (SimulatorMeta.isSimulator(c)) continue;
       if (c.assistantId != null &&
           resolvedOwnerIds.putIfAbsent(
                 c.assistantId!,
@@ -2930,6 +2934,34 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                                         ),
                                       ),
                                       const SizedBox(width: 8),
+                                      // 模拟器入口（与翻译、设置同款单色图标）
+                                      SizedBox(
+                                        width: 45,
+                                        height: 45,
+                                        child: Center(
+                                          child: IosIconButton(
+                                            size: 22,
+                                            color: textBase,
+                                            icon: Lucide.Compass,
+                                            padding: const EdgeInsets.all(10),
+                                            onTap: () async {
+                                              final id =
+                                                  await Navigator.of(
+                                                    context,
+                                                  ).push<String>(
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          const SimulatorListPage(),
+                                                    ),
+                                                  );
+                                              if (id == null) return;
+                                              await widget.onSelectConversation
+                                                  ?.call(id, closeDrawer: true);
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
                                       // 翻译按钮（圆形，无水波纹）
                                       SizedBox(
                                         width: 45,

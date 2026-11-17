@@ -15,6 +15,9 @@ import '../../provider/widgets/oauth_message_recovery.dart';
 import 'response_truncation_notice.dart';
 import 'dart:async';
 import 'dart:collection';
+import '../../simulator/simulator_meta.dart';
+import '../../simulator/simulator_options.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/foundation.dart'
@@ -1631,6 +1634,28 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         target: AssistantRegexTransformTarget.visual,
       ).text,
     );
+  }
+
+  bool? _simulatorConversation;
+
+  /// Simulations fold the raw option block into a collapsed <details>, so the
+  /// lines do not show twice next to the square keys. Every other
+  /// conversation is untouched.
+  String _simulatorDisplayText(String text) {
+    var isSimulator = _simulatorConversation;
+    if (isSimulator == null) {
+      try {
+        final chat = context.read<ChatService>();
+        isSimulator = SimulatorMeta.isSimulator(
+          chat.getConversation(widget.message.conversationId),
+        );
+      } catch (_) {
+        isSimulator = false;
+      }
+      _simulatorConversation = isSimulator;
+    }
+    if (!isSimulator) return text;
+    return SimulatorOptions.collapseForDisplay(text);
   }
 
   String _assistantNameFallback() {
@@ -3339,7 +3364,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       scope: AssistantRegexScope.assistant,
       target: AssistantRegexTransformTarget.visual,
     );
-    final visualContent = mappedVisual.text;
+    final visualContent = _simulatorDisplayText(mappedVisual.text);
     final visualTranslation = widget.message.translation != null
         ? _applyVisualAssistantRegexes(
             widget.message.translation!,

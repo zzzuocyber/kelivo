@@ -25,6 +25,9 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
     show kIsWeb, mapEquals, ValueListenable;
+import '../../simulator/simulator_meta.dart';
+import '../../simulator/simulator_options.dart';
+import '../../simulator/widgets/simulator_option_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, Clipboard, ClipboardData, LogicalKeyboardKey;
@@ -1134,6 +1137,28 @@ class _HomePageState extends State<HomePage>
     );
   }
 
+  /// The four square keys plus the free-text field, shown above the composer
+  /// only inside a simulated conversation and only once the reply carries a
+  /// complete option block.
+  Widget _buildSimulatorOptions(BuildContext context) {
+    if (!SimulatorMeta.isSimulator(_controller.currentConversation)) {
+      return const SizedBox.shrink();
+    }
+    String? lastAssistant;
+    for (final message in _controller.messages.reversed) {
+      if (message.role == 'assistant') {
+        lastAssistant = message.content;
+        break;
+      }
+    }
+    final options = SimulatorOptions.parse(lastAssistant ?? '');
+    if (options.isEmpty) return const SizedBox.shrink();
+    return SimulatorOptionBar(
+      options: options,
+      onSend: (text) => _controller.sendMessage(text),
+    );
+  }
+
   Widget _buildMobileBody(BuildContext context, ColorScheme cs) {
     final bottomContentPadding = _controller.inputBarHeight + 16;
     final topContentPadding = _chatTopOverlayInset(context) + 8;
@@ -1180,9 +1205,16 @@ class _HomePageState extends State<HomePage>
                 return false;
               },
               child: SizeChangedLayoutNotifier(
+                // Measure the option bar together with the composer, so the
+                // message list keeps its bottom padding clear of both.
                 child: Builder(
-                  builder: (context) =>
+                  builder: (context) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildSimulatorOptions(context),
                       _buildChatInputBar(context, isTablet: false),
+                    ],
+                  ),
                 ),
               ),
             ),
