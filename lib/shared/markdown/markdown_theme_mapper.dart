@@ -15,8 +15,11 @@ import 'package:Kelivo/theme/theme_factory.dart'
 /// 夜间模式下的「白底卡片」补丁
 /// ---------------------------------------------------------------------------
 /// 目标：夜间模式下，行内代码、代码块、表格、折叠块这四类元素改用时用的
-/// 浅色配色（白底深字），其余内容（正文、标题、引用、列表、分割线、
-/// 任务框、链接、代码高亮以外的语法色）保持夜间不变。
+/// 浅色配色（白底深字），其余内容（正文、标题、列表、任务框、链接、代码高亮
+/// 以外的语法色）保持夜间不变。
+///
+/// 例外：引用块的竖线与分割线在夜间这套里按「白字白线」算，落在浅色气泡上
+/// 看不见，所以气泡是浅底时改用浅色主题的那两个颜色（009）。
 ///
 /// 做法：用 App 自己的浅色主题配色再算一套 Markstream 主题，只从里面挑出
 /// 这四类元素的配色（外加卡片内部工具条用到的 chrome），覆盖到夜间主题上；
@@ -117,7 +120,7 @@ MarkstreamTheme mapMarkdownTheme(
 
   // 夜间：把四类块级元素换成浅色主题里的那一份。
   final light = assemble(_lightSchemeFor(settings));
-  return theme.copyWith(
+  final resolved = theme.copyWith(
     // 让代码语法高亮走浅色那套配色，否则夜间的高饱和浅色 token 落在白底上看不清。
     brightness: Brightness.light,
     // 卡片内部的工具条（代码块头、表格工具条、折叠块箭头）都要跟着卡片变深。
@@ -130,6 +133,17 @@ MarkstreamTheme mapMarkdownTheme(
     // 折叠块展开后的正文用的是 ink2，必须跟着换深，否则白底白字。
     colors: theme.colors.copyWith(ink2: light.colors.ink2),
   );
+
+  // 引用块的竖线与分割线按「白字白线」算，落在浅色气泡上等于隐身。
+  // 只有气泡本身是浅底（正文用深色字）时才换成浅色模式那份颜色，深底气泡不动。
+  final proseInk = resolved.body.color ?? scheme.onSurface;
+  if (proseInk.computeLuminance() < 0.5) {
+    return resolved.copyWith(
+      quote: resolved.quote.copyWith(barColor: light.quote.barColor),
+      ruleColor: light.ruleColor,
+    );
+  }
+  return resolved;
 }
 
 /// 取 App 当前的浅色配色（和白天模式用的是同一份），按设置缓存。
