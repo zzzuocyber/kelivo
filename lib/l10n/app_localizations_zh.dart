@@ -16161,8 +16161,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get compressionCarryEarlierHint => '之前压缩过的部分里你发过的消息，也可以挑进来。';
 
   @override
-  String compressionCarryPreview(int count, String tokens) {
-    return '将带上 $count 条 · 约 $tokens tokens';
+  String compressionCarryPreview(int count, int replyCount, String tokens) {
+    return '$count 条用户原文 · $replyCount 条助手回复 · 约 $tokens tokens';
   }
 
   @override
@@ -16342,6 +16342,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get compressionCarryListTitle => '消息预览';
+
+  @override
+  String get compressionCarrySelectAllReplies => '全选助手回复';
+
+  @override
+  String get compressionCarryDeselectAllReplies => '全不选';
+
+  @override
+  String get compressionCarryPairNotFit => '剩余空间放不下这组原文和回复，本次会一起跳过。';
 
   @override
   String compressionCarryImageCount(int count) {
@@ -32656,8 +32665,8 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get compressionCarryEarlierHint => '之前压缩过的部分里你发过的消息，也可以挑进来。';
 
   @override
-  String compressionCarryPreview(int count, String tokens) {
-    return '将带上 $count 条 · 约 $tokens tokens';
+  String compressionCarryPreview(int count, int replyCount, String tokens) {
+    return '$count 条用户原文 · $replyCount 条助手回复 · 约 $tokens tokens';
   }
 
   @override
@@ -32837,6 +32846,15 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get compressionCarryListTitle => '消息预览';
+
+  @override
+  String get compressionCarrySelectAllReplies => '全选助手回复';
+
+  @override
+  String get compressionCarryDeselectAllReplies => '全不选';
+
+  @override
+  String get compressionCarryPairNotFit => '剩余空间放不下这组原文和回复，本次会一起跳过。';
 
   @override
   String compressionCarryImageCount(int count) {
@@ -49163,8 +49181,20 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get compressionCarryEarlierHint => '之前壓縮過的部分裡你發過的訊息，也可以挑進來。';
 
   @override
-  String compressionCarryPreview(int count, String tokens) {
-    return '將帶上 $count 則 · 約 $tokens tokens';
+  String compressionCarryPreview(int count, int replyCount, String tokens) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 則使用者訊息',
+      one: '1 則使用者訊息',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      replyCount,
+      locale: localeName,
+      other: '$replyCount 則回覆',
+      one: '1 則回覆',
+    );
+    return '$_temp0 · $_temp1 · 約 $tokens tokens';
   }
 
   @override
@@ -49344,6 +49374,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get compressionCarryListTitle => '訊息預覽';
+
+  @override
+  String get compressionCarrySelectAllReplies => '全選回覆';
+
+  @override
+  String get compressionCarryDeselectAllReplies => '取消選取所有回覆';
+
+  @override
+  String get compressionCarryPairNotFit => '剩餘空間放不下這組訊息和回覆，本次會一起略過。';
 
   @override
   String compressionCarryImageCount(int count) {
