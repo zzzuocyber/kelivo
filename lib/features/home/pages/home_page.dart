@@ -1397,10 +1397,7 @@ class _HomePageState extends State<HomePage>
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: AppFontWeights.medium,
-          ),
+          style: TextStyle(fontSize: 15, fontWeight: AppFontWeights.medium),
         ),
       ),
       onBack: _openSimulatorList,
