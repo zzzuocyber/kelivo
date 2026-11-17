@@ -1155,7 +1155,7 @@ class _HomePageState extends State<HomePage>
     if (options.isEmpty) return const SizedBox.shrink();
     return SimulatorOptionBar(
       options: options,
-      onSend: (text) => _controller.sendMessage(text),
+      onSend: (text) => _controller.sendMessage(ChatInputData(text: text)),
     );
   }
 
