@@ -1747,6 +1747,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get backupPageFilesLabel => 'Файлы и изображения';
 
   @override
+  String get backupPageSettingsSaveFailed =>
+      'Не удалось сохранить настройки резервного копирования. Попробуйте ещё раз.';
+
+  @override
   String get backupPageScopeTitle => 'Содержимое резервной копии и импорта';
 
   @override

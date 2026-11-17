@@ -1642,6 +1642,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backupPageFilesLabel => '文件与图片';
 
   @override
+  String get backupPageSettingsSaveFailed => '备份设置保存失败，请重试。';
+
+  @override
   String get backupPageScopeTitle => '备份与导入内容';
 
   @override
@@ -18171,6 +18174,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get backupPageFilesLabel => '文件与图片';
+
+  @override
+  String get backupPageSettingsSaveFailed => '备份设置保存失败，请重试。';
 
   @override
   String get backupPageScopeTitle => '备份与导入内容';
@@ -34707,6 +34713,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get backupPageFilesLabel => '檔案與圖片';
+
+  @override
+  String get backupPageSettingsSaveFailed => '無法儲存備份設定，請再試一次。';
 
   @override
   String get backupPageScopeTitle => '備份與匯入內容';

@@ -1036,7 +1036,6 @@ class MyApp extends StatelessWidget {
             chatService: ctx.read<ChatService>(),
             businessRepository: databaseLease.businessRepository,
             businessPreferences: businessPreferences,
-            initialConfig: ctx.read<SettingsProvider>().webDavConfig,
           ),
         ),
         ChangeNotifierProvider(
@@ -1044,7 +1043,6 @@ class MyApp extends StatelessWidget {
             chatService: ctx.read<ChatService>(),
             businessRepository: databaseLease.businessRepository,
             businessPreferences: businessPreferences,
-            initialConfig: ctx.read<SettingsProvider>().s3Config,
           ),
         ),
         ChangeNotifierProvider(
