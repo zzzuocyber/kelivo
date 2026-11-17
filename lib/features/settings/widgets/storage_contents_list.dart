@@ -10,6 +10,7 @@ import '../../../core/services/skills/skills_service.dart';
 import '../../../core/services/storage/storage_usage_service.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/ios_settings_rows.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/section_card.dart';
@@ -25,10 +26,19 @@ class StorageContentsList extends StatelessWidget {
     super.key,
     required this.category,
     required this.fmtBytes,
+    this.selection,
+    this.onToggleSelection,
   });
 
   final StorageUsageCategory category;
   final String Function(int) fmtBytes;
+
+  /// Non-null turns every row into a checkbox row: the checkbox toggles the
+  /// entry id in this set, while tapping the row itself keeps its old action
+  /// (opening the directory). Used by the session-file deleter, which works
+  /// from the user's own picks instead of guessing what is unused.
+  final Set<String>? selection;
+  final ValueChanged<String>? onToggleSelection;
 
   static bool supports(StorageUsageCategoryKey key) => const {
     StorageUsageCategoryKey.workspaceFiles,
@@ -68,19 +78,40 @@ class StorageContentsList extends StatelessWidget {
     if (category.subcategories.isEmpty) {
       return Center(child: Text(l10n.workspaceFilesEmpty));
     }
+    final selectable = selection != null && onToggleSelection != null;
+    final cs = Theme.of(context).colorScheme;
     return ListView.separated(
       itemCount: category.subcategories.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final entry = category.subcategories[index];
         final title = label(entry);
+        final row = IosNavRow(
+          key: ValueKey('storage-content-${entry.id}'),
+          icon: entry.isDirectory ? Lucide.Folder : Lucide.File,
+          label: title,
+          subtitle: fmtBytes(entry.stats.bytes),
+          onTap: () => _open(context, entry, title),
+        );
+        if (!selectable) return SectionCard(child: row);
         return SectionCard(
-          child: IosNavRow(
-            key: ValueKey('storage-content-${entry.id}'),
-            icon: entry.isDirectory ? Lucide.Folder : Lucide.File,
-            label: title,
-            subtitle: fmtBytes(entry.stats.bytes),
-            onTap: () => _open(context, entry, title),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 12, right: 2),
+                child: IosCheckbox(
+                  value: selection!.contains(entry.id),
+                  size: 20,
+                  hitTestSize: 22,
+                  borderWidth: 1.6,
+                  activeColor: cs.primary,
+                  borderColor: cs.primary.withValues(alpha: 0.55),
+                  onChanged: (_) => onToggleSelection!(entry.id),
+                  enableHaptics: false,
+                ),
+              ),
+              Expanded(child: row),
+            ],
           ),
         );
       },

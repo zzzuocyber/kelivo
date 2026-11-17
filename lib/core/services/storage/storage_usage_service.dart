@@ -905,6 +905,35 @@ abstract final class StorageUsageService {
     return StorageUsageStats(fileCount: cleared.files, bytes: cleared.bytes);
   }
 
+  /// Deletes the given conversation session directories outright.
+  ///
+  /// The caller has already chosen exactly which directories to drop, so no
+  /// reference check runs here: a directory whose files are still referenced
+  /// (drafts, other conversations, pending generations) is deleted too, and
+  /// whatever pointed at it shows up as missing afterwards. Each directory is
+  /// handled on its own so one locked entry cannot stop the rest; paths outside
+  /// the sessions root are ignored. Returns how many directories were removed.
+  static Future<int> deleteSessionDirectories(Iterable<String> paths) async {
+    final sessions = await AppDirectories.getSessionsDirectory();
+    final root = p.normalize(sessions.path);
+    var removed = 0;
+    for (final raw in paths.toSet()) {
+      final path = p.normalize(raw);
+      if (!p.isWithin(root, path)) continue;
+      try {
+        if (FileSystemEntity.typeSync(path, followLinks: false) !=
+            FileSystemEntityType.directory) {
+          continue;
+        }
+        await Directory(path).delete(recursive: true);
+        removed++;
+      } catch (_) {
+        // Locked or already gone: the count reports what really happened.
+      }
+    }
+    return removed;
+  }
+
   static Future<StorageUsageStats> _orphanSessionStats({
     required Directory sessions,
     required Set<String> conversationIds,

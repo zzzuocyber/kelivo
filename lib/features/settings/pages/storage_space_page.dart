@@ -37,18 +37,6 @@ import '../widgets/windows_data_directory_tile.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 import 'package:Kelivo/shared/widgets/section_card.dart';
 
-Set<String>? _conversationIdsOrNull(BuildContext context) {
-  try {
-    return context
-        .read<ChatService>()
-        .getAllConversations()
-        .map((conversation) => conversation.id)
-        .toSet();
-  } catch (_) {
-    return null;
-  }
-}
-
 class StorageSpacePage extends StatefulWidget {
   const StorageSpacePage({super.key, this.embedded = false});
 
@@ -580,57 +568,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
     }
   }
 
-  Future<void> _doCleanOrphanSessionFiles() async {
-    if (_clearing) return;
-    final l10n = AppLocalizations.of(context)!;
-    final conversationIds = _conversationIdsOrNull(context);
-    final reclaimable = await StorageUsageService.measureOrphanSessionFiles(
-      conversationIds: conversationIds,
-    );
-    if (!mounted) return;
-    final ok = await _confirmAction(
-      context,
-      title: l10n.storageSpaceClearConfirmTitle,
-      message: l10n.storageSessionFilesCleanOrphansHint(
-        _fmtBytes(reclaimable.bytes),
-      ),
-      actionLabel: l10n.storageSpaceClearButton,
-    );
-    if (!ok || !mounted) return;
-
-    setState(() => _clearing = true);
-    try {
-      await StorageUsageService.clearOrphanSessionFiles(
-        conversationIds: conversationIds,
-        protectedPaths:
-            context
-                .read<ChatService?>()
-                ?.transientAttachmentReferences
-                .keys
-                .toSet() ??
-            const {},
-      );
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: l10n.storageSpaceClearDone(
-          l10n.storageSpaceCategorySessionFiles,
-        ),
-        type: NotificationType.success,
-      );
-      await _refreshReport();
-    } catch (e) {
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: l10n.storageSpaceClearFailed(e.toString()),
-        type: NotificationType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _clearing = false);
-    }
-  }
-
   Future<void> _openCategoryDetail(StorageUsageCategoryKey key) async {
     final report = _report;
     if (report == null) return;
@@ -844,9 +781,6 @@ class _StorageSpacePageState extends State<StorageSpacePage> {
                         onClearLocalModels: _clearing
                             ? null
                             : _doClearLocalModels,
-                        onCleanOrphanSessionFiles: _clearing
-                            ? null
-                            : _doCleanOrphanSessionFiles,
                         refreshReport: _refreshReport,
                       ),
                     ),
@@ -1341,56 +1275,6 @@ class _StorageCategoryPageState extends State<_StorageCategoryPage> {
     }
   }
 
-  Future<void> _clearOrphanSessionFiles() async {
-    if (_clearing) return;
-    final l10n = AppLocalizations.of(context)!;
-    final conversationIds = _conversationIdsOrNull(context);
-    final reclaimable = await StorageUsageService.measureOrphanSessionFiles(
-      conversationIds: conversationIds,
-    );
-    if (!mounted) return;
-    final ok = await _confirmAction(
-      title: l10n.storageSpaceClearConfirmTitle,
-      message: l10n.storageSessionFilesCleanOrphansHint(
-        widget.fmtBytes(reclaimable.bytes),
-      ),
-      actionLabel: l10n.storageSpaceClearButton,
-    );
-    if (!ok || !mounted) return;
-
-    setState(() => _clearing = true);
-    try {
-      await StorageUsageService.clearOrphanSessionFiles(
-        conversationIds: conversationIds,
-        protectedPaths:
-            context
-                .read<ChatService?>()
-                ?.transientAttachmentReferences
-                .keys
-                .toSet() ??
-            const {},
-      );
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: l10n.storageSpaceClearDone(
-          l10n.storageSpaceCategorySessionFiles,
-        ),
-        type: NotificationType.success,
-      );
-      await _refresh();
-    } catch (e) {
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: l10n.storageSpaceClearFailed(e.toString()),
-        type: NotificationType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _clearing = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -1456,10 +1340,6 @@ class _StorageCategoryPageState extends State<_StorageCategoryPage> {
               : null,
           onClearLocalModels: (category.key == StorageUsageCategoryKey.other)
               ? _clearLocalModels
-              : null,
-          onCleanOrphanSessionFiles:
-              (category.key == StorageUsageCategoryKey.sessionFiles)
-              ? _clearOrphanSessionFiles
               : null,
           refreshReport: _refresh,
         ),
@@ -1664,7 +1544,6 @@ class _CategoryDetail extends StatelessWidget {
     required this.onClearDisplacedDatabases,
     required this.onClearFonts,
     required this.onClearLocalModels,
-    required this.onCleanOrphanSessionFiles,
     required this.refreshReport,
   });
 
@@ -1682,7 +1561,6 @@ class _CategoryDetail extends StatelessWidget {
   final Future<void> Function()? onClearDisplacedDatabases;
   final Future<void> Function()? onClearFonts;
   final Future<void> Function()? onClearLocalModels;
-  final Future<void> Function()? onCleanOrphanSessionFiles;
   final Future<void> Function() refreshReport;
 
   @override
@@ -1824,14 +1702,6 @@ class _CategoryDetail extends StatelessWidget {
         enabled: !clearing,
         onTap: () => openManager(const SkillsPage()),
       );
-    } else if (category.key == StorageUsageCategoryKey.sessionFiles) {
-      actions = IosTileButton(
-        label: l10n.storageSessionFilesCleanOrphans,
-        icon: Lucide.Trash2,
-        backgroundColor: cs.primary,
-        enabled: !clearing && onCleanOrphanSessionFiles != null,
-        onTap: () => onCleanOrphanSessionFiles?.call(),
-      );
     }
 
     if (category.key == StorageUsageCategoryKey.images ||
@@ -1843,6 +1713,17 @@ class _CategoryDetail extends StatelessWidget {
         title: title,
         refreshReport: refreshReport,
         fmtBytes: fmtBytes,
+      );
+    }
+
+    if (category.key == StorageUsageCategoryKey.sessionFiles) {
+      return _SessionFilesCategory(
+        category: category,
+        title: title,
+        hint: hint,
+        fmtBytes: fmtBytes,
+        clearing: clearing,
+        refreshReport: refreshReport,
       );
     }
 
@@ -2061,6 +1942,127 @@ class _CategoryDetail extends StatelessWidget {
         type: NotificationType.error,
       );
     }
+  }
+}
+
+/// Session-file page: the user ticks the directories they want gone and the
+/// delete button removes exactly those. Nothing here asks whether a directory
+/// is still referenced, in use or has a surviving conversation: the old
+/// orphan sweep answered that in the database and quietly skipped whatever it
+/// considered busy, which left unremovable folders behind.
+class _SessionFilesCategory extends StatefulWidget {
+  const _SessionFilesCategory({
+    required this.category,
+    required this.title,
+    required this.hint,
+    required this.fmtBytes,
+    required this.clearing,
+    required this.refreshReport,
+  });
+
+  final StorageUsageCategory category;
+  final String title;
+  final String hint;
+  final String Function(int) fmtBytes;
+  final bool clearing;
+  final Future<void> Function() refreshReport;
+
+  @override
+  State<_SessionFilesCategory> createState() => _SessionFilesCategoryState();
+}
+
+class _SessionFilesCategoryState extends State<_SessionFilesCategory> {
+  final Set<String> _selected = <String>{};
+  bool _deleting = false;
+
+  void _toggle(String id) {
+    setState(() {
+      if (!_selected.remove(id)) _selected.add(id);
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_deleting || _selected.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+    final paths = <String>[
+      for (final entry in widget.category.subcategories)
+        if (entry.isDirectory &&
+            _selected.contains(entry.id) &&
+            entry.path != null)
+          entry.path!,
+    ];
+    if (paths.isEmpty) return;
+    setState(() => _deleting = true);
+    try {
+      final removed = await StorageUsageService.deleteSessionDirectories(paths);
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        message: l10n.storageSpaceClearDone(
+          l10n.storageSpaceCategorySessionFiles,
+        ),
+        type: NotificationType.success,
+      );
+      if (removed > 0) _selected.clear();
+      await widget.refreshReport();
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        message: l10n.storageSpaceClearFailed(e.toString()),
+        type: NotificationType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final busy = widget.clearing || _deleting;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.title,
+          style: TextStyle(fontSize: 16, fontWeight: AppFontWeights.emphasis),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          widget.fmtBytes(widget.category.stats.bytes),
+          style: TextStyle(
+            fontSize: 12.5,
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.hint,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 14),
+        IosTileButton(
+          label: '删除会话文件',
+          icon: Lucide.Trash2,
+          backgroundColor: cs.primary,
+          enabled: !busy && _selected.isNotEmpty,
+          onTap: _deleteSelected,
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: StorageContentsList(
+            category: widget.category,
+            fmtBytes: widget.fmtBytes,
+            selection: _selected,
+            onToggleSelection: _toggle,
+          ),
+        ),
+      ],
+    );
   }
 }
 
