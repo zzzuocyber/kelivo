@@ -1158,9 +1158,8 @@ class _HomePageState extends State<HomePage>
     final status = SimulatorBlocks.innerOf(text, SimulatorBlocks.statusName);
     final ending = SimulatorBlocks.innerOf(text, SimulatorBlocks.endingName);
     final options = SimulatorOptions.parse(text);
-    if (status == null && ending == null && options.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    // 模拟器里 E 就是唯一的输入口，所以这一排永远都在；
+    // 没有选项时四个方块灰着。
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1169,12 +1168,10 @@ class _HomePageState extends State<HomePage>
             sections: SimulatorBlocks.statusSections(status),
           ),
         if (ending != null) SimulatorEndingCard(markdown: ending),
-        if (options.isNotEmpty)
-          SimulatorOptionBar(
-            options: options,
-            onSend: (text) =>
-                _controller.sendMessage(ChatInputData(text: text)),
-          ),
+        SimulatorOptionBar(
+          options: options,
+          onSend: (text) => _controller.sendMessage(ChatInputData(text: text)),
+        ),
       ],
     );
   }
@@ -1228,13 +1225,26 @@ class _HomePageState extends State<HomePage>
                 // Measure the option bar together with the composer, so the
                 // message list keeps its bottom padding clear of both.
                 child: Builder(
-                  builder: (context) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildSimulatorOptions(context),
-                      _buildChatInputBar(context, isTablet: false),
-                    ],
-                  ),
+                  builder: (context) {
+                    final simulator = SimulatorMeta.isSimulator(
+                      _controller.currentConversation,
+                    );
+                    if (simulator) {
+                      // 按版式备忘录：模拟器里只有正文 + 方块 + E，
+                      // 不搬聊天输入栏过来。
+                      return SafeArea(
+                        top: false,
+                        child: _buildSimulatorOptions(context),
+                      );
+                    }
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildSimulatorOptions(context),
+                        _buildChatInputBar(context, isTablet: false),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -1479,7 +1489,9 @@ class _HomePageState extends State<HomePage>
   }) {
     final assistant = context.watch<AssistantProvider>().currentAssistant;
     final footerVisible =
-        !_controller.isCurrentConversationLoading && !_controller.selecting;
+        !_controller.isCurrentConversationLoading &&
+        !_controller.selecting &&
+        !SimulatorMeta.isSimulator(_controller.currentConversation);
     final footerConversationId = _controller.currentConversation?.id;
     final footerBackgroundActive = _assistantBackgroundActive(context);
     final promptFooter = footerVisible
