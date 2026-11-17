@@ -30,6 +30,7 @@ import '../../simulator/simulator_blocks.dart';
 import '../../simulator/simulator_options.dart';
 import '../../simulator/widgets/simulator_ending_card.dart';
 import '../../simulator/widgets/simulator_status_panel.dart';
+import '../../simulator/widgets/simulator_scene_panel.dart';
 import '../../simulator/widgets/simulator_option_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
@@ -1177,6 +1178,9 @@ class _HomePageState extends State<HomePage>
   }
 
   Widget _buildMobileBody(BuildContext context, ColorScheme cs) {
+    if (SimulatorMeta.isSimulator(_controller.currentConversation)) {
+      return _buildSimulatorBody(context, cs);
+    }
     final bottomContentPadding = _controller.inputBarHeight + 16;
     final topContentPadding = _chatTopOverlayInset(context) + 8;
     final backgroundImageActive = _assistantBackgroundActive(context);
@@ -1250,6 +1254,115 @@ class _HomePageState extends State<HomePage>
             ),
       foreground: _buildForegroundOverlay(context),
     );
+  }
+
+  /// 模拟器的独立版式（按 05-暂存目录/模拟器-版式备忘录.md）：
+  /// 场景图（可折叠、默认开）→ 状态区 → 正文 → 底部方块与 E；结局是全屏遮罩。
+  Widget _buildSimulatorBody(BuildContext context, ColorScheme cs) {
+    final text = _simulatorLastReply();
+    final status = SimulatorBlocks.innerOf(text, SimulatorBlocks.statusName);
+    final ending = SimulatorBlocks.innerOf(text, SimulatorBlocks.endingName);
+    final options = SimulatorOptions.parse(text);
+    final extras =
+        _controller.currentConversation?.extras ?? const <String, dynamic>{};
+    final scene = extras[simulatorSceneKey] is String
+        ? extras[simulatorSceneKey] as String
+        : null;
+
+    return SafeArea(
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              SimulatorScenePanel(path: scene, onEdit: _simulatorEditScene),
+              if (status != null)
+                SimulatorStatusPanel(
+                  sections: SimulatorBlocks.statusSections(status),
+                ),
+              Expanded(
+                child: _buildMessageListView(
+                  context,
+                  topContentPadding: AppSpacing.xs,
+                  bottomContentPadding: AppSpacing.xs,
+                  dividerPadding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: AppSpacing.sm,
+                  ),
+                ),
+              ),
+              SimulatorOptionBar(
+                options: options,
+                onSend: (value) =>
+                    _controller.sendMessage(ChatInputData(text: value)),
+              ),
+            ],
+          ),
+          if (ending != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.45),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: SimulatorEndingCard(markdown: ending),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static const String simulatorSceneKey = 'simulator.scene';
+
+  String _simulatorLastReply() {
+    for (final message in _controller.messages.reversed) {
+      if (message.role == 'assistant') return message.content;
+    }
+    return '';
+  }
+
+  Future<void> _simulatorEditScene() async {
+    final conversation = _controller.currentConversation;
+    if (conversation == null) return;
+    final current = conversation.extras[simulatorSceneKey] is String
+        ? conversation.extras[simulatorSceneKey] as String
+        : '';
+    final controller = TextEditingController(text: current);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('场景图路径'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '贴本地图片路径，留空则不要图'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null) return;
+    final chat = context.read<ChatService>();
+    await chat.updateConversationExtras(conversation.id, (extras) {
+      final next = Map<String, dynamic>.of(extras);
+      if (result.isEmpty) {
+        next.remove(simulatorSceneKey);
+      } else {
+        next[simulatorSceneKey] = result;
+      }
+      return next;
+    });
   }
 
   Widget _buildTabletLayout(
