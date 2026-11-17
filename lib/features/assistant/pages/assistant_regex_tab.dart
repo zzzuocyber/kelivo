@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -686,6 +687,7 @@ Future<_RegexFormData?> _showRegexBottomSheet(
   final nameCtrl = TextEditingController(text: rule?.name ?? '');
   final patternCtrl = TextEditingController(text: rule?.pattern ?? '');
   final replacementCtrl = TextEditingController(text: rule?.replacement ?? '');
+  final fieldsKey = GlobalKey<_RegexFieldsBlockState>();
   final Set<AssistantRegexScope> scopes = {
     ...(rule?.scopes ?? <AssistantRegexScope>[AssistantRegexScope.user]),
   };
@@ -703,6 +705,8 @@ Future<_RegexFormData?> _showRegexBottomSheet(
       return StatefulBuilder(
         builder: (ctx, setState) {
           Future<void> submit() async {
+            // Read the JSON box back first; a bad paste keeps the sheet open.
+            if (!(fieldsKey.currentState?.syncToFields() ?? true)) return;
             final name = nameCtrl.text.trim();
             final pattern = patternCtrl.text.trim();
             if (name.isEmpty || pattern.isEmpty || scopes.isEmpty) {
@@ -802,21 +806,12 @@ Future<_RegexFormData?> _showRegexBottomSheet(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _RegexTextField(
-                              controller: nameCtrl,
-                              label: l10n.assistantRegexNameLabel,
-                              autofocus: true,
-                            ),
-                            const SizedBox(height: 12),
-                            _RegexTextField(
-                              controller: patternCtrl,
-                              label: l10n.assistantRegexPatternLabel,
-                            ),
-                            const SizedBox(height: 12),
-                            _RegexTextField(
-                              controller: replacementCtrl,
-                              label: l10n.assistantRegexReplacementLabel,
-                              multiline: true,
+                            _RegexFieldsBlock(
+                              key: fieldsKey,
+                              nameCtrl: nameCtrl,
+                              patternCtrl: patternCtrl,
+                              replacementCtrl: replacementCtrl,
+                              autofocusName: true,
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -895,6 +890,14 @@ Future<_RegexFormData?> _showRegexBottomSheet(
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 8),
+                            Center(
+                              child: TextButton(
+                                onPressed: () =>
+                                    fieldsKey.currentState?.toggleMode(),
+                                child: const Text('切换输入模式'),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -920,6 +923,7 @@ Future<_RegexFormData?> _showRegexDialog(
   final nameCtrl = TextEditingController(text: rule?.name ?? '');
   final patternCtrl = TextEditingController(text: rule?.pattern ?? '');
   final replacementCtrl = TextEditingController(text: rule?.replacement ?? '');
+  final fieldsKey = GlobalKey<_RegexFieldsBlockState>();
   final Set<AssistantRegexScope> scopes = {
     ...(rule?.scopes ?? <AssistantRegexScope>[AssistantRegexScope.user]),
   };
@@ -937,6 +941,8 @@ Future<_RegexFormData?> _showRegexDialog(
         child: StatefulBuilder(
           builder: (ctx, setState) {
             Future<void> submit() async {
+              // Read the JSON box back first; a bad paste keeps the dialog open.
+              if (!(fieldsKey.currentState?.syncToFields() ?? true)) return;
               final name = nameCtrl.text.trim();
               final pattern = patternCtrl.text.trim();
               if (name.isEmpty || pattern.isEmpty || scopes.isEmpty) {
@@ -1008,21 +1014,12 @@ Future<_RegexFormData?> _showRegexDialog(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _RegexTextField(
-                              controller: nameCtrl,
-                              label: l10n.assistantRegexNameLabel,
-                              autofocus: true,
-                            ),
-                            const SizedBox(height: 12),
-                            _RegexTextField(
-                              controller: patternCtrl,
-                              label: l10n.assistantRegexPatternLabel,
-                            ),
-                            const SizedBox(height: 12),
-                            _RegexTextField(
-                              controller: replacementCtrl,
-                              label: l10n.assistantRegexReplacementLabel,
-                              multiline: true,
+                            _RegexFieldsBlock(
+                              key: fieldsKey,
+                              nameCtrl: nameCtrl,
+                              patternCtrl: patternCtrl,
+                              replacementCtrl: replacementCtrl,
+                              autofocusName: true,
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -1101,6 +1098,14 @@ Future<_RegexFormData?> _showRegexDialog(
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 8),
+                            Center(
+                              child: TextButton(
+                                onPressed: () =>
+                                    fieldsKey.currentState?.toggleMode(),
+                                child: const Text('切换输入模式'),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1164,6 +1169,314 @@ Future<_RegexFormData?> _showRegexDialog(
   patternCtrl.dispose();
   replacementCtrl.dispose();
   return result;
+}
+
+/// Reads the pasted rule JSON without being picky, in three passes:
+///
+/// 1. strict JSON;
+/// 2. the same, after escaping real line breaks that notes and chat apps leave
+///    inside quoted strings;
+/// 3. a hand-written fallback where every backslash is taken literally, so a
+///    pattern can be pasted as `[\s\S]+` instead of `[\\s\\S]+`.
+///
+/// Returns null when nothing can be understood. Callers must leave every field
+/// untouched in that case.
+Map<String, String>? _parseLooseRegexJson(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) return null;
+
+  Object? decoded;
+  try {
+    decoded = jsonDecode(text);
+  } catch (_) {
+    try {
+      decoded = jsonDecode(_escapeControlCharsInsideStrings(text));
+    } catch (_) {
+      decoded = null;
+    }
+  }
+  // A strict decode that turns a backslash into a control character (,
+  // and friends) means the text was a regular expression, not JSON: keep the
+  // backslashes by reading it the hand-written way instead.
+  if (decoded is Map && !_holdsSuspectControlChars(decoded)) {
+    return _collectRuleFields(decoded);
+  }
+
+  final relaxed = _parseRelaxedRuleObject(text);
+  if (relaxed == null) return null;
+  return _collectRuleFields(relaxed);
+}
+
+/// True when a decoded object contains control characters that only appear
+/// because a regular expression's `\\b` / `\\f` were read as JSON escapes.
+/// Line breaks and tabs are left alone: those are what a JSON string means.
+bool _holdsSuspectControlChars(Object source) {
+  if (source is! Map) return false;
+  for (final value in source.values) {
+    if (value is! String) continue;
+    for (final rune in value.runes) {
+      if (rune == 0x0A || rune == 0x0D || rune == 0x09) continue;
+      if (rune < 0x20) return true;
+    }
+  }
+  return false;
+}
+
+/// Keeps the fields this editor knows about and ignores everything else, so an
+/// extra note in the JSON cannot break a paste.
+Map<String, String>? _collectRuleFields(Object source) {
+  if (source is! Map) return null;
+  String? asText(Object? value) {
+    if (value is String) return value;
+    if (value is num || value is bool) return value.toString();
+    return null;
+  }
+
+  final out = <String, String>{};
+  for (final entry in source.entries) {
+    final key = entry.key.toString().trim().toLowerCase();
+    final value = asText(entry.value);
+    if (value == null) return null;
+    if (key == '名称' || key == 'name') {
+      out['name'] = value;
+    } else if (key == '正则表达式' || key == 'pattern') {
+      out['pattern'] = value;
+    } else if (key == '替换字符串' || key == 'replacement') {
+      out['replacement'] = value;
+    }
+  }
+  return out.isEmpty ? null : out;
+}
+
+/// Hand-written fallback: reads `{"key": "value", ...}` where real line breaks
+/// are allowed inside values and only `\\` and `\\"` are unescaped. Everything
+/// else keeps its backslash, which is what a regular expression wants.
+Map<String, String>? _parseRelaxedRuleObject(String text) {
+  var i = 0;
+  void skipSpace() {
+    while (i < text.length && ' \t\r\n'.contains(text[i])) {
+      i++;
+    }
+  }
+
+  String? readString() {
+    if (i >= text.length || text[i] != '"') return null;
+    i++;
+    final buffer = StringBuffer();
+    var escaped = false;
+    while (i < text.length) {
+      final ch = text[i];
+      if (escaped) {
+        if (ch == '"' || ch == '\\') {
+          buffer.write(ch);
+        } else {
+          buffer
+            ..write(r'\')
+            ..write(ch);
+        }
+        escaped = false;
+        i++;
+        continue;
+      }
+      if (ch == r'\') {
+        escaped = true;
+        i++;
+        continue;
+      }
+      if (ch == '"') {
+        i++;
+        return buffer.toString();
+      }
+      buffer.write(ch);
+      i++;
+    }
+    return null;
+  }
+
+  skipSpace();
+  if (i >= text.length || text[i] != '{') return null;
+  i++;
+
+  final out = <String, String>{};
+  while (true) {
+    skipSpace();
+    if (i < text.length && text[i] == '}') break;
+    final key = readString();
+    if (key == null) return null;
+    skipSpace();
+    if (i >= text.length || text[i] != ':') return null;
+    i++;
+    skipSpace();
+    final value = readString();
+    if (value == null) return null;
+    out[key] = value;
+    skipSpace();
+    if (i < text.length && text[i] == ',') {
+      i++;
+      continue;
+    }
+    if (i < text.length && text[i] == '}') break;
+    return null;
+  }
+  return out;
+}
+
+/// Turns real line breaks, tabs and carriage returns that sit inside quoted
+/// strings into their escape sequences, which is what JSON actually wants.
+String _escapeControlCharsInsideStrings(String source) {
+  final out = StringBuffer();
+  var inString = false;
+  var escaped = false;
+  for (var i = 0; i < source.length; i++) {
+    final ch = source[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        out.write(ch);
+        continue;
+      }
+      if (ch == r'\') {
+        escaped = true;
+        out.write(ch);
+        continue;
+      }
+      if (ch == '"') {
+        inString = false;
+        out.write(ch);
+        continue;
+      }
+      if (ch == '\n') {
+        out.write(r'\n');
+        continue;
+      }
+      if (ch == '\r') {
+        continue;
+      }
+      if (ch == '\t') {
+        out.write(r'\t');
+        continue;
+      }
+      out.write(ch);
+      continue;
+    }
+    if (ch == '"') inString = true;
+    out.write(ch);
+  }
+  return out.toString();
+}
+
+/// The three rule fields, with a text mode that folds them into one JSON box.
+///
+/// Switching never rewrites content: going to text mode dumps the three
+/// controllers verbatim, and coming back fills them only from keys the JSON
+/// actually carries. A paste that cannot be understood reports itself and
+/// leaves both the JSON box and the three fields exactly as they were.
+class _RegexFieldsBlock extends StatefulWidget {
+  const _RegexFieldsBlock({
+    super.key,
+    required this.nameCtrl,
+    required this.patternCtrl,
+    required this.replacementCtrl,
+    this.autofocusName = false,
+  });
+
+  final TextEditingController nameCtrl;
+  final TextEditingController patternCtrl;
+  final TextEditingController replacementCtrl;
+  final bool autofocusName;
+
+  @override
+  State<_RegexFieldsBlock> createState() => _RegexFieldsBlockState();
+}
+
+class _RegexFieldsBlockState extends State<_RegexFieldsBlock> {
+  static const String _nameKey = '名称';
+  static const String _patternKey = '正则表达式';
+  static const String _replacementKey = '替换字符串';
+
+  final TextEditingController _jsonCtrl = TextEditingController();
+  bool _textMode = false;
+
+  @override
+  void dispose() {
+    _jsonCtrl.dispose();
+    super.dispose();
+  }
+
+  String _composeJson() {
+    return const JsonEncoder.withIndent('  ').convert(<String, String>{
+      _nameKey: widget.nameCtrl.text,
+      _patternKey: widget.patternCtrl.text,
+      _replacementKey: widget.replacementCtrl.text,
+    });
+  }
+
+  /// Writes the JSON box back into the three fields. False means "could not be
+  /// read": nothing has been changed and the caller must stay put.
+  bool syncToFields() {
+    if (!_textMode) return true;
+    final parsed = _parseLooseRegexJson(_jsonCtrl.text);
+    if (parsed == null) {
+      showAppSnackBar(
+        context,
+        message: '这段 JSON 读不出来，原文没动，改好再切',
+        type: NotificationType.warning,
+      );
+      return false;
+    }
+    final name = parsed['name'];
+    final pattern = parsed['pattern'];
+    final replacement = parsed['replacement'];
+    if (name != null) widget.nameCtrl.text = name;
+    if (pattern != null) widget.patternCtrl.text = pattern;
+    if (replacement != null) widget.replacementCtrl.text = replacement;
+    return true;
+  }
+
+  /// Entry point for the sheet's toggle button, which lives below the scope
+  /// cards so the whole editor does not jump around when the mode flips.
+  void toggleMode() {
+    if (_textMode) {
+      if (!syncToFields()) return;
+      setState(() => _textMode = false);
+      return;
+    }
+    _jsonCtrl.text = _composeJson();
+    setState(() => _textMode = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_textMode) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _RegexTextField(
+            controller: widget.nameCtrl,
+            label: AppLocalizations.of(context)!.assistantRegexNameLabel,
+            autofocus: widget.autofocusName,
+          ),
+          const SizedBox(height: 12),
+          _RegexTextField(
+            controller: widget.patternCtrl,
+            label: AppLocalizations.of(context)!.assistantRegexPatternLabel,
+          ),
+          const SizedBox(height: 12),
+          _RegexTextField(
+            controller: widget.replacementCtrl,
+            label: AppLocalizations.of(context)!.assistantRegexReplacementLabel,
+            multiline: true,
+          ),
+        ],
+      );
+    }
+    return _RegexTextField(
+      controller: _jsonCtrl,
+      label: '规则 JSON',
+      multiline: true,
+    );
+  }
 }
 
 class _RegexTextField extends StatelessWidget {
