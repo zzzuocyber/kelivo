@@ -26,7 +26,10 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
     show kIsWeb, mapEquals, ValueListenable;
 import '../../simulator/simulator_meta.dart';
+import '../../simulator/simulator_blocks.dart';
 import '../../simulator/simulator_options.dart';
+import '../../simulator/widgets/simulator_ending_card.dart';
+import '../../simulator/widgets/simulator_status_panel.dart';
 import '../../simulator/widgets/simulator_option_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
@@ -1151,11 +1154,28 @@ class _HomePageState extends State<HomePage>
         break;
       }
     }
-    final options = SimulatorOptions.parse(lastAssistant ?? '');
-    if (options.isEmpty) return const SizedBox.shrink();
-    return SimulatorOptionBar(
-      options: options,
-      onSend: (text) => _controller.sendMessage(ChatInputData(text: text)),
+    final text = lastAssistant ?? '';
+    final status = SimulatorBlocks.innerOf(text, SimulatorBlocks.statusName);
+    final ending = SimulatorBlocks.innerOf(text, SimulatorBlocks.endingName);
+    final options = SimulatorOptions.parse(text);
+    if (status == null && ending == null && options.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (status != null)
+          SimulatorStatusPanel(
+            sections: SimulatorBlocks.statusSections(status),
+          ),
+        if (ending != null) SimulatorEndingCard(markdown: ending),
+        if (options.isNotEmpty)
+          SimulatorOptionBar(
+            options: options,
+            onSend: (text) =>
+                _controller.sendMessage(ChatInputData(text: text)),
+          ),
+      ],
     );
   }
 

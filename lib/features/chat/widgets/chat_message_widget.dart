@@ -16,6 +16,7 @@ import 'response_truncation_notice.dart';
 import 'dart:async';
 import 'dart:collection';
 import '../../simulator/simulator_meta.dart';
+import '../../simulator/simulator_blocks.dart';
 import '../../simulator/simulator_options.dart';
 
 import 'package:flutter/material.dart';
@@ -1641,21 +1642,29 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
   /// Simulations fold the raw option block into a collapsed <details>, so the
   /// lines do not show twice next to the square keys. Every other
   /// conversation is untouched.
-  String _simulatorDisplayText(String text) {
-    var isSimulator = _simulatorConversation;
-    if (isSimulator == null) {
-      try {
-        final chat = context.read<ChatService>();
-        isSimulator = SimulatorMeta.isSimulator(
-          chat.getConversation(widget.message.conversationId),
-        );
-      } catch (_) {
-        isSimulator = false;
-      }
-      _simulatorConversation = isSimulator;
+  bool get _isSimulatorConversation {
+    final cached = _simulatorConversation;
+    if (cached != null) return cached;
+    var value = false;
+    try {
+      final chat = context.read<ChatService>();
+      value = SimulatorMeta.isSimulator(
+        chat.getConversation(widget.message.conversationId),
+      );
+    } catch (_) {
+      value = false;
     }
-    if (!isSimulator) return text;
-    return SimulatorOptions.collapseForDisplay(text);
+    _simulatorConversation = value;
+    return value;
+  }
+
+  String _simulatorDisplayText(String text) {
+    if (!_isSimulatorConversation) return text;
+    final withoutPanels = SimulatorBlocks.strip(text, const <String>[
+      SimulatorBlocks.statusName,
+      SimulatorBlocks.endingName,
+    ]);
+    return SimulatorOptions.collapseForDisplay(withoutPanels);
   }
 
   String _assistantNameFallback() {
@@ -2908,6 +2917,16 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
     UiTextSlice? uiSource,
     SourceTextMap? sourceMap,
   }) {
+    // 模拟器对话的标记块：正文里不显示（状态与结局由固定面板负责）。
+    if (_isSimulatorConversation) {
+      final folded = _simulatorDisplayText(visualContent);
+      if (!identical(folded, visualContent)) {
+        visualContent = folded;
+        // 原文被改写后，位置映射不再对得上，清掉免得越界。
+        sourceMap = null;
+        findParagraph = null;
+      }
+    }
     final bool isDesktop =
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows ||
@@ -3364,7 +3383,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       scope: AssistantRegexScope.assistant,
       target: AssistantRegexTransformTarget.visual,
     );
-    final visualContent = _simulatorDisplayText(mappedVisual.text);
+    final visualContent = mappedVisual.text;
     final visualTranslation = widget.message.translation != null
         ? _applyVisualAssistantRegexes(
             widget.message.translation!,

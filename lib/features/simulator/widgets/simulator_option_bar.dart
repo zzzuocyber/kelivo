@@ -67,124 +67,132 @@ class _SimulatorOptionBarState extends State<SimulatorOptionBar> {
     final strong = cs.onSurface.withValues(alpha: 0.82);
     final faint = cs.onSurface.withValues(alpha: 0.45);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (_selected != null)
+    return Container(
+      // 压在聊天内容上面，必须有不透的底，否则下面的字会透出来
+      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_selected != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.xs,
+                AppSpacing.md,
+                0,
+              ),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_selected!.letter}. ${_selected!.text}',
+                        style: TextStyle(fontSize: 13, color: cs.onSurface),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: widget.enabled ? _sendSelected : null,
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 32),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      child: const Text('发送'),
+                    ),
+                    IconButton(
+                      onPressed: () => setState(() => _selected = null),
+                      icon: Icon(Lucide.X, size: 16, color: faint),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.md,
               AppSpacing.xs,
               AppSpacing.md,
-              0,
+              AppSpacing.xs,
             ),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-              decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${_selected!.letter}. ${_selected!.text}',
-                      style: TextStyle(fontSize: 13, color: cs.onSurface),
-                    ),
+            child: Row(
+              children: [
+                for (final letter in SimulatorOptions.buttonLetters) ...[
+                  _SquareKey(
+                    letter: letter,
+                    option: _optionFor(letter),
+                    selected: _selected?.letter == letter,
+                    color: strong,
+                    accent: cs.primary,
+                    onTap: widget.enabled
+                        ? () {
+                            final option = _optionFor(letter);
+                            if (option != null) _pick(option);
+                          }
+                        : null,
                   ),
-                  TextButton(
-                    onPressed: widget.enabled ? _sendSelected : null,
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(0, 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                    ),
-                    child: const Text('发送'),
-                  ),
-                  IconButton(
-                    onPressed: () => setState(() => _selected = null),
-                    icon: Icon(Lucide.X, size: 16, color: faint),
-                    visualDensity: VisualDensity.compact,
-                  ),
+                  const SizedBox(width: 6),
                 ],
-              ),
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.xs,
-            AppSpacing.md,
-            AppSpacing.xs,
-          ),
-          child: Row(
-            children: [
-              for (final letter in SimulatorOptions.buttonLetters) ...[
-                _SquareKey(
-                  letter: letter,
-                  option: _optionFor(letter),
-                  selected: _selected?.letter == letter,
-                  color: strong,
-                  accent: cs.primary,
-                  onTap: widget.enabled
-                      ? () {
-                          final option = _optionFor(letter);
-                          if (option != null) _pick(option);
-                        }
-                      : null,
-                ),
-                const SizedBox(width: 6),
-              ],
-              Expanded(
-                child: Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: cs.onSurface.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        'E',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: faint,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: TextField(
-                          controller: _free,
-                          enabled: widget.enabled,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _sendFree(),
-                          style: TextStyle(fontSize: 13, color: cs.onSurface),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 6,
-                            ),
-                            hintText: '自己写一个走向',
-                            hintStyle: TextStyle(fontSize: 13, color: faint),
+                Expanded(
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: cs.onSurface.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'E',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: faint,
                           ),
                         ),
-                      ),
-                      IconButton(
-                        onPressed: widget.enabled ? _sendFree : null,
-                        icon: Icon(Lucide.ArrowUp, size: 16, color: cs.primary),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: TextField(
+                            controller: _free,
+                            enabled: widget.enabled,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _sendFree(),
+                            style: TextStyle(fontSize: 13, color: cs.onSurface),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 6,
+                              ),
+                              hintText: '自己写一个走向',
+                              hintStyle: TextStyle(fontSize: 13, color: faint),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: widget.enabled ? _sendFree : null,
+                          icon: Icon(
+                            Lucide.ArrowUp,
+                            size: 16,
+                            color: cs.primary,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
