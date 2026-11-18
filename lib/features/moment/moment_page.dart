@@ -544,17 +544,6 @@ class _MomentPageState extends State<MomentPage> {
               child: MomentTopBar(
                 onBack: () => Navigator.of(context).maybePop(),
                 actions: <Widget>[
-                  MomentRoundButton(
-                    icon: Lucide.RefreshCw,
-                    onTap: _generating ? null : _refresh,
-                    child: _generating
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : null,
-                  ),
                   MomentPill(
                     icon: Lucide.SquarePen,
                     label: '发布',
