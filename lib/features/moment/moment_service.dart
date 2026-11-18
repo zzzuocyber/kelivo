@@ -536,7 +536,7 @@ class MomentReplyComposer {
         reasoning: ReasoningRequest(settings.momentReasoning),
         requestTimeout: momentReplyTimeout,
       );
-      return parseReplies(result.text, names: names, me: me, onlyFrom: replyTo);
+      return parseReplies(result.text, names: names, me: me);
     } catch (_) {
       return const <MomentComment>[];
     }
