@@ -198,7 +198,7 @@ class MomentPostCard extends StatelessWidget {
         ? comments.length
         : pageStart + momentCommentsPerPage;
     final card = Container(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 22),
+      padding: const EdgeInsets.fromLTRB(26, 24, 26, 22),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: MomentColors.hairline)),
       ),
@@ -635,7 +635,7 @@ class MomentPanel extends StatelessWidget {
           if (avatarName != null)
             Positioned(
               top: -30,
-              right: 16,
+              right: 26,
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
