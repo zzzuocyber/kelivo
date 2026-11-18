@@ -503,19 +503,11 @@ const String momentBannerSvg = '''
 </svg>
 ''';
 
-/// 顶部那块封面：背景图 + 右下角名字。头像不在这里，它是半压在交界处的，
+/// 顶部那块封面：只有背景图，不写字。头像不在这里，它是半压在交界处的，
 /// 由 [MomentPanel] 负责，这样它能跟着白卡一起滚走。
 class MomentCover extends StatelessWidget {
-  const MomentCover({
-    super.key,
-    required this.name,
-    this.subtitle,
-    this.height = 180,
-    this.coverPath,
-  });
+  const MomentCover({super.key, this.height = 180, this.coverPath});
 
-  final String name;
-  final String? subtitle;
   final double height;
 
   /// 上传过的背景图；读不到就退回内置占位图。
@@ -556,50 +548,6 @@ class MomentCover extends StatelessWidget {
                   colors: <Color>[Color(0x33000000), Color(0x00000000)],
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            right: 84,
-            bottom: 8,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    shadows: <Shadow>[
-                      Shadow(
-                        color: Color(0x66000000),
-                        blurRadius: 10,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                ),
-                if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xF2FFFFFF),
-                      shadows: <Shadow>[
-                        Shadow(
-                          color: Color(0x66000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
             ),
           ),
         ],

@@ -527,7 +527,7 @@ class _MomentPageState extends State<MomentPage> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.zero,
                 children: <Widget>[
-                  MomentCover(name: persona, coverPath: personaAssets.cover),
+                  MomentCover(coverPath: personaAssets.cover),
                   MomentPanel(
                     avatarName: persona,
                     avatarPath: personaAssets.avatar,
