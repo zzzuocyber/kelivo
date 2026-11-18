@@ -34,6 +34,10 @@ class _MomentPageState extends State<MomentPage> {
   /// 我正在等谁的回我一句，那一条帖子底下就转个小圈。
   String? _waitingReplyPostId;
 
+  /// 正在重写哪条动态 / 哪条评论（长按菜单里的「刷新」）。
+  String? _rewritingPostId;
+  String? _rewritingCommentKey;
+
   @override
   void initState() {
     super.initState();
@@ -249,6 +253,7 @@ class _MomentPageState extends State<MomentPage> {
         post: post,
         myText: myText,
         replyTo: replyTo,
+        recentPosts: _posts,
       );
       final replies = await composer.compose();
       if (replies.isNotEmpty) {
@@ -260,6 +265,197 @@ class _MomentPageState extends State<MomentPage> {
       // 没人回就算了，不打扰。
     } finally {
       if (mounted) setState(() => _waitingReplyPostId = null);
+    }
+  }
+
+  Future<void> _showPostMenu(MomentPost post) async {
+    final action = await _showActionSheet('这条动态', <String>['刷新', '删除']);
+    if (action == null) return;
+    if (action == '删除') {
+      await _confirmDelete(
+        '删除这条动态？',
+        '连同它的点赞和评论一起删掉。',
+        onOk: () => _store.deletePost(post.id),
+      );
+      return;
+    }
+    await _rewritePost(post);
+  }
+
+  Future<void> _showCommentMenu(
+    MomentPost post,
+    int index,
+    MomentComment comment,
+  ) async {
+    if (_rewritingCommentKey != null) return;
+    final action = await _showActionSheet('这条回复', <String>['刷新', '删除']);
+    if (action == null) return;
+    if (action == '删除') {
+      await _confirmDelete(
+        '删除这条回复？',
+        '只删这一条，别的不动。',
+        onOk: () => _store.deleteComment(post.id, index),
+      );
+      return;
+    }
+    await _rewriteComment(post, index, comment);
+  }
+
+  Future<String?> _showActionSheet(String title, List<String> actions) {
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Theme(
+        data: momentLightTheme(),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: MomentColors.secondaryText,
+                    ),
+                  ),
+                ),
+              ),
+              for (final action in actions)
+                InkWell(
+                  onTap: () => Navigator.of(ctx).pop(action),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Text(
+                        action,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: action == '删除'
+                              ? const Color(0xFFC0392B)
+                              : MomentColors.primaryText,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(
+    String title,
+    String message, {
+    Future<void> Function()? onOk,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          title,
+          style: const TextStyle(color: MomentColors.primaryText, fontSize: 17),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: MomentColors.primaryText, fontSize: 14),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除', style: TextStyle(color: Color(0xFFC0392B))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      if (onOk != null) await onOk();
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      _toast('没删掉，再试一次');
+    }
+  }
+
+  Future<void> _rewritePost(MomentPost post) async {
+    setState(() => _rewritingPostId = post.id);
+    try {
+      final settings = context.read<SettingsProvider>();
+      final worldBooks = context.read<WorldBookProvider>();
+      final rewriter = MomentRewriter(
+        settings: settings,
+        worldBooks: worldBooks,
+        bookId: settings.momentBookId,
+        characters: _characters,
+        personaName: _personaName(settings),
+        recentPosts: _posts,
+      );
+      final text = await rewriter.rewritePost(post);
+      if (text != null && text.isNotEmpty) {
+        await _store.updatePostText(post.id, text);
+      } else {
+        _toast('这次没重写出东西，再长按试一次');
+      }
+    } catch (_) {
+      _toast('重写没成功，再长按试一次');
+    } finally {
+      if (mounted) {
+        setState(() => _rewritingPostId = null);
+        _reload();
+      }
+    }
+  }
+
+  Future<void> _rewriteComment(
+    MomentPost post,
+    int index,
+    MomentComment comment,
+  ) async {
+    final key = '${post.id}#$index';
+    setState(() => _rewritingCommentKey = key);
+    try {
+      final settings = context.read<SettingsProvider>();
+      final worldBooks = context.read<WorldBookProvider>();
+      final rewriter = MomentRewriter(
+        settings: settings,
+        worldBooks: worldBooks,
+        bookId: settings.momentBookId,
+        characters: _characters,
+        personaName: _personaName(settings),
+        recentPosts: _posts,
+      );
+      final text = await rewriter.rewriteComment(post, comment);
+      if (text != null && text.isNotEmpty) {
+        await _store.updateCommentText(post.id, index, text);
+      } else {
+        _toast('这次没重写出东西，再长按试一次');
+      }
+    } catch (_) {
+      _toast('重写没成功，再长按试一次');
+    } finally {
+      if (mounted) {
+        setState(() => _rewritingCommentKey = null);
+        _reload();
+      }
     }
   }
 
@@ -464,13 +660,22 @@ class _MomentPageState extends State<MomentPage> {
         for (final post in _posts)
           MomentPostCard(
             post: post,
-            avatarPath: _assets[post.author]?.avatar,
+            avatarPath: momentAssetsForAuthor(
+              _assets,
+              post.author,
+              persona,
+            )?.avatar,
             likedByMe: post.likes.contains(persona),
             onTapAvatar: () => _openAuthor(post.author),
             onTapLike: () => _toggleLike(post),
             onTapComment: () => _comment(post),
             onTapCommentLine: (comment) =>
                 _comment(post, replyTo: comment.author),
+            onLongPressPost: _rewritingPostId == post.id
+                ? null
+                : () => _showPostMenu(post),
+            onLongPressComment: (index, comment) =>
+                _showCommentMenu(post, index, comment),
             waitingReply: _waitingReplyPostId == post.id,
           ),
         const SizedBox(height: 24),

@@ -58,6 +58,20 @@ Map<String, MomentAssets> momentAssetsFromExtras(Map<String, dynamic>? extras) {
 Map<String, MomentAssets> momentAssetsOf(Conversation? conversation) =>
     momentAssetsFromExtras(conversation?.extras);
 
+/// 找某个作者的两张图。作者名就是我自己时，用马甲那一份。
+MomentAssets? momentAssetsForAuthor(
+  Map<String, MomentAssets> assets,
+  String author,
+  String persona,
+) {
+  final name = author.trim();
+  final me = persona.trim();
+  if (me.isNotEmpty && name == me) {
+    return assets[MomentAssets.personaKey];
+  }
+  return assets[name] ?? assets[MomentAssets.personaKey];
+}
+
 /// 最近 N 条帖子，按时间倒序（新的在前），刷新时拿去让模型补互动。
 const int momentReactionWindow = 10;
 
@@ -238,6 +252,74 @@ class MomentStore {
             post,
       ];
     });
+  }
+
+  /// 重写一条动态的正文，别的都不动。
+  Future<void> updatePostText(String postId, String text) async {
+    await updatePosts((posts) {
+      return <MomentPost>[
+        for (final post in posts)
+          if (post.id == postId) post.copyWith(text: text) else post,
+      ];
+    });
+  }
+
+  Future<void> deletePost(String postId) async {
+    await updatePosts(
+      (posts) => <MomentPost>[
+        for (final post in posts)
+          if (post.id != postId) post,
+      ],
+    );
+  }
+
+  /// 重写某一条评论（按它在评论区里的位置定位）。
+  Future<void> updateCommentText(String postId, int index, String text) async {
+    await updatePosts((posts) {
+      return <MomentPost>[
+        for (final post in posts)
+          if (post.id == postId)
+            post.copyWith(comments: _replaceComment(post.comments, index, text))
+          else
+            post,
+      ];
+    });
+  }
+
+  Future<void> deleteComment(String postId, int index) async {
+    await updatePosts((posts) {
+      return <MomentPost>[
+        for (final post in posts)
+          if (post.id == postId)
+            post.copyWith(
+              comments: <MomentComment>[
+                for (var i = 0; i < post.comments.length; i++)
+                  if (i != index) post.comments[i],
+              ],
+            )
+          else
+            post,
+      ];
+    });
+  }
+
+  static List<MomentComment> _replaceComment(
+    List<MomentComment> comments,
+    int index,
+    String text,
+  ) {
+    if (index < 0 || index >= comments.length) return comments;
+    return <MomentComment>[
+      for (var i = 0; i < comments.length; i++)
+        if (i == index)
+          MomentComment(
+            author: comments[i].author,
+            text: text,
+            replyTo: comments[i].replyTo,
+          )
+        else
+          comments[i],
+    ];
   }
 
   Future<void> clearPosts() async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/providers/settings_provider.dart';
 import '../../core/services/chat/chat_service.dart';
 import 'moment_models.dart';
 import 'moment_store.dart';
@@ -30,8 +31,14 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
 
   void _load() {
     final conversation = _store.findConversation();
+    final persona = context.read<SettingsProvider>().momentPersonaName.trim();
     _assets =
-        momentAssetsOf(conversation)[widget.author] ?? const MomentAssets();
+        momentAssetsForAuthor(
+          momentAssetsOf(conversation),
+          widget.author,
+          persona.isEmpty ? '我' : persona,
+        ) ??
+        const MomentAssets();
     final posts = <MomentPost>[...momentPostsOf(conversation)]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     _posts = posts

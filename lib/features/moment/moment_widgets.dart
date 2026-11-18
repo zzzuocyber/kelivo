@@ -153,6 +153,8 @@ class MomentPostCard extends StatelessWidget {
     this.onTapLike,
     this.onTapComment,
     this.onTapCommentLine,
+    this.onLongPressPost,
+    this.onLongPressComment,
     this.waitingReply = false,
   });
 
@@ -166,12 +168,18 @@ class MomentPostCard extends StatelessWidget {
   /// 点评论区里的某一条，就回复那个人。
   final void Function(MomentComment comment)? onTapCommentLine;
 
+  /// 长按这条动态：刷新 / 删除。
+  final VoidCallback? onLongPressPost;
+
+  /// 长按某条评论：刷新 / 删除。
+  final void Function(int index, MomentComment comment)? onLongPressComment;
+
   /// 我刚评论完，角色正在回我。
   final bool waitingReply;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: MomentColors.hairline)),
@@ -306,12 +314,16 @@ class MomentPostCard extends StatelessWidget {
                               ),
                             ),
                         ],
-                        for (final comment in post.comments)
+                        for (var i = 0; i < post.comments.length; i++)
                           _commentRow(
-                            comment,
+                            post.comments[i],
                             onTapCommentLine == null
                                 ? null
-                                : () => onTapCommentLine!(comment),
+                                : () => onTapCommentLine!(post.comments[i]),
+                            onLongPressComment == null
+                                ? null
+                                : () =>
+                                      onLongPressComment!(i, post.comments[i]),
                           ),
                         if (waitingReply) ...<Widget>[
                           const SizedBox(height: 6),
@@ -338,9 +350,19 @@ class MomentPostCard extends StatelessWidget {
         ],
       ),
     );
+    if (onLongPressPost == null) return card;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: onLongPressPost,
+      child: card,
+    );
   }
 
-  Widget _commentRow(MomentComment comment, VoidCallback? onTap) {
+  Widget _commentRow(
+    MomentComment comment,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  ) {
     final replyTo = comment.replyTo;
     final showReply =
         replyTo != null && replyTo.isNotEmpty && replyTo != comment.author;
@@ -375,10 +397,11 @@ class MomentPostCard extends StatelessWidget {
         ),
       ),
     );
-    if (onTap == null) return row;
+    if (onTap == null && onLongPress == null) return row;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
+      onLongPress: onLongPress,
       child: row,
     );
   }

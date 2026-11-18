@@ -482,6 +482,7 @@ class MomentReplyComposer {
     required this.post,
     required this.myText,
     required this.replyTo,
+    this.recentPosts = const <MomentPost>[],
   });
 
   final SettingsProvider settings;
@@ -494,6 +495,9 @@ class MomentReplyComposer {
 
   /// 我这条评论回的是谁，可能是帖主，也可能是评论区里的某个人。
   final String replyTo;
+
+  /// 最近的动态，给模型一点上下文，免得它凭空编剧情。
+  final List<MomentPost> recentPosts;
 
   Future<List<MomentComment>> compose() async {
     final me = personaName.trim();
@@ -512,6 +516,7 @@ class MomentReplyComposer {
       me: me,
       myText: myText,
       replyTo: replyTo,
+      recentPosts: recentPosts,
     );
 
     try {
@@ -529,7 +534,7 @@ class MomentReplyComposer {
         reasoning: ReasoningRequest(settings.momentReasoning),
         requestTimeout: momentReplyTimeout,
       );
-      return parseReplies(result.text, names: names, me: me);
+      return parseReplies(result.text, names: names, me: me, onlyFrom: replyTo);
     } catch (_) {
       return const <MomentComment>[];
     }
@@ -539,6 +544,7 @@ class MomentReplyComposer {
     String raw, {
     required List<String> names,
     required String me,
+    String? onlyFrom,
   }) {
     final decoded = MomentGenerator._decodePayload(raw);
     List<dynamic> items;
@@ -551,24 +557,20 @@ class MomentReplyComposer {
       return const <MomentComment>[];
     }
     final known = <String>{...names, me};
-    final out = <MomentComment>[];
+    final author = (onlyFrom ?? '').trim();
     for (final item in items) {
       if (item is! Map) continue;
-      final author = (item['author'] ?? '').toString().trim();
+      final who = (item['author'] ?? '').toString().trim();
       final text = (item['text'] ?? '').toString().trim();
-      if (!known.contains(author) || text.isEmpty) continue;
-      if (author == me) continue;
-      final rawReplyTo = (item['replyTo'] ?? '').toString().trim();
-      final replyTo =
-          (rawReplyTo.isNotEmpty &&
-              rawReplyTo != author &&
-              known.contains(rawReplyTo))
-          ? rawReplyTo
-          : me;
-      out.add(MomentComment(author: author, text: text, replyTo: replyTo));
-      if (out.length >= 4) break;
+      if (text.isEmpty) continue;
+      // 只有名单里的人能说话；而且只收「我回复的那个人」的那一条。
+      if (!known.contains(who) || who == me) continue;
+      if (author.isNotEmpty && who != author) continue;
+      return <MomentComment>[
+        MomentComment(author: who, text: text, replyTo: me),
+      ];
     }
-    return out;
+    return const <MomentComment>[];
   }
 
   static String buildPrompt({
@@ -578,6 +580,7 @@ class MomentReplyComposer {
     required String me,
     required String myText,
     required String replyTo,
+    List<MomentPost> recentPosts = const <MomentPost>[],
   }) {
     final buffer = StringBuffer();
     buffer.writeln('【角色】');
@@ -587,14 +590,26 @@ class MomentReplyComposer {
       if (profile.isNotEmpty) buffer.writeln(profile);
       buffer.writeln('---');
     }
+    if (recentPosts.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln('【最近的动态】只是让你知道这群人最近在聊什么，别拿来编新剧情');
+      var count = 0;
+      for (final other in recentPosts) {
+        if (other.id == post.id) continue;
+        buffer.writeln(
+          '${other.author}：${other.text.replaceAll(RegExp(r'\s+'), ' ')}',
+        );
+        count++;
+        if (count >= 8) break;
+      }
+    }
     buffer.writeln();
     buffer.writeln('【这条帖子】');
     buffer.writeln('作者：${post.author}');
     buffer.writeln(post.text);
-    final recent = post.comments;
-    if (recent.isNotEmpty) {
+    if (post.comments.isNotEmpty) {
       buffer.writeln('评论区已有的留言：');
-      for (final comment in recent) {
+      for (final comment in post.comments) {
         final who = comment.replyTo == null || comment.replyTo!.isEmpty
             ? comment.author
             : '${comment.author} 回复 ${comment.replyTo}';
@@ -611,23 +626,158 @@ class MomentReplyComposer {
     buffer.writeln();
     buffer.writeln('【要求】');
     buffer.writeln(
-      '让 1~4 个角色接着聊下去，像评论区真的热闹起来那样，'
-      '别排队式地一起回我。',
+      '只让「$replyTo」一个人回我，就一句话到两句话，别让第二个人开口，'
+      '也别让角色之间自己聊起来。',
     );
     buffer.writeln(
-      '第一条可以回我，也可以回上面某个留言的人；后面的人可以接着回上一条的人，'
-      '也可以另起一头跟别人聊。帖子作者自己也可以进来。',
+      '内容只能围绕这条帖子和我说的话：可以接我的梗、吐槽、不耐烦、装傻，'
+      '但不许提到我没说过的事，不许编造新的剧情、人物或设定。',
     );
     buffer.writeln(
-      '每条用 replyTo 写明回的是谁，名字只能从角色名单、帖子作者和我里面挑；'
-      '想直接评帖子就不写 replyTo。不要客套，不要讲道理，不要一次上五个人。',
+      '口气像熟人随口一接：不要客套，不要讲道理，不要总结，'
+      '也不要解释你为什么这么想。',
     );
     buffer.writeln();
     buffer.writeln('【输出】');
     buffer.writeln('只输出一个 JSON 对象，不要代码块标记，不要多余文字：');
-    buffer.writeln(
-      '{"replies": [{"author": "角色名", "text": "说的话", "replyTo": "回谁"}]}',
-    );
+    buffer.writeln('{"replies": [{"author": "$replyTo", "text": "说的话"}]}');
     return buffer.toString();
+  }
+}
+
+/// 长按之后「刷新」那一项：让模型重写一条动态或一条评论。
+/// 只换文字，点赞、评论、时间都不动。
+class MomentRewriter {
+  const MomentRewriter({
+    required this.settings,
+    required this.worldBooks,
+    required this.bookId,
+    required this.characters,
+    required this.personaName,
+    required this.recentPosts,
+  });
+
+  final SettingsProvider settings;
+  final WorldBookProvider worldBooks;
+  final String bookId;
+  final List<MomentCharacter> characters;
+  final String personaName;
+  final List<MomentPost> recentPosts;
+
+  Future<String?> rewritePost(MomentPost post) {
+    final author = post.author.trim();
+    if (author == personaName.trim()) return Future<String?>.value();
+    return _run(author: author, body: _postPrompt(post));
+  }
+
+  Future<String?> rewriteComment(MomentPost post, MomentComment comment) async {
+    final author = comment.author.trim();
+    if (author == personaName.trim()) return null;
+    return _run(author: author, body: _commentPrompt(post, comment));
+  }
+
+  String _postPrompt(MomentPost post) {
+    final buffer = StringBuffer();
+    buffer.writeln('【人物】');
+    buffer.writeln(_profileOf(post.author));
+    buffer.writeln();
+    buffer.writeln('【他最近的动态】别拿来编新剧情，只是让你知道他最近在讲什么');
+    var count = 0;
+    for (final other in recentPosts) {
+      if (other.id == post.id || other.author != post.author) continue;
+      buffer.writeln(other.text.replaceAll(RegExp(r'\s+'), ' '));
+      count++;
+      if (count >= 4) break;
+    }
+    if (count > 0) buffer.writeln();
+    buffer.writeln('【要重写的那一条】');
+    buffer.writeln(post.text);
+    buffer.writeln();
+    buffer.writeln('【要求】');
+    buffer.writeln(
+      '按上面这个人的性格重写这一条，主题别换，长度跟原来接近，'
+      '不要写成旁白，不要提设定，不要突然深情，也不许编造新的事情。',
+    );
+    buffer.writeln();
+    buffer.writeln('只输出 JSON，不要多余文字：{"text": "重写后的正文"}');
+    return buffer.toString();
+  }
+
+  String _commentPrompt(MomentPost post, MomentComment comment) {
+    final buffer = StringBuffer();
+    buffer.writeln('【人物】');
+    buffer.writeln(_profileOf(comment.author));
+    buffer.writeln();
+    buffer.writeln('【这条帖子】');
+    buffer.writeln('作者：${post.author}');
+    buffer.writeln(post.text);
+    buffer.writeln();
+    buffer.writeln('【评论区现状】');
+    for (var i = 0; i < post.comments.length; i++) {
+      final other = post.comments[i];
+      final who = other.replyTo == null || other.replyTo!.isEmpty
+          ? other.author
+          : '${other.author} 回复 ${other.replyTo}';
+      final mark =
+          (other.author == comment.author &&
+              other.text == comment.text &&
+              other.replyTo == comment.replyTo)
+          ? '（这条要重写）'
+          : '';
+      buffer.writeln('$who：${other.text}$mark');
+      if (i >= 8) break;
+    }
+    buffer.writeln();
+    buffer.writeln('【要求】');
+    buffer.writeln(
+      '只重写那条标着「这条要重写」的评论，作者还是 ${comment.author}，'
+      '回的还应该是 ${comment.replyTo ?? post.author}。一句话就够，'
+      '贴他这个人的口气，不许编新剧情，不许把别人说过的话换个说法再说一遍。',
+    );
+    buffer.writeln();
+    buffer.writeln('只输出 JSON，不要多余文字：{"text": "重写后的那一句"}');
+    return buffer.toString();
+  }
+
+  String _profileOf(String name) {
+    final book = worldBooks.getById(bookId);
+    if (book == null) return '角色名：$name';
+    for (final character in characters) {
+      if (character.name != name) continue;
+      final entry = MomentGenerator._findEntry(book, character);
+      final content = entry?.content.trim() ?? '';
+      return content.isEmpty ? '角色名：$name' : '角色名：$name\n$content';
+    }
+    return '角色名：$name';
+  }
+
+  Future<String?> _run({required String author, required String body}) async {
+    try {
+      final model = MomentGenerator._resolveModel(settings);
+      final system = MomentGenerator._systemText(settings);
+      final result = await ChatApiService.generateMessage(
+        config: model.config,
+        modelId: model.modelId,
+        messages: <Map<String, dynamic>>[
+          <String, dynamic>{'role': 'system', 'content': system},
+          <String, dynamic>{'role': 'user', 'content': body},
+        ],
+        builtInToolMode: BuiltInToolMode.none,
+        skipImageParsing: true,
+        allowImagesApiRouting: false,
+        textOnly: true,
+        reasoning: ReasoningRequest(settings.momentReasoning),
+        requestTimeout: momentReplyTimeout,
+      );
+      final decoded = MomentGenerator._decodePayload(result.text);
+      if (decoded is Map) {
+        final text = (decoded['text'] ?? '').toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      final raw = result.text.trim();
+      return raw.isEmpty ? null : raw;
+    } catch (_) {
+      return null;
+    }
   }
 }
