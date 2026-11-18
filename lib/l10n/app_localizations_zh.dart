@@ -4338,6 +4338,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get providerDetailPageClaudePromptCachingTtl1h => '1 小时';
 
   @override
+  String get providerBalanceAutoRefresh => '余额自动刷新';
+
+  @override
+  String get providerBalanceScopeProvider => '此供应商';
+
+  @override
+  String get providerBalanceScopeGlobal => '全局默认';
+
+  @override
   String get providerBalanceDefaultInterval => '余额默认刷新间隔';
 
   @override
@@ -20947,6 +20956,15 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get providerDetailPageClaudePromptCachingTtl1h => '1 小时';
+
+  @override
+  String get providerBalanceAutoRefresh => '余额自动刷新';
+
+  @override
+  String get providerBalanceScopeProvider => '此供应商';
+
+  @override
+  String get providerBalanceScopeGlobal => '全局默认';
 
   @override
   String get providerBalanceDefaultInterval => '余额默认刷新间隔';
@@ -37563,6 +37581,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get providerDetailPageClaudePromptCachingTtl1h => '1 小時';
+
+  @override
+  String get providerBalanceAutoRefresh => '餘額自動重新整理';
+
+  @override
+  String get providerBalanceScopeProvider => '此供應商';
+
+  @override
+  String get providerBalanceScopeGlobal => '全域預設';
 
   @override
   String get providerBalanceDefaultInterval => '餘額預設重新整理間隔';
