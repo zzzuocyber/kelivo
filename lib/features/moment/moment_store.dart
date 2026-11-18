@@ -8,6 +8,7 @@ import 'moment_models.dart';
 const String momentHiddenKey = 'moment.hidden';
 const String momentPostsKey = 'moment.posts';
 const String momentCharactersKey = 'moment.characters';
+const String momentAssetsKey = 'moment.assets';
 
 /// 隐藏对话的标题，只在备份/导出里可见。
 const String momentFeedTitle = '朋友圈';
@@ -42,6 +43,20 @@ List<MomentCharacter> momentCharactersOf(Conversation? conversation) =>
 
 List<MomentPost> momentPostsOf(Conversation? conversation) =>
     momentPostsFromExtras(conversation?.extras);
+
+Map<String, MomentAssets> momentAssetsFromExtras(Map<String, dynamic>? extras) {
+  final raw = extras?[momentAssetsKey];
+  if (raw is! Map) return const <String, MomentAssets>{};
+  final out = <String, MomentAssets>{};
+  raw.forEach((key, value) {
+    final assets = MomentAssets.fromJson(value);
+    if (assets != null) out[key.toString()] = assets;
+  });
+  return out;
+}
+
+Map<String, MomentAssets> momentAssetsOf(Conversation? conversation) =>
+    momentAssetsFromExtras(conversation?.extras);
 
 /// 最近 N 条帖子，按时间倒序（新的在前），刷新时拿去让模型补互动。
 const int momentReactionWindow = 10;
@@ -90,6 +105,40 @@ class MomentStore {
       // 标记没写进去也还能用，只是列表里会露出来。
     }
     return created.id;
+  }
+
+  Map<String, MomentAssets> readAssets() => momentAssetsOf(findConversation());
+
+  /// 换掉某个角色（或马甲）的一张图；传 null 就是移除。
+  Future<void> saveAssets(
+    String key, {
+    String? avatar,
+    String? cover,
+    bool clearAvatar = false,
+    bool clearCover = false,
+  }) async {
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final current = momentAssetsFromExtras(extras);
+      final existing = current[key] ?? const MomentAssets();
+      final next = existing.copyWith(
+        avatar: avatar,
+        cover: cover,
+        clearAvatar: clearAvatar,
+        clearCover: clearCover,
+      );
+      final nextAssets = Map<String, MomentAssets>.from(current);
+      if (next.avatar == null && next.cover == null) {
+        nextAssets.remove(key);
+      } else {
+        nextAssets[key] = next;
+      }
+      final nextExtras = Map<String, dynamic>.from(extras);
+      nextExtras[momentAssetsKey] = <String, dynamic>{
+        for (final entry in nextAssets.entries) entry.key: entry.value.toJson(),
+      };
+      return nextExtras;
+    });
   }
 
   Future<void> saveCharacters(List<MomentCharacter> characters) async {

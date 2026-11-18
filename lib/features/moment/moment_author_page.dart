@@ -19,6 +19,7 @@ class MomentAuthorPage extends StatefulWidget {
 class _MomentAuthorPageState extends State<MomentAuthorPage> {
   late final MomentStore _store;
   List<MomentPost> _posts = const <MomentPost>[];
+  MomentAssets _assets = const MomentAssets();
 
   @override
   void initState() {
@@ -29,6 +30,8 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
 
   void _load() {
     final conversation = _store.findConversation();
+    _assets =
+        momentAssetsOf(conversation)[widget.author] ?? const MomentAssets();
     final posts = <MomentPost>[...momentPostsOf(conversation)]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     _posts = posts
@@ -47,6 +50,8 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
             MomentCover(
               name: widget.author,
               subtitle: '${_posts.length} 条动态',
+              avatarPath: _assets.avatar,
+              coverPath: _assets.cover,
               onBack: () => Navigator.of(context).maybePop(),
             ),
             Expanded(
@@ -72,8 +77,10 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
                     : ListView.builder(
                         padding: const EdgeInsets.only(bottom: 16),
                         itemCount: _posts.length,
-                        itemBuilder: (_, index) =>
-                            MomentPostCard(post: _posts[index]),
+                        itemBuilder: (_, index) => MomentPostCard(
+                          post: _posts[index],
+                          avatarPath: _assets.avatar,
+                        ),
                       ),
               ),
             ),

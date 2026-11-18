@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../icons/lucide_adapter.dart';
+import 'moment_emoji.dart';
 import 'moment_models.dart';
 
 /// 朋友圈固定浅色，不跟夜间模式走，所以颜色都写死在这里。
@@ -47,11 +50,15 @@ class MomentAvatar extends StatelessWidget {
     required this.name,
     this.size = 42,
     this.onTap,
+    this.imagePath,
   });
 
   final String name;
   final double size;
   final VoidCallback? onTap;
+
+  /// 上传过的头像文件。读不到（比如在图片页被删了）就退回圆形首字。
+  final String? imagePath;
 
   static const List<Color> _palette = <Color>[
     Color(0xFFDCE6F7),
@@ -85,80 +92,42 @@ class MomentAvatar extends StatelessWidget {
       hash = (hash + unit) % 9973;
     }
     final index = hash % _palette.length;
+    final path = (imagePath ?? '').trim();
     final circle = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: _palette[index], shape: BoxShape.circle),
-      child: Text(
-        initialOf(trimmed),
-        style: TextStyle(
-          fontSize: size * 0.42,
-          fontWeight: FontWeight.w600,
-          color: _ink[index],
-        ),
-      ),
+      clipBehavior: Clip.antiAlias,
+      child: path.isEmpty
+          ? Text(
+              initialOf(trimmed),
+              style: TextStyle(
+                fontSize: size * 0.42,
+                fontWeight: FontWeight.w600,
+                color: _ink[index],
+              ),
+            )
+          : Image.file(
+              File(path),
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Text(
+                initialOf(trimmed),
+                style: TextStyle(
+                  fontSize: size * 0.42,
+                  fontWeight: FontWeight.w600,
+                  color: _ink[index],
+                ),
+              ),
+            ),
     );
     if (onTap == null) return circle;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: circle,
-    );
-  }
-}
-
-/// 帖子里本该放图的空位。生图接口还没接，先放一张本地 SVG 占位。
-const String _momentPlaceholderSvg = '''
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="675" viewBox="0 0 900 675">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#EDF1F7"/>
-      <stop offset="1" stop-color="#D9E1EE"/>
-    </linearGradient>
-  </defs>
-  <rect width="900" height="675" fill="url(#bg)"/>
-  <circle cx="660" cy="180" r="72" fill="#F7F9FC"/>
-  <path d="M0 675 L250 400 L420 560 L560 430 L900 675 Z" fill="#C6D2E4"/>
-  <path d="M0 675 L180 520 L330 620 L470 520 L620 620 L900 500 L900 675 Z" fill="#B3C1D6"/>
-</svg>
-''';
-
-/// 角色主页顶部的背景。同样先占位，以后换成本地图。
-const String momentBannerSvg = '''
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
-  <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F3F6FB"/>
-      <stop offset="1" stop-color="#DCE6F4"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect width="900" height="420" fill="url(#sky)"/>
-  <circle cx="330" cy="170" r="120" fill="url(#glow)"/>
-  <circle cx="330" cy="170" r="58" fill="#E7EEF9"/>
-  <ellipse cx="330" cy="182" rx="118" ry="26" fill="none" stroke="#C9D7EB" stroke-width="5"/>
-  <circle cx="700" cy="120" r="6" fill="#D6E1F2"/>
-  <circle cx="760" cy="210" r="4" fill="#D6E1F2"/>
-  <circle cx="620" cy="250" r="3" fill="#D6E1F2"/>
-  <path d="M0 420 L180 320 L330 400 L480 300 L680 400 L900 330 L900 420 Z" fill="#C5D3E6"/>
-</svg>
-''';
-
-class MomentPlaceholderImage extends StatelessWidget {
-  const MomentPlaceholderImage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 4 / 3,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: SvgPicture.string(_momentPlaceholderSvg, fit: BoxFit.cover),
-      ),
     );
   }
 }
@@ -178,6 +147,7 @@ class MomentPostCard extends StatelessWidget {
   const MomentPostCard({
     super.key,
     required this.post,
+    this.avatarPath,
     this.likedByMe = false,
     this.onTapAvatar,
     this.onTapLike,
@@ -186,6 +156,7 @@ class MomentPostCard extends StatelessWidget {
   });
 
   final MomentPost post;
+  final String? avatarPath;
   final bool likedByMe;
   final VoidCallback? onTapAvatar;
   final VoidCallback? onTapLike;
@@ -204,7 +175,12 @@ class MomentPostCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          MomentAvatar(name: post.author, size: 42, onTap: onTapAvatar),
+          MomentAvatar(
+            name: post.author,
+            size: 42,
+            imagePath: avatarPath,
+            onTap: onTapAvatar,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -229,7 +205,7 @@ class MomentPostCard extends StatelessWidget {
                 ),
                 if (post.hasImage) ...<Widget>[
                   const SizedBox(height: 10),
-                  const MomentPlaceholderImage(),
+                  MomentEmojiImage(post: post),
                 ],
                 const SizedBox(height: 10),
                 Row(
@@ -415,6 +391,30 @@ class _TapIcon extends StatelessWidget {
   }
 }
 
+/// 顶部封面的占位图（没上传背景图时用）。以后想换本地图，改这一个常量就行。
+const String momentBannerSvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3F6FB"/>
+      <stop offset="1" stop-color="#DCE6F4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="900" height="420" fill="url(#sky)"/>
+  <circle cx="330" cy="170" r="120" fill="url(#glow)"/>
+  <circle cx="330" cy="170" r="58" fill="#E7EEF9"/>
+  <ellipse cx="330" cy="182" rx="118" ry="26" fill="none" stroke="#C9D7EB" stroke-width="5"/>
+  <circle cx="700" cy="120" r="6" fill="#D6E1F2"/>
+  <circle cx="760" cy="210" r="4" fill="#D6E1F2"/>
+  <circle cx="620" cy="250" r="3" fill="#D6E1F2"/>
+  <path d="M0 420 L180 320 L330 400 L480 300 L680 400 L900 330 L900 420 Z" fill="#C5D3E6"/>
+</svg>
+''';
+
 /// 顶部那块封面：SVG 背景 + 左上返回 + 右上按钮 + 右下角头像和名字。
 class MomentCover extends StatelessWidget {
   const MomentCover({
@@ -424,6 +424,8 @@ class MomentCover extends StatelessWidget {
     this.subtitle,
     this.actions = const <Widget>[],
     this.height = 232,
+    this.avatarPath,
+    this.coverPath,
   });
 
   final String name;
@@ -432,6 +434,23 @@ class MomentCover extends StatelessWidget {
   final List<Widget> actions;
   final double height;
 
+  /// 上传过的头像 / 背景图；读不到就退回首字头像和内置占位背景。
+  final String? avatarPath;
+  final String? coverPath;
+
+  Widget _coverImage() {
+    final path = (coverPath ?? '').trim();
+    if (path.isEmpty) {
+      return SvgPicture.string(momentBannerSvg, fit: BoxFit.cover);
+    }
+    return Image.file(
+      File(path),
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) =>
+          SvgPicture.string(momentBannerSvg, fit: BoxFit.cover),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
@@ -439,9 +458,7 @@ class MomentCover extends StatelessWidget {
       height: height + topInset,
       child: Stack(
         children: <Widget>[
-          Positioned.fill(
-            child: SvgPicture.string(momentBannerSvg, fit: BoxFit.cover),
-          ),
+          Positioned.fill(child: _coverImage()),
           Positioned(
             left: 6,
             top: topInset + 4,
@@ -499,7 +516,11 @@ class MomentCover extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 3),
                   ),
-                  child: MomentAvatar(name: name, size: 56),
+                  child: MomentAvatar(
+                    name: name,
+                    size: 56,
+                    imagePath: avatarPath,
+                  ),
                 ),
               ],
             ),

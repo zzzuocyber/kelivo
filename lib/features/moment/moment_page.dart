@@ -5,6 +5,7 @@ import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
 import '../../icons/lucide_adapter.dart';
+import 'moment_assets_page.dart';
 import 'moment_author_page.dart';
 import 'moment_characters_page.dart';
 import 'moment_models.dart';
@@ -25,6 +26,7 @@ class _MomentPageState extends State<MomentPage> {
   late final MomentStore _store;
   List<MomentCharacter> _characters = const <MomentCharacter>[];
   List<MomentPost> _posts = const <MomentPost>[];
+  Map<String, MomentAssets> _assets = const <String, MomentAssets>{};
   bool _generating = false;
   bool _loading = true;
 
@@ -43,6 +45,7 @@ class _MomentPageState extends State<MomentPage> {
     final posts = <MomentPost>[...momentPostsOf(conversation)]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     _characters = momentCharactersOf(conversation);
+    _assets = momentAssetsOf(conversation);
     _posts = posts;
     _loading = false;
   }
@@ -119,6 +122,13 @@ class _MomentPageState extends State<MomentPage> {
       MaterialPageRoute<void>(
         builder: (_) => MomentCharactersPage(bookId: bookId),
       ),
+    );
+    _reload();
+  }
+
+  Future<void> _openAssets() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const MomentAssetsPage()),
     );
     _reload();
   }
@@ -281,6 +291,8 @@ class _MomentPageState extends State<MomentPage> {
           children: <Widget>[
             MomentCover(
               name: persona,
+              avatarPath: _assets[MomentAssets.personaKey]?.avatar,
+              coverPath: _assets[MomentAssets.personaKey]?.cover,
               onBack: () => Navigator.of(context).maybePop(),
               actions: <Widget>[
                 MomentRoundButton(
@@ -295,11 +307,6 @@ class _MomentPageState extends State<MomentPage> {
                       : null,
                 ),
                 MomentPill(
-                  icon: Lucide.MessageCirclePlus,
-                  label: '邀请角色',
-                  onTap: _openCharacters,
-                ),
-                MomentPill(
                   icon: Lucide.SquarePen,
                   label: '发布',
                   onTap: _compose,
@@ -308,13 +315,31 @@ class _MomentPageState extends State<MomentPage> {
                   color: Colors.white,
                   padding: EdgeInsets.zero,
                   onSelected: (value) {
-                    if (value == 'settings') {
+                    if (value == 'characters') {
+                      _openCharacters();
+                    } else if (value == 'assets') {
+                      _openAssets();
+                    } else if (value == 'settings') {
                       _openSettings();
                     } else if (value == 'clear') {
                       _clearAll();
                     }
                   },
                   itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'characters',
+                      child: Text(
+                        '邀请角色',
+                        style: TextStyle(color: MomentColors.primaryText),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'assets',
+                      child: Text(
+                        '角色管理',
+                        style: TextStyle(color: MomentColors.primaryText),
+                      ),
+                    ),
                     PopupMenuItem<String>(
                       value: 'settings',
                       child: Text(
@@ -376,6 +401,7 @@ class _MomentPageState extends State<MomentPage> {
         final post = _posts[index];
         return MomentPostCard(
           post: post,
+          avatarPath: _assets[post.author]?.avatar,
           likedByMe: post.likes.contains(persona),
           onTapAvatar: () => _openAuthor(post.author),
           onTapLike: () => _toggleLike(post),

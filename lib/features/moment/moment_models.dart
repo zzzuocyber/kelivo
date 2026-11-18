@@ -179,3 +179,44 @@ String newMomentPostId() {
   final salt = Random().nextInt(1 << 20);
   return '$stamp-$salt';
 }
+
+/// 一个角色（或我的马甲）的两张图：头像 + 背景。
+/// 只存文件路径，图本身放在 Kelivo 的 avatars 目录，
+/// 也就是图片页里的「头像与背景」分类，删图后这里会读不到文件自动退回。
+class MomentAssets {
+  const MomentAssets({this.avatar, this.cover});
+
+  /// 马甲用这个键，角色用角色名。
+  static const String personaKey = '@me';
+
+  final String? avatar;
+  final String? cover;
+
+  MomentAssets copyWith({
+    String? avatar,
+    String? cover,
+    bool clearAvatar = false,
+    bool clearCover = false,
+  }) {
+    return MomentAssets(
+      avatar: clearAvatar ? null : (avatar ?? this.avatar),
+      cover: clearCover ? null : (cover ?? this.cover),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    if (avatar != null && avatar!.isNotEmpty) 'avatar': avatar,
+    if (cover != null && cover!.isNotEmpty) 'cover': cover,
+  };
+
+  static MomentAssets? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final avatar = (raw['avatar'] ?? '').toString().trim();
+    final cover = (raw['cover'] ?? '').toString().trim();
+    if (avatar.isEmpty && cover.isEmpty) return null;
+    return MomentAssets(
+      avatar: avatar.isEmpty ? null : avatar,
+      cover: cover.isEmpty ? null : cover,
+    );
+  }
+}
