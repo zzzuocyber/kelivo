@@ -35,6 +35,7 @@ class MomentGenerator {
     required this.characters,
     required this.personaName,
     required this.recentPosts,
+    this.contextCharLimit = 0,
     this.batchSize = momentBatchSize,
   });
 
@@ -46,8 +47,11 @@ class MomentGenerator {
   /// 我的马甲名，只用来在提示词里点明「这是我」。
   final String personaName;
 
-  /// 最近若干条旧帖，用来让模型给它们补互动。
+  /// 旧帖，用来让模型给它们补互动。
   final List<MomentPost> recentPosts;
+
+  /// 喂多少字的旧帖内容。0 = 不限制，全给。
+  final int contextCharLimit;
   final int batchSize;
 
   Future<MomentBatch> generate() async {
@@ -68,6 +72,7 @@ class MomentGenerator {
       personaName: personaName,
       oldPosts: recentPosts,
       count: batchSize,
+      charLimit: contextCharLimit,
     );
 
     Object? lastError;
@@ -377,6 +382,7 @@ class MomentGenerator {
     required String personaName,
     required List<MomentPost> oldPosts,
     required int count,
+    int charLimit = 0,
   }) {
     final buffer = StringBuffer();
     buffer.writeln('【角色】');
@@ -390,18 +396,23 @@ class MomentGenerator {
       buffer.writeln();
       buffer.writeln('【最近的旧帖】后面可以给它们补新的互动，编号从 1 开始');
       var index = 1;
+      var used = 0;
       for (final post in oldPosts) {
-        final tail = post.text.replaceAll('\n', ' ');
-        final snippet = tail.length > 40 ? '${tail.substring(0, 40)}…' : tail;
-        buffer.writeln('$index. ${post.author}：$snippet');
-        final recent = post.comments.length > 2
-            ? post.comments.sublist(post.comments.length - 2)
-            : post.comments;
-        for (final comment in recent) {
-          final who = comment.replyTo == null || comment.replyTo!.isEmpty
-              ? comment.author
-              : '${comment.author} 回复 ${comment.replyTo}';
-          buffer.writeln('   评论区：$who：${comment.text}');
+        final body = post.text.replaceAll(RegExp(r'\s+'), ' ');
+        final commentsText = post.comments
+            .map(
+              (c) => c.replyTo == null || c.replyTo!.isEmpty
+                  ? '${c.author}：${c.text}'
+                  : '${c.author} 回复 ${c.replyTo}：${c.text}',
+            )
+            .join(' / ');
+        final chunkLength = body.length + commentsText.length;
+        // 0 = 不限制；否则装到字数上限为止，更老的不再带。
+        if (charLimit > 0 && used + chunkLength > charLimit) break;
+        used += chunkLength;
+        buffer.writeln('$index. ${post.author}：$body');
+        if (commentsText.isNotEmpty) {
+          buffer.writeln('   评论区：$commentsText');
         }
         index++;
       }
@@ -467,6 +478,7 @@ class MomentReplyComposer {
     required this.personaName,
     required this.post,
     required this.myText,
+    required this.replyTo,
   });
 
   final SettingsProvider settings;
@@ -476,6 +488,9 @@ class MomentReplyComposer {
   final String personaName;
   final MomentPost post;
   final String myText;
+
+  /// 我这条评论回的是谁，可能是帖主，也可能是评论区里的某个人。
+  final String replyTo;
 
   Future<List<MomentComment>> compose() async {
     final me = personaName.trim();
@@ -493,6 +508,7 @@ class MomentReplyComposer {
       post: post,
       me: me,
       myText: myText,
+      replyTo: replyTo,
     );
 
     try {
@@ -557,6 +573,7 @@ class MomentReplyComposer {
     required MomentPost post,
     required String me,
     required String myText,
+    required String replyTo,
   }) {
     final buffer = StringBuffer();
     buffer.writeln('【角色】');
@@ -570,9 +587,7 @@ class MomentReplyComposer {
     buffer.writeln('【这条帖子】');
     buffer.writeln('作者：${post.author}');
     buffer.writeln(post.text);
-    final recent = post.comments.length > 4
-        ? post.comments.sublist(post.comments.length - 4)
-        : post.comments;
+    final recent = post.comments;
     if (recent.isNotEmpty) {
       buffer.writeln('评论区已有的留言：');
       for (final comment in recent) {
@@ -584,7 +599,11 @@ class MomentReplyComposer {
     }
     buffer.writeln();
     buffer.writeln('【我刚发的评论】');
-    buffer.writeln('$me：$myText');
+    buffer.writeln(
+      replyTo == me || replyTo.isEmpty
+          ? '$me：$myText'
+          : '$me 回复 $replyTo：$myText',
+    );
     buffer.writeln();
     buffer.writeln('【要求】');
     buffer.writeln(

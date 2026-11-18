@@ -21,6 +21,7 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
   late final TextEditingController _promptController;
   late final TextEditingController _instructionController;
   late final TextEditingController _personaController;
+  late final TextEditingController _contextCharsController;
   bool _saving = false;
 
   @override
@@ -36,6 +37,9 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
     _personaController = TextEditingController(
       text: settings.momentPersonaName,
     );
+    _contextCharsController = TextEditingController(
+      text: settings.momentContextChars.toString(),
+    );
   }
 
   @override
@@ -43,6 +47,7 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
     _promptController.dispose();
     _instructionController.dispose();
     _personaController.dispose();
+    _contextCharsController.dispose();
     super.dispose();
   }
 
@@ -153,6 +158,8 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
     await settings.setMomentSystemPrompt(_promptController.text);
     await settings.setMomentExtraInstruction(_instructionController.text);
     await settings.setMomentPersonaName(_personaController.text);
+    final chars = int.tryParse(_contextCharsController.text.trim()) ?? 0;
+    await settings.setMomentContextChars(chars < 0 ? 0 : chars);
     if (!mounted) return;
     setState(() => _saving = false);
     Navigator.of(context).pop();
@@ -205,6 +212,14 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
               controller: _personaController,
               minLines: 1,
               singleLine: true,
+            ),
+            _Section(
+              title: '旧帖最多喂多少字',
+              hint: '0 = 不限制，全部喂回去；填数字就按最新的往回装，装够就停',
+              controller: _contextCharsController,
+              minLines: 1,
+              singleLine: true,
+              numberOnly: true,
             ),
             _Section(
               title: '系统提示词',
@@ -281,6 +296,7 @@ class _Section extends StatelessWidget {
     required this.controller,
     required this.minLines,
     this.singleLine = false,
+    this.numberOnly = false,
   });
 
   final String title;
@@ -288,6 +304,7 @@ class _Section extends StatelessWidget {
   final TextEditingController controller;
   final int minLines;
   final bool singleLine;
+  final bool numberOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -310,6 +327,7 @@ class _Section extends StatelessWidget {
             controller: controller,
             minLines: minLines,
             maxLines: singleLine ? 1 : null,
+            keyboardType: numberOnly ? TextInputType.number : null,
             style: const TextStyle(
               fontSize: 14,
               height: 1.45,

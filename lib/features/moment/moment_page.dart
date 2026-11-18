@@ -83,7 +83,7 @@ class _MomentPageState extends State<MomentPage> {
       case 'parse_failed':
         return '模型这次没按格式回，再点一次刷新';
       default:
-        return '这次没生成出来，再点一次刷新';
+        return '这次没生成出来，再点一次刷新；一直失败就去设置里把「旧帖最多喂多少字」调小';
     }
   }
 
@@ -103,7 +103,8 @@ class _MomentPageState extends State<MomentPage> {
         bookId: settings.momentBookId,
         characters: _characters,
         personaName: _personaName(settings),
-        recentPosts: _posts.take(momentReactionWindow).toList(growable: false),
+        recentPosts: _posts,
+        contextCharLimit: settings.momentContextChars,
       );
       final batch = await generator.generate();
       await _store.applyBatch(batch);
@@ -188,7 +189,8 @@ class _MomentPageState extends State<MomentPage> {
     }
   }
 
-  Future<void> _comment(MomentPost post) async {
+  Future<void> _comment(MomentPost post, {String? replyTo}) async {
+    final target = (replyTo ?? post.author).trim();
     final myText = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -196,7 +198,7 @@ class _MomentPageState extends State<MomentPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => _CommentSheet(post: post),
+      builder: (_) => _CommentSheet(post: post, replyTo: target),
     );
     if (!mounted) return;
     final text = (myText ?? '').trim();
@@ -205,7 +207,7 @@ class _MomentPageState extends State<MomentPage> {
     final myComment = MomentComment(
       author: me,
       text: text,
-      replyTo: post.author == me ? null : post.author,
+      replyTo: target == me ? null : target,
     );
     try {
       await _store.addComments(post.id, <MomentComment>[myComment]);
@@ -215,10 +217,15 @@ class _MomentPageState extends State<MomentPage> {
     }
     if (!mounted) return;
     _reload();
-    await _askForReplies(post, text, me);
+    await _askForReplies(post, text, me, target);
   }
 
-  Future<void> _askForReplies(MomentPost post, String myText, String me) async {
+  Future<void> _askForReplies(
+    MomentPost post,
+    String myText,
+    String me,
+    String replyTo,
+  ) async {
     setState(() => _waitingReplyPostId = post.id);
     try {
       final settings = context.read<SettingsProvider>();
@@ -231,6 +238,7 @@ class _MomentPageState extends State<MomentPage> {
         personaName: me,
         post: post,
         myText: myText,
+        replyTo: replyTo,
       );
       final replies = await composer.compose();
       if (replies.isNotEmpty) {
@@ -283,93 +291,113 @@ class _MomentPageState extends State<MomentPage> {
   @override
   Widget build(BuildContext context) {
     final persona = _personaName(context.watch<SettingsProvider>());
+    final personaAssets =
+        _assets[MomentAssets.personaKey] ?? const MomentAssets();
     return Theme(
       data: momentLightTheme(),
       child: Scaffold(
         backgroundColor: MomentColors.card,
-        body: Column(
+        body: Stack(
           children: <Widget>[
-            MomentCover(
-              name: persona,
-              avatarPath: _assets[MomentAssets.personaKey]?.avatar,
-              coverPath: _assets[MomentAssets.personaKey]?.cover,
-              onBack: () => Navigator.of(context).maybePop(),
-              actions: <Widget>[
-                MomentRoundButton(
-                  icon: Lucide.RefreshCw,
-                  onTap: _generating ? null : _refresh,
-                  child: _generating
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : null,
+            ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                MomentCover(
+                  name: persona,
+                  avatarPath: personaAssets.avatar,
+                  coverPath: personaAssets.cover,
                 ),
-                MomentPill(
-                  icon: Lucide.SquarePen,
-                  label: '发布',
-                  onTap: _compose,
-                ),
-                PopupMenuButton<String>(
-                  color: Colors.white,
-                  padding: EdgeInsets.zero,
-                  onSelected: (value) {
-                    if (value == 'characters') {
-                      _openCharacters();
-                    } else if (value == 'assets') {
-                      _openAssets();
-                    } else if (value == 'settings') {
-                      _openSettings();
-                    } else if (value == 'clear') {
-                      _clearAll();
-                    }
-                  },
-                  itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                    PopupMenuItem<String>(
-                      value: 'characters',
-                      child: Text(
-                        '邀请角色',
-                        style: TextStyle(color: MomentColors.primaryText),
-                      ),
+                Container(
+                  decoration: const BoxDecoration(
+                    color: MomentColors.card,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(18),
                     ),
-                    PopupMenuItem<String>(
-                      value: 'assets',
-                      child: Text(
-                        '角色管理',
-                        style: TextStyle(color: MomentColors.primaryText),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x1F000000),
+                        blurRadius: 18,
+                        offset: Offset(0, -6),
                       ),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'settings',
-                      child: Text(
-                        '设置',
-                        style: TextStyle(color: MomentColors.primaryText),
-                      ),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'clear',
-                      child: Text(
-                        '清除所有记录',
-                        style: TextStyle(color: MomentColors.primaryText),
-                      ),
-                    ),
-                  ],
-                  child: const MomentRoundButton(
-                    icon: Lucide.Ellipsis,
-                    onTap: null,
+                    ],
                   ),
+                  child: _buildBody(persona),
                 ),
               ],
             ),
-            Expanded(
-              child: Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: const BoxDecoration(
-                  color: MomentColors.card,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                ),
-                child: _buildBody(persona),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: MomentTopBar(
+                onBack: () => Navigator.of(context).maybePop(),
+                actions: <Widget>[
+                  MomentRoundButton(
+                    icon: Lucide.RefreshCw,
+                    onTap: _generating ? null : _refresh,
+                    child: _generating
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : null,
+                  ),
+                  MomentPill(
+                    icon: Lucide.SquarePen,
+                    label: '发布',
+                    onTap: _compose,
+                  ),
+                  PopupMenuButton<String>(
+                    color: Colors.white,
+                    padding: EdgeInsets.zero,
+                    onSelected: (value) {
+                      if (value == 'characters') {
+                        _openCharacters();
+                      } else if (value == 'assets') {
+                        _openAssets();
+                      } else if (value == 'settings') {
+                        _openSettings();
+                      } else if (value == 'clear') {
+                        _clearAll();
+                      }
+                    },
+                    itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                      PopupMenuItem<String>(
+                        value: 'characters',
+                        child: Text(
+                          '邀请角色',
+                          style: TextStyle(color: MomentColors.primaryText),
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'assets',
+                        child: Text(
+                          '角色管理',
+                          style: TextStyle(color: MomentColors.primaryText),
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'settings',
+                        child: Text(
+                          '设置',
+                          style: TextStyle(color: MomentColors.primaryText),
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'clear',
+                        child: Text(
+                          '清除所有记录',
+                          style: TextStyle(color: MomentColors.primaryText),
+                        ),
+                      ),
+                    ],
+                    child: const MomentRoundButton(
+                      icon: Lucide.Ellipsis,
+                      onTap: null,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -380,35 +408,45 @@ class _MomentPageState extends State<MomentPage> {
 
   Widget _buildBody(String persona) {
     if (_loading) {
-      return const Center(
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 60),
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
         ),
       );
     }
     if (_characters.isEmpty) {
-      return _Hint(text: '还没有角色', action: '添加角色', onAction: _openCharacters);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60),
+        child: _Hint(text: '还没有角色', action: '添加角色', onAction: _openCharacters),
+      );
     }
     if (_posts.isEmpty) {
-      return const _Hint(text: '还没有动态，点右上角刷新');
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 60),
+        child: _Hint(text: '还没有动态，点右上角刷新'),
+      );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      itemCount: _posts.length,
-      itemBuilder: (_, index) {
-        final post = _posts[index];
-        return MomentPostCard(
-          post: post,
-          avatarPath: _assets[post.author]?.avatar,
-          likedByMe: post.likes.contains(persona),
-          onTapAvatar: () => _openAuthor(post.author),
-          onTapLike: () => _toggleLike(post),
-          onTapComment: () => _comment(post),
-          waitingReply: _waitingReplyPostId == post.id,
-        );
-      },
+    return Column(
+      children: <Widget>[
+        for (final post in _posts)
+          MomentPostCard(
+            post: post,
+            avatarPath: _assets[post.author]?.avatar,
+            likedByMe: post.likes.contains(persona),
+            onTapAvatar: () => _openAuthor(post.author),
+            onTapLike: () => _toggleLike(post),
+            onTapComment: () => _comment(post),
+            onTapCommentLine: (comment) =>
+                _comment(post, replyTo: comment.author),
+            waitingReply: _waitingReplyPostId == post.id,
+          ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }
@@ -547,9 +585,12 @@ class _ComposeSheetState extends State<_ComposeSheet> {
 
 /// 我在某条帖子下评论。
 class _CommentSheet extends StatefulWidget {
-  const _CommentSheet({required this.post});
+  const _CommentSheet({required this.post, required this.replyTo});
 
   final MomentPost post;
+
+  /// 这条评论回的是谁。等于帖主时就是普通评论。
+  final String replyTo;
 
   @override
   State<_CommentSheet> createState() => _CommentSheetState();
@@ -580,7 +621,9 @@ class _CommentSheetState extends State<_CommentSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            '评论 ${widget.post.author} 的动态',
+            widget.replyTo == widget.post.author
+                ? '评论 ${widget.post.author} 的动态'
+                : '回复 ${widget.replyTo}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(

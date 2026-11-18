@@ -45,43 +45,63 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
       data: momentLightTheme(),
       child: Scaffold(
         backgroundColor: MomentColors.card,
-        body: Column(
+        body: Stack(
           children: <Widget>[
-            MomentCover(
-              name: widget.author,
-              subtitle: '${_posts.length} 条动态',
-              avatarPath: _assets.avatar,
-              coverPath: _assets.cover,
-              onBack: () => Navigator.of(context).maybePop(),
-            ),
-            Expanded(
-              child: Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: const BoxDecoration(
-                  color: MomentColors.card,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+            ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                MomentCover(
+                  name: widget.author,
+                  subtitle: '${_posts.length} 条动态',
+                  avatarPath: _assets.avatar,
+                  coverPath: _assets.cover,
                 ),
-                child: _posts.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: Text(
-                            '还没有动态',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: MomentColors.secondaryText,
+                Container(
+                  decoration: const BoxDecoration(
+                    color: MomentColors.card,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(18),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x1F000000),
+                        blurRadius: 18,
+                        offset: Offset(0, -6),
+                      ),
+                    ],
+                  ),
+                  child: _posts.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 60),
+                          child: Center(
+                            child: Text(
+                              '还没有动态',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: MomentColors.secondaryText,
+                              ),
                             ),
                           ),
+                        )
+                      : Column(
+                          children: <Widget>[
+                            for (final post in _posts)
+                              MomentPostCard(
+                                post: post,
+                                avatarPath: _assets.avatar,
+                              ),
+                            const SizedBox(height: 24),
+                          ],
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        itemCount: _posts.length,
-                        itemBuilder: (_, index) => MomentPostCard(
-                          post: _posts[index],
-                          avatarPath: _assets.avatar,
-                        ),
-                      ),
+                ),
+              ],
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: MomentTopBar(
+                onBack: () => Navigator.of(context).maybePop(),
               ),
             ),
           ],

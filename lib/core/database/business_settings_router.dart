@@ -71,6 +71,7 @@ final class BusinessKeyRegistry {
     'moment_model_provider_v1',
     'moment_model_id_v1',
     'moment_persona_name_v1',
+    'moment_context_chars_v1',
     'search_common_v1',
     'search_selected_v1',
     'search_enabled_v1',

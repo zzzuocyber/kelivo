@@ -300,6 +300,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _momentModelProviderKey = 'moment_model_provider_v1';
   static const String _momentModelIdKey = 'moment_model_id_v1';
   static const String _momentPersonaNameKey = 'moment_persona_name_v1';
+  static const String _momentContextCharsKey = 'moment_context_chars_v1';
   static const String _displayLongPasteAsFileKey =
       'display_long_paste_as_file_v1';
   static const String _displayLongPasteAsFileThresholdKey =
@@ -1172,6 +1173,7 @@ class SettingsProvider extends ChangeNotifier {
     _momentModelProvider = prefs.getString(_momentModelProviderKey);
     _momentModelId = prefs.getString(_momentModelIdKey);
     _momentPersonaName = prefs.getString(_momentPersonaNameKey) ?? '';
+    _momentContextChars = prefs.getInt(_momentContextCharsKey) ?? 0;
     _longPasteAsFile = prefs.getBool(_displayLongPasteAsFileKey) ?? true;
     _longPasteAsFileThreshold =
         (prefs.getInt(_displayLongPasteAsFileThresholdKey) ??
@@ -5324,6 +5326,17 @@ Requirements:
     await _preferences.setString(_momentPersonaNameKey, v);
   }
 
+  // 刷新时把多少字的旧帖内容喂回模型。0 = 不限制，全给。
+  int _momentContextChars = 0;
+  int get momentContextChars => _momentContextChars;
+  Future<void> setMomentContextChars(int value) async {
+    final v = value < 0 ? 0 : value;
+    if (_momentContextChars == v) return;
+    _momentContextChars = v;
+    notifyListeners();
+    await _preferences.setInt(_momentContextCharsKey, v);
+  }
+
   static const int defaultLongPasteAsFileThreshold = 5000;
   static const int minLongPasteAsFileThreshold = 1;
   static const int maxLongPasteAsFileThreshold = 999999;
@@ -6292,6 +6305,7 @@ Requirements:
     copy._momentModelProvider = _momentModelProvider;
     copy._momentModelId = _momentModelId;
     copy._momentPersonaName = _momentPersonaName;
+    copy._momentContextChars = _momentContextChars;
     copy._titleModelProvider = _titleModelProvider;
     copy._titleModelId = _titleModelId;
     copy._titleGenerationEnabled = _titleGenerationEnabled;

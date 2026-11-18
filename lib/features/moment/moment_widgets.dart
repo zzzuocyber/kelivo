@@ -152,6 +152,7 @@ class MomentPostCard extends StatelessWidget {
     this.onTapAvatar,
     this.onTapLike,
     this.onTapComment,
+    this.onTapCommentLine,
     this.waitingReply = false,
   });
 
@@ -161,6 +162,9 @@ class MomentPostCard extends StatelessWidget {
   final VoidCallback? onTapAvatar;
   final VoidCallback? onTapLike;
   final VoidCallback? onTapComment;
+
+  /// 点评论区里的某一条，就回复那个人。
+  final void Function(MomentComment comment)? onTapCommentLine;
 
   /// 我刚评论完，角色正在回我。
   final bool waitingReply;
@@ -303,7 +307,12 @@ class MomentPostCard extends StatelessWidget {
                             ),
                         ],
                         for (final comment in post.comments)
-                          _commentRow(comment),
+                          _commentRow(
+                            comment,
+                            onTapCommentLine == null
+                                ? null
+                                : () => onTapCommentLine!(comment),
+                          ),
                         if (waitingReply) ...<Widget>[
                           const SizedBox(height: 6),
                           const Row(
@@ -331,7 +340,7 @@ class MomentPostCard extends StatelessWidget {
     );
   }
 
-  static Widget _commentRow(MomentComment comment) {
+  Widget _commentRow(MomentComment comment, VoidCallback? onTap) {
     final replyTo = comment.replyTo;
     final showReply =
         replyTo != null && replyTo.isNotEmpty && replyTo != comment.author;
@@ -353,7 +362,7 @@ class MomentPostCard extends StatelessWidget {
         ),
       TextSpan(text: '：${comment.text}'),
     ];
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: RichText(
         text: TextSpan(
@@ -365,6 +374,12 @@ class MomentPostCard extends StatelessWidget {
           children: spans,
         ),
       ),
+    );
+    if (onTap == null) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: row,
     );
   }
 }
@@ -415,23 +430,20 @@ const String momentBannerSvg = '''
 </svg>
 ''';
 
-/// 顶部那块封面：SVG 背景 + 左上返回 + 右上按钮 + 右下角头像和名字。
+/// 顶部那块封面：背景图 + 右下角头像和名字。
+/// 按钮不在这里，由 [MomentTopBar] 单独浮在上面，这样封面能跟着列表滚走。
 class MomentCover extends StatelessWidget {
   const MomentCover({
     super.key,
     required this.name,
-    required this.onBack,
     this.subtitle,
-    this.actions = const <Widget>[],
-    this.height = 232,
+    this.height = 180,
     this.avatarPath,
     this.coverPath,
   });
 
   final String name;
-  final VoidCallback onBack;
   final String? subtitle;
-  final List<Widget> actions;
   final double height;
 
   /// 上传过的头像 / 背景图；读不到就退回首字头像和内置占位背景。
@@ -460,27 +472,8 @@ class MomentCover extends StatelessWidget {
         children: <Widget>[
           Positioned.fill(child: _coverImage()),
           Positioned(
-            left: 6,
-            top: topInset + 4,
-            child: MomentRoundButton(icon: Lucide.ChevronLeft, onTap: onBack),
-          ),
-          if (actions.isNotEmpty)
-            Positioned(
-              right: 12,
-              top: topInset + 8,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  for (final action in actions) ...<Widget>[
-                    action,
-                    const SizedBox(width: 8),
-                  ],
-                ],
-              ),
-            ),
-          Positioned(
             right: 18,
-            bottom: 18,
+            bottom: 14,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
@@ -495,7 +488,14 @@ class MomentCover extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
-                        color: MomentColors.primaryText,
+                        color: Colors.white,
+                        shadows: <Shadow>[
+                          Shadow(
+                            color: Color(0x66000000),
+                            blurRadius: 10,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
                       ),
                     ),
                     if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
@@ -504,7 +504,14 @@ class MomentCover extends StatelessWidget {
                         subtitle!,
                         style: const TextStyle(
                           fontSize: 12,
-                          color: MomentColors.secondaryText,
+                          color: Color(0xF2FFFFFF),
+                          shadows: <Shadow>[
+                            Shadow(
+                              color: Color(0x66000000),
+                              blurRadius: 8,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -515,6 +522,13 @@ class MomentCover extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 12,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: MomentAvatar(
                     name: name,
@@ -553,9 +567,16 @@ class MomentRoundButton extends StatelessWidget {
       height: 36,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
+        color: Colors.white.withValues(alpha: 0.92),
         shape: BoxShape.circle,
         border: Border.all(color: MomentColors.hairline),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x1F000000),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: content,
     );
@@ -591,9 +612,16 @@ class MomentPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.92),
+          color: Colors.white.withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: MomentColors.hairline),
+          boxShadow: const <BoxShadow>[
+            BoxShadow(
+              color: Color(0x1F000000),
+              blurRadius: 10,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -612,6 +640,36 @@ class MomentPill extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 浮在最上面那一条：返回 + 按钮。位置钉死，封面滚走了它也还在。
+class MomentTopBar extends StatelessWidget {
+  const MomentTopBar({
+    super.key,
+    required this.onBack,
+    this.actions = const <Widget>[],
+  });
+
+  final VoidCallback onBack;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
+    return Padding(
+      padding: EdgeInsets.only(top: topInset + 4, left: 6, right: 12),
+      child: Row(
+        children: <Widget>[
+          MomentRoundButton(icon: Lucide.ChevronLeft, onTap: onBack),
+          const Spacer(),
+          for (final action in actions) ...<Widget>[
+            action,
+            const SizedBox(width: 8),
+          ],
+        ],
       ),
     );
   }

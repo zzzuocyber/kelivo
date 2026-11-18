@@ -19,7 +19,7 @@ import '../../../core/models/chat_item.dart';
 import '../../../core/providers/user_provider.dart';
 import '../../settings/pages/settings_page.dart';
 import '../../translate/pages/translate_page.dart';
-import '../../moment/moment_page.dart';
+import '../../moment/moment_phone_page.dart';
 import '../../moment/moment_store.dart';
 import '../../backup/pages/backup_page.dart';
 import '../../../core/providers/assistant_provider.dart';
@@ -2945,7 +2945,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                                             icon: Lucide.Compass,
                                             padding: const EdgeInsets.all(10),
                                             onTap: () {
-                                              openMomentPage(context);
+                                              openMomentPhone(context);
                                             },
                                           ),
                                         ),
