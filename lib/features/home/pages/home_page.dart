@@ -34,7 +34,7 @@ import '../../simulator/widgets/simulator_scene_panel.dart';
 import '../../simulator/widgets/simulator_option_bar.dart';
 import '../../simulator/widgets/simulator_settings_sheet.dart';
 import '../../simulator/widgets/simulator_top_bar.dart';
-import '../../simulator/pages/simulator_list_page.dart';
+import '../../simulator/widgets/simulator_transcript.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, Clipboard, ClipboardData, LogicalKeyboardKey;
@@ -1293,17 +1293,7 @@ class _HomePageState extends State<HomePage>
                   SimulatorStatusPanel(
                     sections: SimulatorBlocks.statusSections(status),
                   ),
-                Expanded(
-                  child: _buildMessageListView(
-                    context,
-                    topContentPadding: AppSpacing.xs,
-                    bottomContentPadding: AppSpacing.xs,
-                    dividerPadding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: AppSpacing.sm,
-                    ),
-                  ),
-                ),
+                Expanded(child: _buildSimulatorTranscript(context)),
                 SimulatorOptionBar(
                   options: options,
                   onSend: (value) =>
@@ -1340,6 +1330,57 @@ class _HomePageState extends State<HomePage>
 
   String _simulatorLastReply() =>
       _simulatorLastAssistantMessage()?.content ?? '';
+
+  /// 正文：按草图排成一页文档——所有叙述接在同一张卡里，一条条气泡、
+  /// 头像、名字行、复制/重试那套小按钮统统不要。
+  ///
+  /// 三种标记块（状态 / 结局 / 选项）先从正文里摘掉，它们各有各的位置；
+  /// 块还没闭合（还在流式）时不摘，原文照常显示，不半截切。
+  Widget _buildSimulatorTranscript(BuildContext context) {
+    final conversationId = _controller.currentConversation?.id;
+    final parts = <String>[];
+    String? streamingId;
+    for (final message in _controller.messages) {
+      if (message.role != 'assistant') continue;
+      // 正在流的那条用逐字内容源，其它用已经落下的正文。
+      if (message.isStreaming &&
+          _controller.streamingContentNotifier.hasNotifier(message.id)) {
+        streamingId = message.id;
+        continue;
+      }
+      final body = _simulatorBodyText(message.content);
+      if (body.isNotEmpty) parts.add(body);
+    }
+    final base = parts.join('\n\n');
+    if (streamingId == null) {
+      return SimulatorTranscript(text: base, conversationId: conversationId);
+    }
+    return ValueListenableBuilder(
+      valueListenable: _controller.streamingContentNotifier.getNotifier(
+        streamingId,
+      ),
+      builder: (context, data, _) {
+        final live = _simulatorBodyText(data.content);
+        final text = live.isEmpty
+            ? base
+            : (base.isEmpty ? live : '$base\n\n$live');
+        return SimulatorTranscript(
+          text: text,
+          conversationId: conversationId,
+          streaming: true,
+        );
+      },
+    );
+  }
+
+  /// 正文里三种标记块先摘掉，它们各有各的位置；块没闭合就不摘。
+  String _simulatorBodyText(String content) {
+    return SimulatorBlocks.strip(content, const [
+      SimulatorBlocks.statusName,
+      SimulatorBlocks.endingName,
+      SimulatorOptions.blockName,
+    ]).trim();
+  }
 
   Future<void> _simulatorEditScene() async {
     final conversation = _controller.currentConversation;
@@ -1400,22 +1441,20 @@ class _HomePageState extends State<HomePage>
           style: TextStyle(fontSize: 15, fontWeight: AppFontWeights.medium),
         ),
       ),
-      onBack: _openSimulatorList,
+      onBack: _exitSimulator,
       onRegenerate: _simulatorRegenerateLastReply,
       onSettings: _openSimulatorSettings,
       canRegenerate: _simulatorLastAssistantMessage() != null,
     );
   }
 
-  /// `←`：回模拟器列表页；挑了一条就切过去，没挑就留在原处。
-  Future<void> _openSimulatorList() async {
+  /// `←`：退出模拟器，回主界面的对话列表（抽屉）。这条记录本身不动，
+  /// 下次从抽屉底部的罗盘还能回来。
+  void _exitSimulator() {
     _controller.dismissKeyboard();
-    final id = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const SimulatorListPage()),
-    );
-    if (!mounted || id == null) return;
-    if (id == _controller.currentConversation?.id) return;
-    await _controller.switchConversationAnimated(id);
+    if (_drawerController.isClosed) {
+      unawaited(_drawerController.open());
+    }
   }
 
   /// `↻`：把最后一条回复重写。走的是消息菜单里那个同款重生成，

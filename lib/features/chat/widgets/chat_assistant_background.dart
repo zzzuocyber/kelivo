@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../core/services/chat/chat_service.dart';
 import '../../../utils/sandbox_path_resolver.dart';
+import '../../simulator/simulator_meta.dart';
 import 'chat_background_resolver.dart';
 import 'chat_gradient_background.dart';
 import 'frosted/chat_frosted_backdrop.dart';
@@ -40,6 +42,8 @@ class ChatAssistantBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final assistant = context.watch<AssistantProvider>().currentAssistant;
     if (assistant?.useGradientBackground ?? false) {
+      // 模拟器先不支持任何背景，渐变也不铺。
+      if (_inSimulator(context)) return const SizedBox.shrink();
       return ChatGradientBackground(pinned: pinnedToBackdrop);
     }
     final wallpaper = _buildWallpaper(
@@ -167,5 +171,17 @@ class ChatAssistantBackground extends StatelessWidget {
         Positioned.fill(child: mask),
       ],
     );
+  }
+}
+
+/// 当前对话是不是模拟器（取不到 ChatService 的预览页一律按「不是」）。
+bool _inSimulator(BuildContext context) {
+  try {
+    final chat = context.read<ChatService>();
+    final id = chat.currentConversationId;
+    if (id == null) return false;
+    return SimulatorMeta.isSimulator(chat.getConversation(id));
+  } catch (_) {
+    return false;
   }
 }

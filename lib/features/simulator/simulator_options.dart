@@ -10,6 +10,7 @@
 /// :::
 /// ```
 abstract final class SimulatorOptions {
+  static const String blockName = '选项';
   static const String openMarker = ':::选项';
   static const String closeMarker = ':::';
 
