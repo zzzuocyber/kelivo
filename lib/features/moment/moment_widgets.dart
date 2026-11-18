@@ -340,8 +340,11 @@ class MomentPostCard extends StatelessWidget {
                                 : () => onTapCommentLine!(post.comments[i]),
                             onLongPressComment == null
                                 ? null
-                                : () =>
-                                      onLongPressComment!(i, post.comments[i]),
+                                : (position) => onLongPressComment!(
+                                    i,
+                                    post.comments[i],
+                                    position,
+                                  ),
                           ),
                         if (waitingReply) ...<Widget>[
                           const SizedBox(height: 6),
