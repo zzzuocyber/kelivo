@@ -10,6 +10,9 @@ const String momentPostsKey = 'moment.posts';
 const String momentCharactersKey = 'moment.characters';
 const String momentAssetsKey = 'moment.assets';
 
+/// 当前「天意」是谁：评论区署名用这个名字。没有这个键 = 没开。
+const String momentDivineKey = 'moment.divine';
+
 /// 隐藏对话的标题，只在备份/导出里可见。
 const String momentFeedTitle = '朋友圈';
 
@@ -57,6 +60,13 @@ Map<String, MomentAssets> momentAssetsFromExtras(Map<String, dynamic>? extras) {
 
 Map<String, MomentAssets> momentAssetsOf(Conversation? conversation) =>
     momentAssetsFromExtras(conversation?.extras);
+
+/// 现在开着天意的那个人。空字符串 = 没开。
+String momentDivineFromExtras(Map<String, dynamic>? extras) =>
+    (extras?[momentDivineKey] ?? '').toString().trim();
+
+String momentDivineOf(Conversation? conversation) =>
+    momentDivineFromExtras(conversation?.extras);
 
 /// 找某个作者的两张图。作者名就是我自己时，用马甲那一份。
 MomentAssets? momentAssetsForAuthor(
@@ -157,6 +167,21 @@ class MomentStore {
       next[momentCharactersKey] = characters
           .map((c) => c.toJson())
           .toList(growable: false);
+      return next;
+    });
+  }
+
+  /// 开天意：传角色名。关天意：传 null。
+  Future<void> setDivine(String? name) async {
+    final clean = (name ?? '').trim();
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final next = Map<String, dynamic>.from(extras);
+      if (clean.isEmpty) {
+        next.remove(momentDivineKey);
+      } else {
+        next[momentDivineKey] = clean;
+      }
       return next;
     });
   }

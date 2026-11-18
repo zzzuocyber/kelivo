@@ -34,6 +34,9 @@ class _MomentPageState extends State<MomentPage> {
   /// 我正在等谁的回我一句，那一条帖子底下就转个小圈。
   String? _waitingReplyPostId;
 
+  /// 现在开着天意的那个人；null = 没开，评论署名回到我自己的马甲。
+  String? _divineName;
+
   /// 底部那条内嵌输入栏：正在评论哪条、回谁。
   MomentPost? _composerPost;
   String? _composerReplyTo;
@@ -67,6 +70,12 @@ class _MomentPageState extends State<MomentPage> {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     _characters = momentCharactersOf(conversation);
     _assets = momentAssetsOf(conversation);
+    final divine = momentDivineOf(conversation);
+    // 天意指向的角色被删掉就不算数，免得评论区署名落在一个名单外的人身上。
+    _divineName =
+        divine.isNotEmpty && _characters.any((c) => c.name.trim() == divine)
+        ? divine
+        : null;
     _posts = posts;
     _loading = false;
   }
@@ -81,6 +90,13 @@ class _MomentPageState extends State<MomentPage> {
         .momentPersonaName
         .trim();
     return value.isEmpty ? '我' : value;
+  }
+
+  /// 现在拿谁的名义说话：开了天意就是那个人，没开就是我自己的马甲。
+  String _actingName([SettingsProvider? settings]) {
+    final divine = (_divineName ?? '').trim();
+    if (divine.isNotEmpty) return divine;
+    return _personaName(settings);
   }
 
   void _toast(String text) {
@@ -148,13 +164,30 @@ class _MomentPageState extends State<MomentPage> {
     _reload();
   }
 
-  Future<void> _openContacts() {
-    return showMomentContactsDialog(
+  Future<void> _openContacts() async {
+    final outcome = await showMomentContactsDialog(
       context,
       characters: _characters,
       assets: _assets,
-      onOpen: _openAuthor,
+      divineName: _divineName,
     );
+    if (outcome == null || !mounted) return;
+    final openAuthor = outcome.openAuthor;
+    if (openAuthor != null) {
+      await _openAuthor(openAuthor);
+      return;
+    }
+    await _setDivine(outcome.closeDivine ? null : outcome.divineName);
+  }
+
+  Future<void> _setDivine(String? name) async {
+    try {
+      await _store.setDivine(name);
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      _toast('天意没存上，再试一次');
+    }
   }
 
   Future<void> _openAssets() async {
@@ -179,8 +212,11 @@ class _MomentPageState extends State<MomentPage> {
   }
 
   Future<void> _toggleLike(MomentPost post) async {
+    final me = _actingName();
+    // 穿着谁的皮，就别给那个人自己的帖子点赞。
+    if (_divineName != null && post.author.trim() == me) return;
     try {
-      await _store.toggleLike(post.id, _personaName());
+      await _store.toggleLike(post.id, me);
       if (!mounted) return;
       _reload();
     } catch (_) {
@@ -189,14 +225,14 @@ class _MomentPageState extends State<MomentPage> {
   }
 
   Future<void> _compose() async {
-    final result = await showModalBottomSheet<_ComposeResult>(
+    final result = await showModalBottomSheet<MomentComposeResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => const _ComposeSheet(),
+      builder: (_) => const MomentComposeSheet(),
     );
     if (result == null || !mounted) return;
     final text = result.text.trim();
@@ -247,7 +283,7 @@ class _MomentPageState extends State<MomentPage> {
     if (post == null) return;
     final text = _composerController.text.trim();
     if (text.isEmpty) return;
-    final me = _personaName();
+    final me = _actingName();
     final myComment = MomentComment(
       author: me,
       text: text,
@@ -262,7 +298,68 @@ class _MomentPageState extends State<MomentPage> {
     if (!mounted) return;
     _closeComposer();
     _reload();
+    final mentioned = _mentionsIn(text);
+    if (mentioned.isNotEmpty) {
+      await _askMentioned(post, text, me, mentioned);
+      return;
+    }
     await _askForReplies(post, text, me, target);
+  }
+
+  /// 从我说的话里挑出「@了谁」。名字要一字不差，长名字优先，只认通讯录里的人；
+  /// 我自己的马甲、以及现在穿着的这个角色都不算。
+  List<String> _mentionsIn(String text) {
+    final persona = _personaName().trim();
+    final acting = _actingName().trim();
+    final names = <String>[
+      for (final character in _characters)
+        if (character.name.trim() != persona && character.name.trim() != acting)
+          character.name.trim(),
+    ]..sort((a, b) => b.length.compareTo(a.length));
+    if (names.isEmpty) return const <String>[];
+    final pattern = RegExp('@(${names.map(RegExp.escape).join('|')})');
+    final out = <String>[];
+    for (final match in pattern.allMatches(text)) {
+      final name = match.group(1);
+      if (name == null || name.isEmpty) continue;
+      if (!out.contains(name)) out.add(name);
+    }
+    return out;
+  }
+
+  /// @ 了谁，谁就单独回我一句；@ 几个就几条。
+  Future<void> _askMentioned(
+    MomentPost post,
+    String myText,
+    String me,
+    List<String> mentioned,
+  ) async {
+    setState(() => _waitingReplyPostId = post.id);
+    try {
+      final settings = context.read<SettingsProvider>();
+      final worldBooks = context.read<WorldBookProvider>();
+      final composer = MomentMentionReplies(
+        settings: settings,
+        worldBooks: worldBooks,
+        bookId: settings.momentBookId,
+        characters: _characters,
+        personaName: me,
+        post: post,
+        myText: myText,
+        mentioned: mentioned,
+        recentPosts: _posts,
+      );
+      final replies = await composer.compose();
+      if (replies.isNotEmpty) {
+        await _store.addComments(post.id, replies);
+      }
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      // 有人没回就算了，不打扰。
+    } finally {
+      if (mounted) setState(() => _waitingReplyPostId = null);
+    }
   }
 
   Future<void> _askForReplies(
@@ -509,6 +606,9 @@ class _MomentPageState extends State<MomentPage> {
   @override
   Widget build(BuildContext context) {
     final persona = _personaName(context.watch<SettingsProvider>());
+    final acting = (_divineName ?? '').trim().isEmpty
+        ? persona
+        : _divineName!.trim();
     final personaAssets =
         _assets[MomentAssets.personaKey] ?? const MomentAssets();
     return Theme(
@@ -532,7 +632,7 @@ class _MomentPageState extends State<MomentPage> {
                     avatarName: persona,
                     avatarPath: personaAssets.avatar,
                     onTapAvatar: () => _openAuthor(persona),
-                    child: _buildBody(persona),
+                    child: _buildBody(persona, acting),
                   ),
                 ],
               ),
@@ -650,6 +750,7 @@ class _MomentPageState extends State<MomentPage> {
 
   Widget _buildComposerBar() {
     final target = _composerReplyTo ?? '';
+    final divine = (_divineName ?? '').trim();
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: const BoxDecoration(
@@ -659,6 +760,20 @@ class _MomentPageState extends State<MomentPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
+          if (divine.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '已开启天意：$divine',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    color: MomentColors.secondaryText,
+                  ),
+                ),
+              ),
+            ),
           if (target.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
@@ -743,7 +858,7 @@ class _MomentPageState extends State<MomentPage> {
     );
   }
 
-  Widget _buildBody(String persona) {
+  Widget _buildBody(String persona, String acting) {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 60),
@@ -778,7 +893,7 @@ class _MomentPageState extends State<MomentPage> {
               post.author,
               persona,
             )?.avatar,
-            likedByMe: post.likes.contains(persona),
+            likedByMe: post.likes.contains(acting),
             onTapAvatar: () => _openAuthor(post.author),
             onTapLike: () => _toggleLike(post),
             onTapComment: () => _openComposer(post),
@@ -834,98 +949,6 @@ class _Hint extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ComposeResult {
-  const _ComposeResult({required this.text, required this.withImage});
-
-  final String text;
-  final bool withImage;
-}
-
-/// 我自己发一条动态。
-class _ComposeSheet extends StatefulWidget {
-  const _ComposeSheet();
-
-  @override
-  State<_ComposeSheet> createState() => _ComposeSheetState();
-}
-
-class _ComposeSheetState extends State<_ComposeSheet> {
-  final TextEditingController _controller = TextEditingController();
-  bool _withImage = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    Navigator.of(
-      context,
-    ).pop(_ComposeResult(text: text, withImage: _withImage));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          const Text(
-            '发一条动态',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: MomentColors.primaryText,
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            minLines: 3,
-            maxLines: 8,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.45,
-              color: MomentColors.primaryText,
-            ),
-            decoration: const InputDecoration(
-              isDense: true,
-              hintText: '随便写点什么',
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: MomentColors.secondaryText,
-              ),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: <Widget>[
-              Switch(
-                value: _withImage,
-                onChanged: (value) => setState(() => _withImage = value),
-              ),
-              const Text(
-                '带图',
-                style: TextStyle(fontSize: 13, color: MomentColors.primaryText),
-              ),
-              const Spacer(),
-              TextButton(onPressed: _submit, child: const Text('发布')),
-            ],
-          ),
         ],
       ),
     );

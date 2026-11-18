@@ -51,12 +51,16 @@ class MomentAvatar extends StatelessWidget {
     required this.name,
     this.size = 42,
     this.onTap,
+    this.onLongPress,
     this.imagePath,
   });
 
   final String name;
   final double size;
   final VoidCallback? onTap;
+
+  /// 长按头像，参数是手指位置，菜单贴着手弹。
+  final void Function(Offset position)? onLongPress;
 
   /// 上传过的头像文件。读不到（比如在图片页被删了）就退回圆形首字。
   final String? imagePath;
@@ -124,10 +128,13 @@ class MomentAvatar extends StatelessWidget {
               ),
             ),
     );
-    if (onTap == null) return circle;
+    if (onTap == null && onLongPress == null) return circle;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
+      onLongPressStart: onLongPress == null
+          ? null
+          : (details) => onLongPress!(details.globalPosition),
       child: circle,
     );
   }
@@ -571,12 +578,16 @@ class MomentPanel extends StatelessWidget {
     this.avatarName,
     this.avatarPath,
     this.onTapAvatar,
+    this.onLongPressAvatar,
   });
 
   final Widget child;
   final String? avatarName;
   final String? avatarPath;
   final VoidCallback? onTapAvatar;
+
+  /// 长按头像（角色主页用它弹「发布」）。
+  final void Function(Offset position)? onLongPressAvatar;
 
   @override
   Widget build(BuildContext context) {
@@ -611,6 +622,7 @@ class MomentPanel extends StatelessWidget {
                   size: 56,
                   imagePath: avatarPath,
                   onTap: onTapAvatar,
+                  onLongPress: onLongPressAvatar,
                 ),
               ),
             ),
@@ -744,6 +756,98 @@ class MomentTopBar extends StatelessWidget {
             action,
             const SizedBox(width: 8),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 「发一条动态」那一块：我自己发，或者长按角色头像替他发，都用这一套。
+class MomentComposeResult {
+  const MomentComposeResult({required this.text, required this.withImage});
+
+  final String text;
+  final bool withImage;
+}
+
+class MomentComposeSheet extends StatefulWidget {
+  const MomentComposeSheet({super.key});
+
+  @override
+  State<MomentComposeSheet> createState() => _MomentComposeSheetState();
+}
+
+class _MomentComposeSheetState extends State<MomentComposeSheet> {
+  final TextEditingController _controller = TextEditingController();
+  bool _withImage = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    Navigator.of(
+      context,
+    ).pop(MomentComposeResult(text: text, withImage: _withImage));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Text(
+            '发一条动态',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: MomentColors.primaryText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 8,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.45,
+              color: MomentColors.primaryText,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: '随便写点什么',
+              hintStyle: TextStyle(
+                fontSize: 14,
+                color: MomentColors.secondaryText,
+              ),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              Switch(
+                value: _withImage,
+                onChanged: (value) => setState(() => _withImage = value),
+              ),
+              const Text(
+                '带图',
+                style: TextStyle(fontSize: 13, color: MomentColors.primaryText),
+              ),
+              const Spacer(),
+              TextButton(onPressed: _submit, child: const Text('发布')),
+            ],
+          ),
         ],
       ),
     );
