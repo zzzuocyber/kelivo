@@ -34,6 +34,12 @@ class _MomentPageState extends State<MomentPage> {
   /// 我正在等谁的回我一句，那一条帖子底下就转个小圈。
   String? _waitingReplyPostId;
 
+  /// 底部那条内嵌输入栏：正在评论哪条、回谁。
+  MomentPost? _composerPost;
+  String? _composerReplyTo;
+  final TextEditingController _composerController = TextEditingController();
+  final FocusNode _composerFocus = FocusNode();
+
   /// 每条动态的评论区当前在第几页（十条一页）。
   final Map<String, int> _commentPages = <String, int>{};
 
@@ -46,6 +52,13 @@ class _MomentPageState extends State<MomentPage> {
     super.initState();
     _store = MomentStore(context.read<ChatService>());
     _loadNow();
+  }
+
+  @override
+  void dispose() {
+    _composerController.dispose();
+    _composerFocus.dispose();
+    super.dispose();
   }
 
   void _loadNow() {
@@ -206,19 +219,33 @@ class _MomentPageState extends State<MomentPage> {
     }
   }
 
-  Future<void> _comment(MomentPost post, {String? replyTo}) async {
+  void _openComposer(MomentPost post, {String? replyTo}) {
     final target = (replyTo ?? post.author).trim();
-    final myText = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => _CommentSheet(post: post, replyTo: target),
-    );
-    if (!mounted) return;
-    final text = (myText ?? '').trim();
+    setState(() {
+      _composerPost = post;
+      _composerReplyTo = target;
+      _composerController.clear();
+    });
+    // 焦点等一帧再给，否则输入栏还没挂上键盘弹不出来。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _composerFocus.requestFocus();
+    });
+  }
+
+  void _closeComposer() {
+    _composerFocus.unfocus();
+    setState(() {
+      _composerPost = null;
+      _composerReplyTo = null;
+      _composerController.clear();
+    });
+  }
+
+  Future<void> _sendComposer() async {
+    final post = _composerPost;
+    final target = _composerReplyTo ?? '';
+    if (post == null) return;
+    final text = _composerController.text.trim();
     if (text.isEmpty) return;
     final me = _personaName();
     final myComment = MomentComment(
@@ -233,6 +260,7 @@ class _MomentPageState extends State<MomentPage> {
       return;
     }
     if (!mounted) return;
+    _closeComposer();
     _reload();
     await _askForReplies(post, text, me, target);
   }
@@ -271,8 +299,8 @@ class _MomentPageState extends State<MomentPage> {
     }
   }
 
-  Future<void> _showPostMenu(MomentPost post) async {
-    final action = await _showActionSheet('这条动态', <String>['刷新', '删除']);
+  Future<void> _showPostMenu(MomentPost post, Offset position) async {
+    final action = await _showAnchorMenu(position, <String>['刷新', '删除']);
     if (action == null) return;
     if (action == '删除') {
       await _confirmDelete(
@@ -289,9 +317,10 @@ class _MomentPageState extends State<MomentPage> {
     MomentPost post,
     int index,
     MomentComment comment,
+    Offset position,
   ) async {
     if (_rewritingCommentKey != null) return;
-    final action = await _showActionSheet('这条回复', <String>['刷新', '删除']);
+    final action = await _showAnchorMenu(position, <String>['刷新', '删除']);
     if (action == null) return;
     if (action == '删除') {
       await _confirmDelete(
@@ -304,59 +333,39 @@ class _MomentPageState extends State<MomentPage> {
     await _rewriteComment(post, index, comment);
   }
 
-  Future<String?> _showActionSheet(String title, List<String> actions) {
-    return showModalBottomSheet<String>(
+  /// 贴着手指弹的小菜单，不从底部升起。
+  Future<String?> _showAnchorMenu(Offset position, List<String> actions) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final size = MediaQuery.sizeOf(context);
+    final left = position.dx > size.width / 2 ? position.dx - 150 : position.dx;
+    final top = position.dy;
+    return showMenu<String>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      position: RelativeRect.fromLTRB(
+        left,
+        top,
+        (overlay?.size.width ?? size.width) - left - 140,
+        (overlay?.size.height ?? size.height) - top,
       ),
-      builder: (ctx) => Theme(
-        data: momentLightTheme(),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: MomentColors.secondaryText,
-                    ),
-                  ),
-                ),
+      items: <PopupMenuEntry<String>>[
+        for (final action in actions)
+          PopupMenuItem<String>(
+            value: action,
+            height: 44,
+            child: Text(
+              action,
+              style: TextStyle(
+                fontSize: 14,
+                color: action == '删除'
+                    ? const Color(0xFFC0392B)
+                    : MomentColors.primaryText,
               ),
-              for (final action in actions)
-                InkWell(
-                  onTap: () => Navigator.of(ctx).pop(action),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: Text(
-                        action,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: action == '删除'
-                              ? const Color(0xFFC0392B)
-                              : MomentColors.primaryText,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -506,6 +515,8 @@ class _MomentPageState extends State<MomentPage> {
       data: momentLightTheme(),
       child: Scaffold(
         backgroundColor: MomentColors.card,
+        // 键盘自己处理：底部输入栏按 viewInsets 上移，页面不再被压扁。
+        resizeToAvoidBottomInset: false,
         body: Stack(
           children: <Widget>[
             RefreshIndicator(
@@ -601,34 +612,144 @@ class _MomentPageState extends State<MomentPage> {
                 ],
               ),
             ),
-            Positioned(
-              left: 18,
-              bottom: 26,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _openContacts,
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: MomentColors.hairline),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x26000000),
-                        blurRadius: 14,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
+            if (_composerPost == null)
+              Positioned(
+                left: 18,
+                bottom: 26,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openContacts,
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: MomentColors.hairline),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0x26000000),
+                          blurRadius: 14,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Text('📔', style: TextStyle(fontSize: 24)),
                   ),
-                  child: const Text('📔', style: TextStyle(fontSize: 24)),
                 ),
               ),
-            ),
+            if (_composerPost != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AnimatedPadding(
+                  duration: const Duration(milliseconds: 120),
+                  curve: Curves.easeOut,
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewInsetsOf(context).bottom,
+                  ),
+                  child: _buildComposerBar(),
+                ),
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildComposerBar() {
+    final target = _composerReplyTo ?? '';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF7F8FA),
+        border: Border(top: BorderSide(color: MomentColors.hairline)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (target.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      '回复 $target',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: MomentColors.name,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _closeComposer,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        Lucide.X,
+                        size: 16,
+                        color: MomentColors.secondaryText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: _composerController,
+                  focusNode: _composerFocus,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _sendComposer(),
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    height: 1.4,
+                    color: MomentColors.primaryText,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    hintText: '说一句',
+                    hintStyle: const TextStyle(
+                      fontSize: 14,
+                      color: MomentColors.secondaryText,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: MomentColors.hairline,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: MomentColors.hairline,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(onPressed: _sendComposer, child: const Text('发送')),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -671,20 +792,20 @@ class _MomentPageState extends State<MomentPage> {
             likedByMe: post.likes.contains(persona),
             onTapAvatar: () => _openAuthor(post.author),
             onTapLike: () => _toggleLike(post),
-            onTapComment: () => _comment(post),
+            onTapComment: () => _openComposer(post),
             onTapCommentLine: (comment) =>
-                _comment(post, replyTo: comment.author),
+                _openComposer(post, replyTo: comment.author),
             onLongPressPost: _rewritingPostId == post.id
                 ? null
-                : () => _showPostMenu(post),
-            onLongPressComment: (index, comment) =>
-                _showCommentMenu(post, index, comment),
+                : (position) => _showPostMenu(post, position),
+            onLongPressComment: (index, comment, position) =>
+                _showCommentMenu(post, index, comment, position),
             commentPage: _commentPages[post.id] ?? 0,
             onCommentPageChanged: (page) =>
                 setState(() => _commentPages[post.id] = page),
             waitingReply: _waitingReplyPostId == post.id,
           ),
-        const SizedBox(height: 24),
+        SizedBox(height: _composerPost == null ? 24 : 96),
       ],
     );
   }
@@ -815,87 +936,6 @@ class _ComposeSheetState extends State<_ComposeSheet> {
               const Spacer(),
               TextButton(onPressed: _submit, child: const Text('发布')),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 我在某条帖子下评论。
-class _CommentSheet extends StatefulWidget {
-  const _CommentSheet({required this.post, required this.replyTo});
-
-  final MomentPost post;
-
-  /// 这条评论回的是谁。等于帖主时就是普通评论。
-  final String replyTo;
-
-  @override
-  State<_CommentSheet> createState() => _CommentSheetState();
-}
-
-class _CommentSheetState extends State<_CommentSheet> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    Navigator.of(context).pop(text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(
-            widget.replyTo == widget.post.author
-                ? '评论 ${widget.post.author} 的动态'
-                : '回复 ${widget.replyTo}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: MomentColors.primaryText,
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            minLines: 2,
-            maxLines: 6,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.45,
-              color: MomentColors.primaryText,
-            ),
-            decoration: const InputDecoration(
-              isDense: true,
-              hintText: '说一句',
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: MomentColors.secondaryText,
-              ),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(onPressed: _submit, child: const Text('发送')),
           ),
         ],
       ),

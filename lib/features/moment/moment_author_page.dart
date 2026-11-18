@@ -57,11 +57,7 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
             ListView(
               padding: EdgeInsets.zero,
               children: <Widget>[
-                MomentCover(
-                  name: widget.author,
-                  subtitle: '${_posts.length} 条动态',
-                  coverPath: _assets.cover,
-                ),
+                MomentCover(name: widget.author, coverPath: _assets.cover),
                 MomentPanel(
                   avatarName: widget.author,
                   avatarPath: _assets.avatar,

@@ -171,11 +171,12 @@ class MomentPostCard extends StatelessWidget {
   /// 点评论区里的某一条，就回复那个人。
   final void Function(MomentComment comment)? onTapCommentLine;
 
-  /// 长按这条动态：刷新 / 删除。
-  final VoidCallback? onLongPressPost;
+  /// 长按这条动态：刷新 / 删除。参数是手指位置，菜单就弹在那儿。
+  final void Function(Offset position)? onLongPressPost;
 
   /// 长按某条评论：刷新 / 删除。
-  final void Function(int index, MomentComment comment)? onLongPressComment;
+  final void Function(int index, MomentComment comment, Offset position)?
+  onLongPressComment;
 
   /// 评论区当前第几页（从 0 开始），一页 momentCommentsPerPage 条。
   final int commentPage;
@@ -370,7 +371,7 @@ class MomentPostCard extends StatelessWidget {
     if (onLongPressPost == null) return card;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onLongPress: onLongPressPost,
+      onLongPressStart: (details) => onLongPressPost!(details.globalPosition),
       child: card,
     );
   }
@@ -378,7 +379,7 @@ class MomentPostCard extends StatelessWidget {
   Widget _commentRow(
     MomentComment comment,
     VoidCallback? onTap,
-    VoidCallback? onLongPress,
+    void Function(Offset position)? onLongPress,
   ) {
     final replyTo = comment.replyTo;
     final showReply =
@@ -418,7 +419,9 @@ class MomentPostCard extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      onLongPress: onLongPress,
+      onLongPressStart: onLongPress == null
+          ? null
+          : (details) => onLongPress(details.globalPosition),
       child: row,
     );
   }
@@ -554,7 +557,7 @@ class MomentCover extends StatelessWidget {
           ),
           Positioned(
             right: 84,
-            bottom: 22,
+            bottom: 8,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
@@ -632,7 +635,7 @@ class MomentPanel extends StatelessWidget {
           if (avatarName != null)
             Positioned(
               top: -30,
-              right: 8,
+              right: 16,
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
