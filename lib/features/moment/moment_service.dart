@@ -462,9 +462,11 @@ class MomentGenerator {
     buffer.writeln('  ]');
     buffer.writeln('}');
     buffer.writeln(
-      'reactions 挑 0~2 条旧帖，index 用上面【最近的旧帖】里的编号，每条补 1~3 条评论。'
+      'reactions 挑 0~3 条旧帖，index 用上面【最近的旧帖】里的编号，每条补 1~3 条评论。'
       '评论要像真的在聊：后面的人可以回帖子作者，也可以回上一条评论的人'
       '（名字写进 replyTo），彼此接得上；也可以各说各的、谁也不指。'
+      '这次是整批刷新，不用守「一次一句」：如果我发过动态或评论，'
+      '可以让两三个人来理我，回我的评论、在我的动态下留言、点赞都行。'
       '没有要补的就输出空数组。',
     );
     return buffer.toString();
@@ -544,7 +546,6 @@ class MomentReplyComposer {
     String raw, {
     required List<String> names,
     required String me,
-    String? onlyFrom,
   }) {
     final decoded = MomentGenerator._decodePayload(raw);
     List<dynamic> items;
@@ -557,15 +558,13 @@ class MomentReplyComposer {
       return const <MomentComment>[];
     }
     final known = <String>{...names, me};
-    final author = (onlyFrom ?? '').trim();
+    // 一次只收一条：谁说的都行（被回复的人，或者插话的别人）。
     for (final item in items) {
       if (item is! Map) continue;
       final who = (item['author'] ?? '').toString().trim();
       final text = (item['text'] ?? '').toString().trim();
       if (text.isEmpty) continue;
-      // 只有名单里的人能说话；而且只收「我回复的那个人」的那一条。
       if (!known.contains(who) || who == me) continue;
-      if (author.isNotEmpty && who != author) continue;
       return <MomentComment>[
         MomentComment(author: who, text: text, replyTo: me),
       ];
@@ -625,9 +624,11 @@ class MomentReplyComposer {
     );
     buffer.writeln();
     buffer.writeln('【要求】');
+    buffer.writeln('只让一个人回我，就一句话到两句话，别让第二个人开口，也别让角色之间自己聊起来。');
     buffer.writeln(
-      '只让「$replyTo」一个人回我，就一句话到两句话，别让第二个人开口，'
-      '也别让角色之间自己聊起来。',
+      '说话的人通常是「$replyTo」，但也允许名单里某个人插一句：'
+      '像是看到我们在聊，忍不住搭一句。大约五次里有一次是他们插话就行，'
+      '谁插话挑跟这条帖子和这个人最搭的那个，不要每次都是同一个人。',
     );
     buffer.writeln(
       '内容只能围绕这条帖子和我说的话：可以接我的梗、吐槽、不耐烦、装傻，'
@@ -640,7 +641,7 @@ class MomentReplyComposer {
     buffer.writeln();
     buffer.writeln('【输出】');
     buffer.writeln('只输出一个 JSON 对象，不要代码块标记，不要多余文字：');
-    buffer.writeln('{"replies": [{"author": "$replyTo", "text": "说的话"}]}');
+    buffer.writeln('{"replies": [{"author": "角色名", "text": "说的话"}]}');
     return buffer.toString();
   }
 }
