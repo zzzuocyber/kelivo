@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../core/models/model_spec.dart';
+import '../../core/models/reasoning_request.dart';
 import '../../core/models/world_book.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
@@ -90,6 +92,7 @@ class MomentGenerator {
           skipImageParsing: true,
           allowImagesApiRouting: false,
           textOnly: true,
+          reasoning: ReasoningRequest(settings.momentReasoning),
           requestTimeout: momentRequestTimeout,
         );
         final batch = parseBatch(
@@ -523,6 +526,7 @@ class MomentReplyComposer {
         skipImageParsing: true,
         allowImagesApiRouting: false,
         textOnly: true,
+        reasoning: ReasoningRequest(settings.momentReasoning),
         requestTimeout: momentReplyTimeout,
       );
       return parseReplies(result.text, names: names, me: me);

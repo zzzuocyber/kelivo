@@ -6,6 +6,7 @@ import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
 import '../../icons/lucide_adapter.dart';
 import 'moment_assets_page.dart';
+import 'moment_contacts_dialog.dart';
 import 'moment_author_page.dart';
 import 'moment_characters_page.dart';
 import 'moment_models.dart';
@@ -125,6 +126,15 @@ class _MomentPageState extends State<MomentPage> {
       ),
     );
     _reload();
+  }
+
+  Future<void> _openContacts() {
+    return showMomentContactsDialog(
+      context,
+      characters: _characters,
+      assets: _assets,
+      onOpen: _openAuthor,
+    );
   }
 
   Future<void> _openAssets() async {
@@ -296,34 +306,26 @@ class _MomentPageState extends State<MomentPage> {
     return Theme(
       data: momentLightTheme(),
       child: Scaffold(
-        backgroundColor: MomentColors.card,
+        backgroundColor: MomentColors.background,
         body: Stack(
           children: <Widget>[
-            ListView(
-              padding: EdgeInsets.zero,
-              children: <Widget>[
-                MomentCover(
-                  name: persona,
-                  avatarPath: personaAssets.avatar,
-                  coverPath: personaAssets.cover,
-                ),
-                Container(
-                  decoration: const BoxDecoration(
-                    color: MomentColors.card,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x1F000000),
-                        blurRadius: 18,
-                        offset: Offset(0, -6),
-                      ),
-                    ],
+            RefreshIndicator(
+              onRefresh: _refresh,
+              color: MomentColors.name,
+              backgroundColor: Colors.white,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                children: <Widget>[
+                  MomentCover(name: persona, coverPath: personaAssets.cover),
+                  MomentPanel(
+                    avatarName: persona,
+                    avatarPath: personaAssets.avatar,
+                    onTapAvatar: () => _openAuthor(persona),
+                    child: _buildBody(persona),
                   ),
-                  child: _buildBody(persona),
-                ),
-              ],
+                ],
+              ),
             ),
             Positioned(
               top: 0,
@@ -398,6 +400,32 @@ class _MomentPageState extends State<MomentPage> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            Positioned(
+              left: 18,
+              bottom: 26,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _openContacts,
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.95),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: MomentColors.hairline),
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x26000000),
+                        blurRadius: 14,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Text('📔', style: TextStyle(fontSize: 24)),
+                ),
               ),
             ),
           ],

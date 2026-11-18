@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/models/model_spec.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
+import '../../core/services/model_spec/model_spec_resolver.dart';
 import '../../icons/lucide_adapter.dart';
+import '../../l10n/app_localizations.dart';
+import '../chat/widgets/reasoning_level_sheet.dart';
 import '../model/widgets/model_select_sheet.dart';
 import 'moment_service.dart';
 import 'moment_widgets.dart';
@@ -144,6 +148,85 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
     setState(() {});
   }
 
+  Future<void> _pickReasoning() async {
+    final settings = context.read<SettingsProvider>();
+    final providerKey =
+        settings.momentModelProvider ?? settings.currentModelProvider;
+    final modelId = settings.momentModelId ?? settings.currentModelId;
+    if (providerKey == null || modelId == null) {
+      _toast('先选一个模型');
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final config = settings.getProviderConfig(providerKey);
+    final spec = ModelSpecResolver.instance.spec(config, modelId);
+    final rows = <(String, ReasoningLevel)>[
+      if (spec.reasoning.canDisable)
+        (reasoningLevelLabel(l10n, ReasoningLevel.off), ReasoningLevel.off),
+      (reasoningLevelLabel(l10n, ReasoningLevel.auto), ReasoningLevel.auto),
+      for (final level in spec.reasoning.levels)
+        (reasoningLevelLabel(l10n, level), level),
+    ];
+    final picked = await showModalBottomSheet<ReasoningLevel>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                '深度思考',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: MomentColors.primaryText,
+                ),
+              ),
+            ),
+            for (final row in rows)
+              InkWell(
+                onTap: () => Navigator.of(ctx).pop(row.$2),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          row.$1,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: MomentColors.primaryText,
+                          ),
+                        ),
+                      ),
+                      if (settings.momentReasoning == row.$2)
+                        const Icon(
+                          Lucide.Check,
+                          size: 18,
+                          color: MomentColors.name,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    await settings.setMomentReasoning(picked);
+    if (!mounted) return;
+    setState(() {});
+  }
+
   void _toast(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -205,6 +288,14 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
               onTap: _pickBook,
             ),
             _Row(label: '模型', value: modelText, onTap: _pickModel),
+            _Row(
+              label: '深度思考',
+              value: reasoningLevelLabel(
+                AppLocalizations.of(context)!,
+                settings.momentReasoning,
+              ),
+              onTap: _pickReasoning,
+            ),
             const SizedBox(height: 8),
             _Section(
               title: '我的马甲',

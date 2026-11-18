@@ -53,23 +53,11 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
                 MomentCover(
                   name: widget.author,
                   subtitle: '${_posts.length} 条动态',
-                  avatarPath: _assets.avatar,
                   coverPath: _assets.cover,
                 ),
-                Container(
-                  decoration: const BoxDecoration(
-                    color: MomentColors.card,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x1F000000),
-                        blurRadius: 18,
-                        offset: Offset(0, -6),
-                      ),
-                    ],
-                  ),
+                MomentPanel(
+                  avatarName: widget.author,
+                  avatarPath: _assets.avatar,
                   child: _posts.isEmpty
                       ? const Padding(
                           padding: EdgeInsets.symmetric(vertical: 60),

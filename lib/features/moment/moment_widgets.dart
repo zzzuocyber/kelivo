@@ -430,15 +430,14 @@ const String momentBannerSvg = '''
 </svg>
 ''';
 
-/// 顶部那块封面：背景图 + 右下角头像和名字。
-/// 按钮不在这里，由 [MomentTopBar] 单独浮在上面，这样封面能跟着列表滚走。
+/// 顶部那块封面：背景图 + 右下角名字。头像不在这里，它是半压在交界处的，
+/// 由 [MomentPanel] 负责，这样它能跟着白卡一起滚走。
 class MomentCover extends StatelessWidget {
   const MomentCover({
     super.key,
     required this.name,
     this.subtitle,
     this.height = 180,
-    this.avatarPath,
     this.coverPath,
   });
 
@@ -446,8 +445,7 @@ class MomentCover extends StatelessWidget {
   final String? subtitle;
   final double height;
 
-  /// 上传过的头像 / 背景图；读不到就退回首字头像和内置占位背景。
-  final String? avatarPath;
+  /// 上传过的背景图；读不到就退回内置占位图。
   final String? coverPath;
 
   Widget _coverImage() {
@@ -471,74 +469,134 @@ class MomentCover extends StatelessWidget {
       child: Stack(
         children: <Widget>[
           Positioned.fill(child: _coverImage()),
+          // 顶上压一层渐隐的淡黑，免得亮背景上按钮看不清。
           Positioned(
-            right: 18,
-            bottom: 14,
-            child: Row(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: topInset + 96,
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[Color(0x33000000), Color(0x00000000)],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 84,
+            bottom: 50,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        shadows: <Shadow>[
-                          Shadow(
-                            color: Color(0x66000000),
-                            blurRadius: 10,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    shadows: <Shadow>[
+                      Shadow(
+                        color: Color(0x66000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 1),
                       ),
-                    ),
-                    if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xF2FFFFFF),
-                          shadows: <Shadow>[
-                            Shadow(
-                              color: Color(0x66000000),
-                              blurRadius: 8,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
+                    ],
+                  ),
+                ),
+                if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xF2FFFFFF),
+                      shadows: <Shadow>[
+                        Shadow(
+                          color: Color(0x66000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 1),
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x33000000),
-                        blurRadius: 12,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  child: MomentAvatar(
-                    name: name,
-                    size: 56,
-                    imagePath: avatarPath,
-                  ),
-                ),
+                ],
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 白卡：左右缩进、四角圆角、顶上垫投影；头像半压在它的上边。
+class MomentPanel extends StatelessWidget {
+  const MomentPanel({
+    super.key,
+    required this.child,
+    this.avatarName,
+    this.avatarPath,
+    this.onTapAvatar,
+  });
+
+  final Widget child;
+  final String? avatarName;
+  final String? avatarPath;
+  final VoidCallback? onTapAvatar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      clipBehavior: Clip.none,
+      decoration: BoxDecoration(
+        color: MomentColors.card,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x1F000000),
+            blurRadius: 18,
+            offset: Offset(0, -6),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 44, 0, 24),
+            child: child,
+          ),
+          if (avatarName != null)
+            Positioned(
+              top: -30,
+              right: 8,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: MomentAvatar(
+                  name: avatarName!,
+                  size: 56,
+                  imagePath: avatarPath,
+                  onTap: onTapAvatar,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -660,7 +718,7 @@ class MomentTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     return Padding(
-      padding: EdgeInsets.only(top: topInset + 4, left: 6, right: 12),
+      padding: EdgeInsets.only(top: topInset + 4, left: 18, right: 12),
       child: Row(
         children: <Widget>[
           MomentRoundButton(icon: Lucide.ChevronLeft, onTap: onBack),

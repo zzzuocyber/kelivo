@@ -301,6 +301,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _momentModelIdKey = 'moment_model_id_v1';
   static const String _momentPersonaNameKey = 'moment_persona_name_v1';
   static const String _momentContextCharsKey = 'moment_context_chars_v1';
+  static const String _momentReasoningKey = 'moment_reasoning_v1';
   static const String _displayLongPasteAsFileKey =
       'display_long_paste_as_file_v1';
   static const String _displayLongPasteAsFileThresholdKey =
@@ -1174,6 +1175,8 @@ class SettingsProvider extends ChangeNotifier {
     _momentModelId = prefs.getString(_momentModelIdKey);
     _momentPersonaName = prefs.getString(_momentPersonaNameKey) ?? '';
     _momentContextChars = prefs.getInt(_momentContextCharsKey) ?? 0;
+    final momentReasoning = prefs.getString(_momentReasoningKey);
+    _momentReasoning = _parseReasoningLevel(momentReasoning);
     _longPasteAsFile = prefs.getBool(_displayLongPasteAsFileKey) ?? true;
     _longPasteAsFileThreshold =
         (prefs.getInt(_displayLongPasteAsFileThresholdKey) ??
@@ -5326,6 +5329,24 @@ Requirements:
     await _preferences.setString(_momentPersonaNameKey, v);
   }
 
+  // 朋友圈这次请求要不要思考、思考多深。默认跟 Kelivo 一样走「自动」。
+  ReasoningLevel _momentReasoning = ReasoningLevel.auto;
+  ReasoningLevel get momentReasoning => _momentReasoning;
+  Future<void> setMomentReasoning(ReasoningLevel level) async {
+    if (_momentReasoning == level) return;
+    _momentReasoning = level;
+    notifyListeners();
+    await _preferences.setString(_momentReasoningKey, level.name);
+  }
+
+  static ReasoningLevel _parseReasoningLevel(String? raw) {
+    final value = (raw ?? '').trim();
+    for (final level in ReasoningLevel.values) {
+      if (level.name == value) return level;
+    }
+    return ReasoningLevel.auto;
+  }
+
   // 刷新时把多少字的旧帖内容喂回模型。0 = 不限制，全给。
   int _momentContextChars = 0;
   int get momentContextChars => _momentContextChars;
@@ -6306,6 +6327,7 @@ Requirements:
     copy._momentModelId = _momentModelId;
     copy._momentPersonaName = _momentPersonaName;
     copy._momentContextChars = _momentContextChars;
+    copy._momentReasoning = _momentReasoning;
     copy._titleModelProvider = _titleModelProvider;
     copy._titleModelId = _titleModelId;
     copy._titleGenerationEnabled = _titleGenerationEnabled;
