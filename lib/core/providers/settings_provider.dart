@@ -43,6 +43,7 @@ import '../../utils/avatar_cache.dart';
 import '../models/assistant.dart';
 import '../models/model_spec.dart';
 import '../models/reasoning_request.dart';
+import '../services/model_spec/model_list_metadata_cache.dart';
 import '../services/model_spec/model_spec_resolver.dart';
 import '../services/model_spec/ollama_model_service.dart';
 import '../../utils/provider_grouping_logic.dart';
@@ -721,6 +722,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.load();
     final localPreferences = await SharedPreferences.getInstance();
     await OllamaModelService.instance.ensureLoaded();
+    await ModelListMetadataCache.instance.ensureLoaded();
     _providersOrder = prefs.getStringList(_providersOrderKey) ?? [];
     final m = prefs.getString(_themeModeKey);
     switch (m) {
@@ -3801,8 +3803,11 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> removeProviderConfig(String key) async {
-    if (!_providerConfigs.containsKey(key)) return;
-    _providerConfigs.remove(key);
+    final removed = _providerConfigs.remove(key);
+    if (removed == null) return;
+    final clearMetadata = ModelListMetadataCache.instance.clearProvider(
+      removed.id,
+    );
     // Remove from order
     _providersOrder = List<String>.from(_providersOrder.where((k) => k != key));
     // Also remove from grouping map
@@ -3877,6 +3882,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_providerConfigsKey, jsonEncode(map));
     await prefs.setStringList(_providersOrderKey, _providersOrder);
     await prefs.setString(_providerGroupMapKey, jsonEncode(_providerGroupMap));
+    await clearMetadata;
     notifyListeners();
   }
 
