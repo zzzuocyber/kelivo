@@ -33,108 +33,112 @@ class _MomentContactsDialog extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     return Theme(
       data: momentLightTheme(),
-      child: Center(
-        child: Container(
-          width: size.width - 72,
-          constraints: BoxConstraints(maxHeight: size.height * 0.62),
-          decoration: BoxDecoration(
-            color: MomentColors.card,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 28,
-                offset: Offset(0, 10),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 8, 6),
-                child: Row(
-                  children: <Widget>[
-                    const Text(
-                      '通讯录',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: MomentColors.primaryText,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Center(
+          child: Container(
+            width: size.width - 72,
+            constraints: BoxConstraints(maxHeight: size.height * 0.62),
+            decoration: BoxDecoration(
+              color: MomentColors.card,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 28,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 8, 6),
+                  child: Row(
+                    children: <Widget>[
+                      const Text(
+                        '通讯录',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: MomentColors.primaryText,
+                        ),
                       ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Lucide.X,
-                        size: 18,
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(
+                          Lucide.X,
+                          size: 18,
+                          color: MomentColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (characters.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(18, 8, 18, 28),
+                    child: Text(
+                      '还没有加角色',
+                      style: TextStyle(
+                        fontSize: 13,
                         color: MomentColors.secondaryText,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              if (characters.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(18, 8, 18, 28),
-                  child: Text(
-                    '还没有加角色',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: MomentColors.secondaryText,
-                    ),
-                  ),
-                )
-              else
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.only(bottom: 12),
-                    itemCount: characters.length,
-                    itemBuilder: (_, index) {
-                      final character = characters[index];
-                      final assetsFor = assets[character.name];
-                      return InkWell(
-                        onTap: () => Navigator.of(context).pop(character.name),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            children: <Widget>[
-                              MomentAvatar(
-                                name: character.name,
-                                size: 36,
-                                imagePath: assetsFor?.avatar,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  character.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14.5,
-                                    color: MomentColors.primaryText,
+                  )
+                else
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 12),
+                      itemCount: characters.length,
+                      itemBuilder: (_, index) {
+                        final character = characters[index];
+                        final assetsFor = assets[character.name];
+                        return InkWell(
+                          onTap: () =>
+                              Navigator.of(context).pop(character.name),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                MomentAvatar(
+                                  name: character.name,
+                                  size: 36,
+                                  imagePath: assetsFor?.avatar,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    character.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14.5,
+                                      color: MomentColors.primaryText,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const Icon(
-                                Lucide.ChevronRight,
-                                size: 16,
-                                color: MomentColors.secondaryText,
-                              ),
-                            ],
+                                const Icon(
+                                  Lucide.ChevronRight,
+                                  size: 16,
+                                  color: MomentColors.secondaryText,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

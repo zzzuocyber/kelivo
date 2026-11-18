@@ -34,6 +34,9 @@ class _MomentPageState extends State<MomentPage> {
   /// 我正在等谁的回我一句，那一条帖子底下就转个小圈。
   String? _waitingReplyPostId;
 
+  /// 每条动态的评论区当前在第几页（十条一页）。
+  final Map<String, int> _commentPages = <String, int>{};
+
   /// 正在重写哪条动态 / 哪条评论（长按菜单里的「刷新」）。
   String? _rewritingPostId;
   String? _rewritingCommentKey;
@@ -502,7 +505,7 @@ class _MomentPageState extends State<MomentPage> {
     return Theme(
       data: momentLightTheme(),
       child: Scaffold(
-        backgroundColor: MomentColors.background,
+        backgroundColor: MomentColors.card,
         body: Stack(
           children: <Widget>[
             RefreshIndicator(
@@ -676,6 +679,9 @@ class _MomentPageState extends State<MomentPage> {
                 : () => _showPostMenu(post),
             onLongPressComment: (index, comment) =>
                 _showCommentMenu(post, index, comment),
+            commentPage: _commentPages[post.id] ?? 0,
+            onCommentPageChanged: (page) =>
+                setState(() => _commentPages[post.id] = page),
             waitingReply: _waitingReplyPostId == post.id,
           ),
         const SizedBox(height: 24),

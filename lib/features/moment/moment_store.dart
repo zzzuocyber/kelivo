@@ -69,19 +69,14 @@ MomentAssets? momentAssetsForAuthor(
   if (me.isNotEmpty && name == me) {
     return assets[MomentAssets.personaKey];
   }
-  return assets[name] ?? assets[MomentAssets.personaKey];
+  return assets[name];
 }
 
 /// 最近 N 条帖子，按时间倒序（新的在前），刷新时拿去让模型补互动。
 const int momentReactionWindow = 10;
 
-/// 一条帖子底下最多留这么多条评论，再往上叠就丢掉最早的，防止越滚越长。
-const int momentMaxCommentsPerPost = 10;
-
-List<MomentComment> _capComments(List<MomentComment> comments) {
-  if (comments.length <= momentMaxCommentsPerPost) return comments;
-  return comments.sublist(comments.length - momentMaxCommentsPerPost);
-}
+/// 评论区一页显示多少条。超过这个数，界面上翻页看，数据一条都不丢。
+const int momentCommentsPerPage = 10;
 
 /// 朋友圈数据进出的唯一入口。
 class MomentStore {
@@ -198,10 +193,7 @@ class MomentStore {
         }
         byId[reaction.postId] = target.copyWith(
           likes: likes,
-          comments: _capComments(<MomentComment>[
-            ...target.comments,
-            ...reaction.comments,
-          ]),
+          comments: <MomentComment>[...target.comments, ...reaction.comments],
         );
       }
       return <MomentPost>[
@@ -243,10 +235,7 @@ class MomentStore {
         for (final post in posts)
           if (post.id == postId)
             post.copyWith(
-              comments: _capComments(<MomentComment>[
-                ...post.comments,
-                ...comments,
-              ]),
+              comments: <MomentComment>[...post.comments, ...comments],
             )
           else
             post,

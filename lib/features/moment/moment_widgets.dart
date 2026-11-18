@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../icons/lucide_adapter.dart';
 import 'moment_emoji.dart';
 import 'moment_models.dart';
+import 'moment_store.dart';
 
 /// 朋友圈固定浅色，不跟夜间模式走，所以颜色都写死在这里。
 class MomentColors {
@@ -155,6 +156,8 @@ class MomentPostCard extends StatelessWidget {
     this.onTapCommentLine,
     this.onLongPressPost,
     this.onLongPressComment,
+    this.commentPage = 0,
+    this.onCommentPageChanged,
     this.waitingReply = false,
   });
 
@@ -174,13 +177,27 @@ class MomentPostCard extends StatelessWidget {
   /// 长按某条评论：刷新 / 删除。
   final void Function(int index, MomentComment comment)? onLongPressComment;
 
+  /// 评论区当前第几页（从 0 开始），一页 momentCommentsPerPage 条。
+  final int commentPage;
+  final void Function(int page)? onCommentPageChanged;
+
   /// 我刚评论完，角色正在回我。
   final bool waitingReply;
 
   @override
   Widget build(BuildContext context) {
+    final comments = post.comments;
+    final pageCount = comments.isEmpty
+        ? 0
+        : (comments.length + momentCommentsPerPage - 1) ~/
+              momentCommentsPerPage;
+    final safePage = pageCount == 0 ? 0 : commentPage.clamp(0, pageCount - 1);
+    final pageStart = safePage * momentCommentsPerPage;
+    final pageEnd = pageStart + momentCommentsPerPage > comments.length
+        ? comments.length
+        : pageStart + momentCommentsPerPage;
     final card = Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 22),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: MomentColors.hairline)),
       ),
@@ -405,6 +422,33 @@ class MomentPostCard extends StatelessWidget {
       child: row,
     );
   }
+
+  Widget _pagerButton(String label, VoidCallback? onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: onTap == null
+                ? MomentColors.hairline
+                : MomentColors.name.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: onTap == null
+                ? MomentColors.secondaryText
+                : MomentColors.name,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _TapIcon extends StatelessWidget {
@@ -510,7 +554,7 @@ class MomentCover extends StatelessWidget {
           ),
           Positioned(
             right: 84,
-            bottom: 50,
+            bottom: 22,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
@@ -576,19 +620,8 @@ class MomentPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10),
       clipBehavior: Clip.none,
-      decoration: BoxDecoration(
-        color: MomentColors.card,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x1F000000),
-            blurRadius: 18,
-            offset: Offset(0, -6),
-          ),
-        ],
-      ),
+      decoration: const BoxDecoration(color: MomentColors.card),
       child: Stack(
         clipBehavior: Clip.none,
         children: <Widget>[
