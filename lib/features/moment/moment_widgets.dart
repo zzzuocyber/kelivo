@@ -287,81 +287,87 @@ class MomentPostCard extends StatelessWidget {
                     post.comments.isNotEmpty ||
                     waitingReply) ...[
                   const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                    decoration: BoxDecoration(
-                      color: MomentColors.commentBlock,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        if (post.likes.isNotEmpty) ...<Widget>[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              const Padding(
-                                padding: EdgeInsets.only(top: 2),
-                                child: Icon(
-                                  Lucide.Heart,
-                                  size: 13,
-                                  color: MomentColors.name,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  post.likes.join('、'),
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    height: 1.35,
+                  // 这块自己吞掉长按：在这里只认单条评论的长按，
+                  // 不许穿透到整张卡片那一层（否则删评论会变成删整条动态）。
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPressStart: (_) {},
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                      decoration: BoxDecoration(
+                        color: MomentColors.commentBlock,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          if (post.likes.isNotEmpty) ...<Widget>[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 2),
+                                  child: Icon(
+                                    Lucide.Heart,
+                                    size: 13,
                                     color: MomentColors.name,
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          if (post.comments.isNotEmpty || waitingReply)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 6),
-                              child: Divider(
-                                height: 1,
-                                thickness: 1,
-                                color: MomentColors.hairline,
-                              ),
-                            ),
-                        ],
-                        for (var i = 0; i < post.comments.length; i++)
-                          _commentRow(
-                            post.comments[i],
-                            onTapCommentLine == null
-                                ? null
-                                : () => onTapCommentLine!(post.comments[i]),
-                            onLongPressComment == null
-                                ? null
-                                : (position) => onLongPressComment!(
-                                    i,
-                                    post.comments[i],
-                                    position,
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    post.likes.join('、'),
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      height: 1.35,
+                                      color: MomentColors.name,
+                                    ),
                                   ),
-                          ),
-                        if (waitingReply) ...<Widget>[
-                          const SizedBox(height: 6),
-                          const Row(
-                            children: <Widget>[
-                              SizedBox(
-                                width: 12,
-                                height: 12,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 1.6,
+                                ),
+                              ],
+                            ),
+                            if (post.comments.isNotEmpty || waitingReply)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6),
+                                child: Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: MomentColors.hairline,
                                 ),
                               ),
-                              SizedBox(width: 8),
-                            ],
-                          ),
+                          ],
+                          for (var i = 0; i < post.comments.length; i++)
+                            _commentRow(
+                              post.comments[i],
+                              onTapCommentLine == null
+                                  ? null
+                                  : () => onTapCommentLine!(post.comments[i]),
+                              onLongPressComment == null
+                                  ? null
+                                  : (position) => onLongPressComment!(
+                                      i,
+                                      post.comments[i],
+                                      position,
+                                    ),
+                            ),
+                          if (waitingReply) ...<Widget>[
+                            const SizedBox(height: 6),
+                            const Row(
+                              children: <Widget>[
+                                SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.6,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                              ],
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ],
@@ -425,7 +431,8 @@ class MomentPostCard extends StatelessWidget {
       onLongPressStart: onLongPress == null
           ? null
           : (details) => onLongPress(details.globalPosition),
-      child: row,
+      // 撑满整行宽度：长按落在这一行右边空白处，也算按的是这条评论。
+      child: SizedBox(width: double.infinity, child: row),
     );
   }
 
