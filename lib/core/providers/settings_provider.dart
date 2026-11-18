@@ -292,6 +292,13 @@ class SettingsProvider extends ChangeNotifier {
       'display_enter_to_send_on_mobile_v1';
   // 「」 key in the composer: what a single tap inserts.
   static const String _composerQuickSymbolKey = 'composer_quick_symbol_v1';
+  // 朋友圈：用哪本世界书、系统提示词、附加指令、跑哪个模型。
+  static const String _momentBookIdKey = 'moment_book_id_v1';
+  static const String _momentSystemPromptKey = 'moment_system_prompt_v1';
+  static const String _momentExtraInstructionKey =
+      'moment_extra_instruction_v1';
+  static const String _momentModelProviderKey = 'moment_model_provider_v1';
+  static const String _momentModelIdKey = 'moment_model_id_v1';
   static const String _displayLongPasteAsFileKey =
       'display_long_paste_as_file_v1';
   static const String _displayLongPasteAsFileThresholdKey =
@@ -1158,6 +1165,11 @@ class SettingsProvider extends ChangeNotifier {
     if (quickSymbolPref != null && quickSymbolPref.isNotEmpty) {
       _composerQuickSymbol = quickSymbolPref;
     }
+    _momentBookId = prefs.getString(_momentBookIdKey) ?? '';
+    _momentSystemPrompt = prefs.getString(_momentSystemPromptKey) ?? '';
+    _momentExtraInstruction = prefs.getString(_momentExtraInstructionKey) ?? '';
+    _momentModelProvider = prefs.getString(_momentModelProviderKey);
+    _momentModelId = prefs.getString(_momentModelIdKey);
     _longPasteAsFile = prefs.getBool(_displayLongPasteAsFileKey) ?? true;
     _longPasteAsFileThreshold =
         (prefs.getInt(_displayLongPasteAsFileThresholdKey) ??
@@ -5257,6 +5269,48 @@ Requirements:
     await prefs.setString(_composerQuickSymbolKey, value);
   }
 
+  // 朋友圈：世界书 / 提示词 / 模型，全部跟着备份走。
+  String _momentBookId = '';
+  String get momentBookId => _momentBookId;
+  Future<void> setMomentBookId(String value) async {
+    final v = value.trim();
+    if (_momentBookId == v) return;
+    _momentBookId = v;
+    notifyListeners();
+    await _preferences.setString(_momentBookIdKey, v);
+  }
+
+  String _momentSystemPrompt = '';
+  String get momentSystemPrompt => _momentSystemPrompt;
+  Future<void> setMomentSystemPrompt(String value) async {
+    if (_momentSystemPrompt == value) return;
+    _momentSystemPrompt = value;
+    notifyListeners();
+    await _preferences.setString(_momentSystemPromptKey, value);
+  }
+
+  String _momentExtraInstruction = '';
+  String get momentExtraInstruction => _momentExtraInstruction;
+  Future<void> setMomentExtraInstruction(String value) async {
+    if (_momentExtraInstruction == value) return;
+    _momentExtraInstruction = value;
+    notifyListeners();
+    await _preferences.setString(_momentExtraInstructionKey, value);
+  }
+
+  String? _momentModelProvider;
+  String? get momentModelProvider => _momentModelProvider;
+  String? _momentModelId;
+  String? get momentModelId => _momentModelId;
+  Future<void> setMomentModel(String providerKey, String modelId) async {
+    _momentModelProvider = providerKey;
+    _momentModelId = modelId;
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setString(_momentModelProviderKey, providerKey);
+    await prefs.setString(_momentModelIdKey, modelId);
+  }
+
   static const int defaultLongPasteAsFileThreshold = 5000;
   static const int minLongPasteAsFileThreshold = 1;
   static const int maxLongPasteAsFileThreshold = 999999;
@@ -6219,6 +6273,11 @@ Requirements:
     copy._currentModelProvider = _currentModelProvider;
     copy._currentModelId = _currentModelId;
     copy._perChatModelEnabled = _perChatModelEnabled;
+    copy._momentBookId = _momentBookId;
+    copy._momentSystemPrompt = _momentSystemPrompt;
+    copy._momentExtraInstruction = _momentExtraInstruction;
+    copy._momentModelProvider = _momentModelProvider;
+    copy._momentModelId = _momentModelId;
     copy._titleModelProvider = _titleModelProvider;
     copy._titleModelId = _titleModelId;
     copy._titleGenerationEnabled = _titleGenerationEnabled;
