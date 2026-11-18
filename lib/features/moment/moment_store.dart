@@ -46,6 +46,14 @@ List<MomentPost> momentPostsOf(Conversation? conversation) =>
 /// 最近 N 条帖子，按时间倒序（新的在前），刷新时拿去让模型补互动。
 const int momentReactionWindow = 10;
 
+/// 一条帖子底下最多留这么多条评论，再往上叠就丢掉最早的，防止越滚越长。
+const int momentMaxCommentsPerPost = 10;
+
+List<MomentComment> _capComments(List<MomentComment> comments) {
+  if (comments.length <= momentMaxCommentsPerPost) return comments;
+  return comments.sublist(comments.length - momentMaxCommentsPerPost);
+}
+
 /// 朋友圈数据进出的唯一入口。
 class MomentStore {
   MomentStore(this.chat);
@@ -127,7 +135,10 @@ class MomentStore {
         }
         byId[reaction.postId] = target.copyWith(
           likes: likes,
-          comments: <MomentComment>[...target.comments, ...reaction.comments],
+          comments: _capComments(<MomentComment>[
+            ...target.comments,
+            ...reaction.comments,
+          ]),
         );
       }
       return <MomentPost>[
@@ -169,7 +180,10 @@ class MomentStore {
         for (final post in posts)
           if (post.id == postId)
             post.copyWith(
-              comments: <MomentComment>[...post.comments, ...comments],
+              comments: _capComments(<MomentComment>[
+                ...post.comments,
+                ...comments,
+              ]),
             )
           else
             post,

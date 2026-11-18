@@ -197,11 +197,9 @@ class MomentPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-      decoration: BoxDecoration(
-        color: MomentColors.card,
-        borderRadius: BorderRadius.circular(14),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: MomentColors.hairline)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,71 +415,182 @@ class _TapIcon extends StatelessWidget {
   }
 }
 
-/// 角色主页顶部：SVG 背景 + 头像 + 名字。
-class MomentAuthorHeader extends StatelessWidget {
-  const MomentAuthorHeader({super.key, required this.name, this.postCount = 0});
+/// 顶部那块封面：SVG 背景 + 左上返回 + 右上按钮 + 右下角头像和名字。
+class MomentCover extends StatelessWidget {
+  const MomentCover({
+    super.key,
+    required this.name,
+    required this.onBack,
+    this.subtitle,
+    this.actions = const <Widget>[],
+    this.height = 232,
+  });
 
   final String name;
-  final int postCount;
+  final VoidCallback onBack;
+  final String? subtitle;
+  final List<Widget> actions;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
     return SizedBox(
-      height: 210,
+      height: height + topInset,
       child: Stack(
-        clipBehavior: Clip.none,
         children: <Widget>[
           Positioned.fill(
             child: SvgPicture.string(momentBannerSvg, fit: BoxFit.cover),
           ),
           Positioned(
-            left: 18,
+            left: 6,
+            top: topInset + 4,
+            child: MomentRoundButton(icon: Lucide.ChevronLeft, onTap: onBack),
+          ),
+          if (actions.isNotEmpty)
+            Positioned(
+              right: 12,
+              top: topInset + 8,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  for (final action in actions) ...<Widget>[
+                    action,
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+          Positioned(
             right: 18,
-            bottom: 16,
+            bottom: 18,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                  ),
-                  child: MomentAvatar(name: name, size: 62),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w600,
-                          color: MomentColors.primaryText,
-                          shadows: <Shadow>[
-                            Shadow(color: Color(0x33FFFFFF), blurRadius: 6),
-                          ],
-                        ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: MomentColors.primaryText,
                       ),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 2),
                       Text(
-                        '$postCount 条动态',
+                        subtitle!,
                         style: const TextStyle(
                           fontSize: 12,
                           color: MomentColors.secondaryText,
                         ),
                       ),
                     ],
+                  ],
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
                   ),
+                  child: MomentAvatar(name: name, size: 56),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 封面上的圆形小按钮（返回、刷新、更多都用它）。
+class MomentRoundButton extends StatelessWidget {
+  const MomentRoundButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.child,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final content =
+        child ?? Icon(icon, size: 19, color: MomentColors.primaryText);
+    final box = Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.86),
+        shape: BoxShape.circle,
+        border: Border.all(color: MomentColors.hairline),
+      ),
+      child: content,
+    );
+    if (onTap == null) return box;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: box,
+    );
+  }
+}
+
+/// 封面上的胶囊按钮（邀请角色、发布）。
+class MomentPill extends StatelessWidget {
+  const MomentPill({
+    super.key,
+    this.icon,
+    this.label = '',
+    required this.onTap,
+  });
+
+  final IconData? icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: MomentColors.hairline),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (icon != null) ...<Widget>[
+              Icon(icon, size: 16, color: MomentColors.primaryText),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: MomentColors.primaryText,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -78,6 +78,7 @@ import '../utils/chat_layout_constants.dart';
 import '../widgets/chat_input_bar.dart';
 import '../widgets/share_destination_sheet.dart';
 import '../../model/widgets/model_select_sheet.dart';
+import '../../moment/moment_store.dart';
 
 /// Translation data for UI state (expanded/collapsed).
 class TranslationData {
@@ -1371,7 +1372,11 @@ class HomePageController extends ChangeNotifier {
       if (prefs.newChatOnLaunch) {
         await _createNewConversation();
       } else {
-        final conversations = _chatService.getAllConversations();
+        // 朋友圈那条隐藏对话不能当聊天打开，否则启动会落进一条空白对话。
+        final conversations = _chatService
+            .getAllConversations()
+            .where((c) => !isMomentConversation(c))
+            .toList(growable: false);
         if (conversations.isNotEmpty) {
           final recent = conversations.first;
           _chatService.setCurrentConversation(recent.id);

@@ -146,6 +146,36 @@ class MomentGenerator {
     return MomentBatch(posts: posts, reactions: reactions);
   }
 
+  /// 评论链：一条条可以接着上面的人聊，也可以谁都不指、直接评帖子。
+  /// replyTo 只能指向名单里的人、帖子作者，或者外面另外允许的名字。
+  static List<MomentComment> _parseCommentChain({
+    required dynamic rawComments,
+    required Set<String> known,
+    required String fallbackReplyTo,
+    required int limit,
+  }) {
+    final out = <MomentComment>[];
+    if (rawComments is! List) return out;
+    for (final item in rawComments) {
+      if (item is! Map) continue;
+      final author = (item['author'] ?? '').toString().trim();
+      final text = (item['text'] ?? '').toString().trim();
+      if (!known.contains(author) || text.isEmpty) continue;
+      final rawReplyTo = (item['replyTo'] ?? '').toString().trim();
+      String? replyTo;
+      if (rawReplyTo.isNotEmpty &&
+          rawReplyTo != author &&
+          (known.contains(rawReplyTo) || rawReplyTo == fallbackReplyTo)) {
+        replyTo = rawReplyTo;
+      } else if (fallbackReplyTo != author) {
+        replyTo = fallbackReplyTo;
+      }
+      out.add(MomentComment(author: author, text: text, replyTo: replyTo));
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
   static MomentReaction? _parseReaction(
     Map item,
     List<String> names,
@@ -164,21 +194,12 @@ class MomentGenerator {
         if (likes.length >= 4) break;
       }
     }
-    final comments = <MomentComment>[];
-    final rawComments = item['comments'];
-    if (rawComments is List) {
-      for (final comment in rawComments) {
-        if (comment is! Map) continue;
-        final author = (comment['author'] ?? '').toString().trim();
-        final text = (comment['text'] ?? '').toString().trim();
-        if (!known.contains(author) || text.isEmpty) continue;
-        if (author == target.author) continue;
-        comments.add(
-          MomentComment(author: author, text: text, replyTo: target.author),
-        );
-        if (comments.length >= 2) break;
-      }
-    }
+    final comments = _parseCommentChain(
+      rawComments: item['comments'],
+      known: known,
+      fallbackReplyTo: target.author,
+      limit: 3,
+    );
     if (likes.isEmpty && comments.isEmpty) return null;
     return MomentReaction(postId: target.id, likes: likes, comments: comments);
   }
@@ -238,18 +259,12 @@ class MomentGenerator {
           if (likes.length >= 4) break;
         }
       }
-      final comments = <MomentComment>[];
-      final rawComments = item['comments'];
-      if (rawComments is List) {
-        for (final comment in rawComments) {
-          if (comment is! Map) continue;
-          final who = (comment['author'] ?? '').toString().trim();
-          final what = (comment['text'] ?? '').toString().trim();
-          if (!known.contains(who) || who == author || what.isEmpty) continue;
-          comments.add(MomentComment(author: who, text: what, replyTo: author));
-          if (comments.length >= 2) break;
-        }
-      }
+      final comments = _parseCommentChain(
+        rawComments: item['comments'],
+        known: known,
+        fallbackReplyTo: author,
+        limit: 3,
+      );
       out.add(
         MomentPost(
           id: newMomentPostId(),
@@ -373,12 +388,21 @@ class MomentGenerator {
     }
     if (oldPosts.isNotEmpty) {
       buffer.writeln();
-      buffer.writeln('【最近的旧帖】给它们补一点新的互动，编号从 1 开始');
+      buffer.writeln('【最近的旧帖】后面可以给它们补新的互动，编号从 1 开始');
       var index = 1;
       for (final post in oldPosts) {
         final tail = post.text.replaceAll('\n', ' ');
         final snippet = tail.length > 40 ? '${tail.substring(0, 40)}…' : tail;
         buffer.writeln('$index. ${post.author}：$snippet');
+        final recent = post.comments.length > 2
+            ? post.comments.sublist(post.comments.length - 2)
+            : post.comments;
+        for (final comment in recent) {
+          final who = comment.replyTo == null || comment.replyTo!.isEmpty
+              ? comment.author
+              : '${comment.author} 回复 ${comment.replyTo}';
+          buffer.writeln('   评论区：$who：${comment.text}');
+        }
         index++;
       }
     }
@@ -396,7 +420,7 @@ class MomentGenerator {
     );
     buffer.write(
       '互动也要不均匀：这 $count 条里要有 1~2 条完全没有点赞也没有评论，'
-      '有 1 条只点赞不评论，剩下的正常。点赞最多 4 个，评论最多 2 条。',
+      '有 1 条只点赞不评论，剩下的正常。点赞最多 4 个，评论最多 3 条。',
     );
     if (personaName.trim().isNotEmpty) {
       buffer.writeln();
@@ -413,18 +437,20 @@ class MomentGenerator {
     buffer.writeln('  "posts": [');
     buffer.writeln(
       '    {"author": "角色名", "text": "动态正文", "withImage": true, '
-      '"likes": ["角色名"], "comments": [{"author": "角色名", "text": "评论"}]}',
+      '"likes": ["角色名"], "comments": [{"author": "角色名", "text": "评论", '
+      '"replyTo": "角色名"}]}',
     );
     buffer.writeln('  ],');
     buffer.writeln('  "reactions": [');
-    buffer.writeln(
-      '    {"index": 2, "likes": ["角色名"], "comments": '
-      '[{"author": "角色名", "text": "新评论"}]}',
-    );
+    buffer.writeln('    {"index": 2, "likes": ["角色名"], "comments": [');
+    buffer.writeln('      {"author": "角色名", "text": "新评论", "replyTo": "回谁"}');
+    buffer.writeln('    ]}');
     buffer.writeln('  ]');
     buffer.writeln('}');
     buffer.writeln(
-      'reactions 只挑 0~2 条旧帖，index 用上面【最近的旧帖】里的编号；'
+      'reactions 挑 0~2 条旧帖，index 用上面【最近的旧帖】里的编号，每条补 1~3 条评论。'
+      '评论要像真的在聊：后面的人可以回帖子作者，也可以回上一条评论的人'
+      '（名字写进 replyTo），彼此接得上；也可以各说各的、谁也不指。'
       '没有要补的就输出空数组。',
     );
     return buffer.toString();
@@ -504,15 +530,23 @@ class MomentReplyComposer {
     } else {
       return const <MomentComment>[];
     }
-    final known = names.toSet();
+    final known = <String>{...names, me};
     final out = <MomentComment>[];
     for (final item in items) {
       if (item is! Map) continue;
       final author = (item['author'] ?? '').toString().trim();
       final text = (item['text'] ?? '').toString().trim();
       if (!known.contains(author) || text.isEmpty) continue;
-      out.add(MomentComment(author: author, text: text, replyTo: me));
-      if (out.length >= 2) break;
+      if (author == me) continue;
+      final rawReplyTo = (item['replyTo'] ?? '').toString().trim();
+      final replyTo =
+          (rawReplyTo.isNotEmpty &&
+              rawReplyTo != author &&
+              known.contains(rawReplyTo))
+          ? rawReplyTo
+          : me;
+      out.add(MomentComment(author: author, text: text, replyTo: replyTo));
+      if (out.length >= 4) break;
     }
     return out;
   }
@@ -536,20 +570,41 @@ class MomentReplyComposer {
     buffer.writeln('【这条帖子】');
     buffer.writeln('作者：${post.author}');
     buffer.writeln(post.text);
+    final recent = post.comments.length > 4
+        ? post.comments.sublist(post.comments.length - 4)
+        : post.comments;
+    if (recent.isNotEmpty) {
+      buffer.writeln('评论区已有的留言：');
+      for (final comment in recent) {
+        final who = comment.replyTo == null || comment.replyTo!.isEmpty
+            ? comment.author
+            : '${comment.author} 回复 ${comment.replyTo}';
+        buffer.writeln('$who：${comment.text}');
+      }
+    }
     buffer.writeln();
     buffer.writeln('【我刚发的评论】');
     buffer.writeln('$me：$myText');
     buffer.writeln();
     buffer.writeln('【要求】');
-    buffer.writeln('让名单里 1~2 个角色回我一句，口气像熟人随口一接。');
     buffer.writeln(
-      '谁回都行，最好挑跟这条帖子和这个人关系最自然的；'
-      '不要客套，不要讲道理，不要一次让所有人都上来。',
+      '让 1~4 个角色接着聊下去，像评论区真的热闹起来那样，'
+      '别排队式地一起回我。',
+    );
+    buffer.writeln(
+      '第一条可以回我，也可以回上面某个留言的人；后面的人可以接着回上一条的人，'
+      '也可以另起一头跟别人聊。帖子作者自己也可以进来。',
+    );
+    buffer.writeln(
+      '每条用 replyTo 写明回的是谁，名字只能从角色名单、帖子作者和我里面挑；'
+      '想直接评帖子就不写 replyTo。不要客套，不要讲道理，不要一次上五个人。',
     );
     buffer.writeln();
     buffer.writeln('【输出】');
     buffer.writeln('只输出一个 JSON 对象，不要代码块标记，不要多余文字：');
-    buffer.writeln('{"replies": [{"author": "角色名", "text": "回复我的话"}]}');
+    buffer.writeln(
+      '{"replies": [{"author": "角色名", "text": "说的话", "replyTo": "回谁"}]}',
+    );
     return buffer.toString();
   }
 }

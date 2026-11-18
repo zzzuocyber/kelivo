@@ -850,6 +850,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
       final candidates =
           chatService
               .getAllConversations()
+              .where((c) => !isMomentConversation(c))
               .where(
                 (c) =>
                     c.assistantId == currentAid && !excludeIds.contains(c.id),

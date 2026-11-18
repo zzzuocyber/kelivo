@@ -276,69 +276,79 @@ class _MomentPageState extends State<MomentPage> {
     return Theme(
       data: momentLightTheme(),
       child: Scaffold(
-        appBar: AppBar(
-          titleSpacing: 0,
-          title: const Text(
-            '朋友圈',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          actions: <Widget>[
-            IconButton(
-              tooltip: '刷新',
-              onPressed: _generating ? null : _refresh,
-              icon: _generating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Lucide.RefreshCw, size: 21),
-            ),
-            IconButton(
-              tooltip: '发布',
-              onPressed: _compose,
-              icon: const Icon(Lucide.Plus, size: 22),
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Lucide.Ellipsis, size: 21),
-              color: Colors.white,
-              onSelected: (value) {
-                if (value == 'characters') {
-                  _openCharacters();
-                } else if (value == 'settings') {
-                  _openSettings();
-                } else if (value == 'clear') {
-                  _clearAll();
-                }
-              },
-              itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                PopupMenuItem<String>(
-                  value: 'characters',
-                  child: Text(
-                    '添加角色',
-                    style: TextStyle(color: MomentColors.primaryText),
-                  ),
+        backgroundColor: MomentColors.card,
+        body: Column(
+          children: <Widget>[
+            MomentCover(
+              name: persona,
+              onBack: () => Navigator.of(context).maybePop(),
+              actions: <Widget>[
+                MomentRoundButton(
+                  icon: Lucide.RefreshCw,
+                  onTap: _generating ? null : _refresh,
+                  child: _generating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
                 ),
-                PopupMenuItem<String>(
-                  value: 'settings',
-                  child: Text(
-                    '设置',
-                    style: TextStyle(color: MomentColors.primaryText),
-                  ),
+                MomentPill(
+                  icon: Lucide.MessageCirclePlus,
+                  label: '邀请角色',
+                  onTap: _openCharacters,
                 ),
-                PopupMenuItem<String>(
-                  value: 'clear',
-                  child: Text(
-                    '清除所有记录',
-                    style: TextStyle(color: MomentColors.primaryText),
+                MomentPill(
+                  icon: Lucide.SquarePen,
+                  label: '发布',
+                  onTap: _compose,
+                ),
+                PopupMenuButton<String>(
+                  color: Colors.white,
+                  padding: EdgeInsets.zero,
+                  onSelected: (value) {
+                    if (value == 'settings') {
+                      _openSettings();
+                    } else if (value == 'clear') {
+                      _clearAll();
+                    }
+                  },
+                  itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'settings',
+                      child: Text(
+                        '设置',
+                        style: TextStyle(color: MomentColors.primaryText),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'clear',
+                      child: Text(
+                        '清除所有记录',
+                        style: TextStyle(color: MomentColors.primaryText),
+                      ),
+                    ),
+                  ],
+                  child: const MomentRoundButton(
+                    icon: Lucide.Ellipsis,
+                    onTap: null,
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 4),
+            Expanded(
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: const BoxDecoration(
+                  color: MomentColors.card,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                ),
+                child: _buildBody(persona),
+              ),
+            ),
           ],
         ),
-        body: _buildBody(persona),
       ),
     );
   }

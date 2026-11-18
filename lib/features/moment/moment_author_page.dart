@@ -41,25 +41,42 @@ class _MomentAuthorPageState extends State<MomentAuthorPage> {
     return Theme(
       data: momentLightTheme(),
       child: Scaffold(
-        appBar: AppBar(titleSpacing: 0, title: const SizedBox.shrink()),
-        body: ListView(
-          padding: const EdgeInsets.only(bottom: 12),
+        backgroundColor: MomentColors.card,
+        body: Column(
           children: <Widget>[
-            MomentAuthorHeader(name: widget.author, postCount: _posts.length),
-            if (_posts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text(
-                    '还没有动态',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: MomentColors.secondaryText,
-                    ),
-                  ),
+            MomentCover(
+              name: widget.author,
+              subtitle: '${_posts.length} 条动态',
+              onBack: () => Navigator.of(context).maybePop(),
+            ),
+            Expanded(
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: const BoxDecoration(
+                  color: MomentColors.card,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
                 ),
+                child: _posts.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Text(
+                            '还没有动态',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: MomentColors.secondaryText,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        itemCount: _posts.length,
+                        itemBuilder: (_, index) =>
+                            MomentPostCard(post: _posts[index]),
+                      ),
               ),
-            for (final post in _posts) MomentPostCard(post: post),
+            ),
           ],
         ),
       ),
