@@ -25,16 +25,6 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
     show kIsWeb, mapEquals, ValueListenable;
-import '../../simulator/simulator_meta.dart';
-import '../../simulator/simulator_blocks.dart';
-import '../../simulator/simulator_options.dart';
-import '../../simulator/widgets/simulator_ending_card.dart';
-import '../../simulator/widgets/simulator_status_panel.dart';
-import '../../simulator/widgets/simulator_scene_panel.dart';
-import '../../simulator/widgets/simulator_option_bar.dart';
-import '../../simulator/widgets/simulator_settings_sheet.dart';
-import '../../simulator/widgets/simulator_top_bar.dart';
-import '../../simulator/widgets/simulator_transcript.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, Clipboard, ClipboardData, LogicalKeyboardKey;
@@ -58,7 +48,6 @@ import '../../../core/providers/instruction_injection_provider.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/models/quick_phrase.dart';
 import '../../../core/models/chat_input_data.dart';
-import '../../../core/models/chat_message.dart';
 import '../../../core/models/compress_context_options.dart';
 import '../../../core/services/android_process_text.dart';
 import '../../../core/services/incoming_share_service.dart';
@@ -76,7 +65,6 @@ import '../../../desktop/world_book_popover.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../chat/widgets/bottom_tools_sheet.dart';
 import '../../chat/widgets/chat_tools_sheet.dart';
-import '../../chat/widgets/message_export_sheet.dart';
 import '../../chat/utils/ensure_conversation.dart';
 import '../../chat/widgets/context_management_sheet.dart';
 import '../../chat/widgets/reasoning_level_sheet.dart';
@@ -99,8 +87,6 @@ import '../widgets/message_list_view.dart';
 import '../widgets/chat_input_section.dart';
 import '../widgets/conversation_note_button.dart';
 import '../widgets/conversation_system_prompt_button.dart';
-import '../widgets/conversation_system_prompt_editor.dart';
-import '../widgets/conversation_title_builder.dart';
 import '../widgets/chat_input_overlay_layout.dart';
 import '../widgets/chat_selection_app_bar.dart';
 import '../widgets/chat_selection_action_bar.dart';
@@ -1141,8 +1127,6 @@ class _HomePageState extends State<HomePage>
               onToggleSelectAll: _controller.toggleSelectAll,
               onInvertSelection: _controller.invertSelection,
             )
-          : SimulatorMeta.isSimulator(_controller.currentConversation)
-          ? _buildSimulatorTopBar(context)
           : null,
       body: _chatFindShortcuts(
         _wrapWithDropTarget(_buildMobileBody(context, cs)),
@@ -1150,46 +1134,7 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  /// The four square keys plus the free-text field, shown above the composer
-  /// only inside a simulated conversation and only once the reply carries a
-  /// complete option block.
-  Widget _buildSimulatorOptions(BuildContext context) {
-    if (!SimulatorMeta.isSimulator(_controller.currentConversation)) {
-      return const SizedBox.shrink();
-    }
-    String? lastAssistant;
-    for (final message in _controller.messages.reversed) {
-      if (message.role == 'assistant') {
-        lastAssistant = message.content;
-        break;
-      }
-    }
-    final text = lastAssistant ?? '';
-    final status = SimulatorBlocks.innerOf(text, SimulatorBlocks.statusName);
-    final ending = SimulatorBlocks.innerOf(text, SimulatorBlocks.endingName);
-    final options = SimulatorOptions.parse(text);
-    // 模拟器里 E 就是唯一的输入口，所以这一排永远都在；
-    // 没有选项时四个方块灰着。
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (status != null)
-          SimulatorStatusPanel(
-            sections: SimulatorBlocks.statusSections(status),
-          ),
-        if (ending != null) SimulatorEndingCard(markdown: ending),
-        SimulatorOptionBar(
-          options: options,
-          onSend: (text) => _controller.sendMessage(ChatInputData(text: text)),
-        ),
-      ],
-    );
-  }
-
   Widget _buildMobileBody(BuildContext context, ColorScheme cs) {
-    if (SimulatorMeta.isSimulator(_controller.currentConversation)) {
-      return _buildSimulatorBody(context, cs);
-    }
     final bottomContentPadding = _controller.inputBarHeight + 16;
     final topContentPadding = _chatTopOverlayInset(context) + 8;
     final backgroundImageActive = _assistantBackgroundActive(context);
@@ -1235,271 +1180,13 @@ class _HomePageState extends State<HomePage>
                 return false;
               },
               child: SizeChangedLayoutNotifier(
-                // Measure the option bar together with the composer, so the
-                // message list keeps its bottom padding clear of both.
                 child: Builder(
-                  builder: (context) {
-                    final simulator = SimulatorMeta.isSimulator(
-                      _controller.currentConversation,
-                    );
-                    if (simulator) {
-                      // 按版式备忘录：模拟器里只有正文 + 方块 + E，
-                      // 不搬聊天输入栏过来。
-                      return SafeArea(
-                        top: false,
-                        child: _buildSimulatorOptions(context),
-                      );
-                    }
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildSimulatorOptions(context),
-                        _buildChatInputBar(context, isTablet: false),
-                      ],
-                    );
-                  },
+                  builder: (context) =>
+                      _buildChatInputBar(context, isTablet: false),
                 ),
               ),
             ),
       foreground: _buildForegroundOverlay(context),
-    );
-  }
-
-  /// 模拟器的独立版式（按 05-暂存目录/模拟器-版式备忘录.md）：
-  /// 场景图（可折叠、默认开）→ 状态区 → 正文 → 底部方块与 E；结局是全屏遮罩。
-  Widget _buildSimulatorBody(BuildContext context, ColorScheme cs) {
-    final text = _simulatorLastReply();
-    final status = SimulatorBlocks.innerOf(text, SimulatorBlocks.statusName);
-    final ending = SimulatorBlocks.innerOf(text, SimulatorBlocks.endingName);
-    final options = SimulatorOptions.parse(text);
-    final extras =
-        _controller.currentConversation?.extras ?? const <String, dynamic>{};
-    final scene = extras[simulatorSceneKey] is String
-        ? extras[simulatorSceneKey] as String
-        : null;
-
-    return SafeArea(
-      // 窄栏是透明浮在正文上的（Scaffold 开了 extendBodyBehindAppBar），
-      // 这里空出它那一档高度（含状态栏），场景图才不会钻到栏底下。
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(top: SimulatorTopBar.clearanceOf(context)),
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                SimulatorScenePanel(path: scene, onEdit: _simulatorEditScene),
-                if (status != null)
-                  SimulatorStatusPanel(
-                    sections: SimulatorBlocks.statusSections(status),
-                  ),
-                Expanded(child: _buildSimulatorTranscript(context)),
-                SimulatorOptionBar(
-                  options: options,
-                  onSend: (value) =>
-                      _controller.sendMessage(ChatInputData(text: value)),
-                ),
-              ],
-            ),
-            if (ending != null)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: SimulatorEndingCard(markdown: ending),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static const String simulatorSceneKey = 'simulator.scene';
-
-  ChatMessage? _simulatorLastAssistantMessage() {
-    for (final message in _controller.messages.reversed) {
-      if (message.role == 'assistant') return message;
-    }
-    return null;
-  }
-
-  String _simulatorLastReply() =>
-      _simulatorLastAssistantMessage()?.content ?? '';
-
-  /// 正文：按草图排成一页文档——所有叙述接在同一张卡里，一条条气泡、
-  /// 头像、名字行、复制/重试那套小按钮统统不要。
-  ///
-  /// 三种标记块（状态 / 结局 / 选项）先从正文里摘掉，它们各有各的位置；
-  /// 块还没闭合（还在流式）时不摘，原文照常显示，不半截切。
-  Widget _buildSimulatorTranscript(BuildContext context) {
-    final conversationId = _controller.currentConversation?.id;
-    final parts = <String>[];
-    String? streamingId;
-    for (final message in _controller.messages) {
-      if (message.role != 'assistant') continue;
-      // 正在流的那条用逐字内容源，其它用已经落下的正文。
-      if (message.isStreaming &&
-          _controller.streamingContentNotifier.hasNotifier(message.id)) {
-        streamingId = message.id;
-        continue;
-      }
-      final body = _simulatorBodyText(message.content);
-      if (body.isNotEmpty) parts.add(body);
-    }
-    final base = parts.join('\n\n');
-    if (streamingId == null) {
-      return SimulatorTranscript(text: base, conversationId: conversationId);
-    }
-    return ValueListenableBuilder(
-      valueListenable: _controller.streamingContentNotifier.getNotifier(
-        streamingId,
-      ),
-      builder: (context, data, _) {
-        final live = _simulatorBodyText(data.content);
-        final text = live.isEmpty
-            ? base
-            : (base.isEmpty ? live : '$base\n\n$live');
-        return SimulatorTranscript(
-          text: text,
-          conversationId: conversationId,
-          streaming: true,
-        );
-      },
-    );
-  }
-
-  /// 正文里三种标记块先摘掉，它们各有各的位置；块没闭合就不摘。
-  String _simulatorBodyText(String content) {
-    return SimulatorBlocks.strip(content, const [
-      SimulatorBlocks.statusName,
-      SimulatorBlocks.endingName,
-      SimulatorOptions.blockName,
-    ]).trim();
-  }
-
-  Future<void> _simulatorEditScene() async {
-    final conversation = _controller.currentConversation;
-    if (conversation == null) return;
-    final current = conversation.extras[simulatorSceneKey] is String
-        ? conversation.extras[simulatorSceneKey] as String
-        : '';
-    final controller = TextEditingController(text: current);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('场景图路径'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '贴本地图片路径，留空则不要图'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (result == null) return;
-    final chat = context.read<ChatService>();
-    await chat.updateConversationExtras(conversation.id, (extras) {
-      final next = Map<String, dynamic>.of(extras);
-      if (result.isEmpty) {
-        next.remove(simulatorSceneKey);
-      } else {
-        next[simulatorSceneKey] = result;
-      }
-      return next;
-    });
-  }
-
-  // ============================================================================
-  // 模拟器窄栏：← 标题 ↻ ⚙
-  // ============================================================================
-
-  PreferredSizeWidget _buildSimulatorTopBar(BuildContext context) {
-    return SimulatorTopBar(
-      title: ConversationTitleBuilder(
-        conversationId: _controller.currentConversation?.id,
-        isTemporary: false,
-        builder: (context, title) => Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 15, fontWeight: AppFontWeights.medium),
-        ),
-      ),
-      onBack: _exitSimulator,
-      onRegenerate: _simulatorRegenerateLastReply,
-      onSettings: _openSimulatorSettings,
-      canRegenerate: _simulatorLastAssistantMessage() != null,
-    );
-  }
-
-  /// `←`：退出模拟器，回主界面的对话列表（抽屉）。这条记录本身不动，
-  /// 下次从抽屉底部的罗盘还能回来。
-  void _exitSimulator() {
-    _controller.dismissKeyboard();
-    if (_drawerController.isClosed) {
-      unawaited(_drawerController.open());
-    }
-  }
-
-  /// `↻`：把最后一条回复重写。走的是消息菜单里那个同款重生成，
-  /// 所以确认弹窗、版本记录、流式都跟普通聊天一致。
-  void _simulatorRegenerateLastReply() {
-    final message = _simulatorLastAssistantMessage();
-    if (message == null) return;
-    unawaited(_controller.regenerateAtMessage(message));
-  }
-
-  /// `⚙`：五行面板，每一行都接聊天页现成的入口。
-  Future<void> _openSimulatorSettings() async {
-    final conversation = _controller.currentConversation;
-    if (conversation == null) return;
-    _controller.dismissKeyboard();
-    await showSimulatorSettingsSheet(
-      context,
-      onModel: () => showModelSelectSheet(context, controller: _controller),
-      onSystemPrompt: () => editConversationSystemPrompt(
-        context,
-        conversationId: conversation.id,
-      ),
-      onWorldBook: () => unawaited(_openWorldBookPopover()),
-      onInjection: () => unawaited(_openInstructionInjectionPopover()),
-      onExport: () => unawaited(_exportSimulatorRecord(conversation.id)),
-    );
-  }
-
-  /// 导出这条记录：复用整段会话的导出面板（就是多选后那个批量导出）。
-  /// 走折叠后的消息，版本组只取当前选中的那一条，避免导出重复分支。
-  Future<void> _exportSimulatorRecord(String conversationId) async {
-    final chat = context.read<ChatService>();
-    final conversation = chat.getConversation(conversationId);
-    if (conversation == null) return;
-    final collapsed = await _controller
-        .loadAllCollapsedMessagesForCurrentConversation();
-    if (!mounted) return;
-    final stored = await chat.loadMessagesByIds([
-      for (final message in collapsed) message.id,
-    ]);
-    if (!mounted || stored.isEmpty) return;
-    await showChatExportSheet(
-      context,
-      conversation: conversation,
-      selectedMessages: stored,
     );
   }
 
@@ -1740,9 +1427,7 @@ class _HomePageState extends State<HomePage>
   }) {
     final assistant = context.watch<AssistantProvider>().currentAssistant;
     final footerVisible =
-        !_controller.isCurrentConversationLoading &&
-        !_controller.selecting &&
-        !SimulatorMeta.isSimulator(_controller.currentConversation);
+        !_controller.isCurrentConversationLoading && !_controller.selecting;
     final footerConversationId = _controller.currentConversation?.id;
     final footerBackgroundActive = _assistantBackgroundActive(context);
     final promptFooter = footerVisible
