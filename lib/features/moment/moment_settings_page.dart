@@ -20,6 +20,7 @@ class MomentSettingsPage extends StatefulWidget {
 class _MomentSettingsPageState extends State<MomentSettingsPage> {
   late final TextEditingController _promptController;
   late final TextEditingController _instructionController;
+  late final TextEditingController _personaController;
   bool _saving = false;
 
   @override
@@ -32,12 +33,16 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
     _instructionController = TextEditingController(
       text: settings.momentExtraInstruction,
     );
+    _personaController = TextEditingController(
+      text: settings.momentPersonaName,
+    );
   }
 
   @override
   void dispose() {
     _promptController.dispose();
     _instructionController.dispose();
+    _personaController.dispose();
     super.dispose();
   }
 
@@ -147,6 +152,7 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
     final settings = context.read<SettingsProvider>();
     await settings.setMomentSystemPrompt(_promptController.text);
     await settings.setMomentExtraInstruction(_instructionController.text);
+    await settings.setMomentPersonaName(_personaController.text);
     if (!mounted) return;
     setState(() => _saving = false);
     Navigator.of(context).pop();
@@ -193,6 +199,13 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
             ),
             _Row(label: '模型', value: modelText, onTap: _pickModel),
             const SizedBox(height: 8),
+            _Section(
+              title: '我的马甲',
+              hint: '填了就是你在朋友圈里的名字，能发帖、评论、点赞。空着就用「我」',
+              controller: _personaController,
+              minLines: 1,
+              singleLine: true,
+            ),
             _Section(
               title: '系统提示词',
               hint: defaultMomentSystemPrompt,
@@ -267,12 +280,14 @@ class _Section extends StatelessWidget {
     required this.hint,
     required this.controller,
     required this.minLines,
+    this.singleLine = false,
   });
 
   final String title;
   final String hint;
   final TextEditingController controller;
   final int minLines;
+  final bool singleLine;
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +309,7 @@ class _Section extends StatelessWidget {
           TextField(
             controller: controller,
             minLines: minLines,
-            maxLines: null,
+            maxLines: singleLine ? 1 : null,
             style: const TextStyle(
               fontSize: 14,
               height: 1.45,

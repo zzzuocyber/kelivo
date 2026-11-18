@@ -13,19 +13,28 @@ export 'moment_service_exception.dart';
 /// 一次刷新生成的帖子条数。
 const int momentBatchSize = 5;
 
+/// 一次生成最多等多久。卡住就报错，不让刷新按钮无限挂着。
+const Duration momentRequestTimeout = Duration(seconds: 150);
+
+/// 让人回我一句时最多等多久。
+const Duration momentReplyTimeout = Duration(seconds: 60);
+
 /// 默认系统提示词，用户可以在朋友圈设置里改。
 const String defaultMomentSystemPrompt = '''你在替一组虚构角色经营他们的朋友圈。
 你要按照每个角色自己的人设和世界观，假装他们是真人，随手发一条生活动态，并让其他角色点赞、评论。
 语气、用词、关心的东西都要贴合各自的身份，不要写成小说旁白，不要解释设定，不要提你是模型。
+朋友圈本来就是不均匀的：有的帖子热闹，有的没人理；有的只有一句话，有的写得很长。
 只输出要求的 JSON，不要任何多余的话。''';
 
-/// 生成一条朋友圈需要的一整套东西。
+/// 一次刷新要干的两件事：发新帖，顺带给旧帖补点赞评论。
 class MomentGenerator {
   const MomentGenerator({
     required this.settings,
     required this.worldBooks,
     required this.bookId,
     required this.characters,
+    required this.personaName,
+    required this.recentPosts,
     this.batchSize = momentBatchSize,
   });
 
@@ -33,9 +42,15 @@ class MomentGenerator {
   final WorldBookProvider worldBooks;
   final String bookId;
   final List<MomentCharacter> characters;
+
+  /// 我的马甲名，只用来在提示词里点明「这是我」。
+  final String personaName;
+
+  /// 最近若干条旧帖，用来让模型给它们补互动。
+  final List<MomentPost> recentPosts;
   final int batchSize;
 
-  Future<List<MomentPost>> generate() async {
+  Future<MomentBatch> generate() async {
     if (characters.isEmpty) {
       throw const MomentServiceException('no_characters');
     }
@@ -45,11 +60,13 @@ class MomentGenerator {
     }
     final names = <String>[for (final c in characters) c.name];
     final profiles = _collectProfiles(book, characters);
-    final model = _resolveModel();
-    final system = _systemText();
+    final model = _resolveModel(settings);
+    final system = _systemText(settings);
     final prompt = buildUserPrompt(
       profiles: profiles,
       names: names,
+      personaName: personaName,
+      oldPosts: recentPosts,
       count: batchSize,
     );
 
@@ -68,13 +85,22 @@ class MomentGenerator {
           skipImageParsing: true,
           allowImagesApiRouting: false,
           textOnly: true,
+          requestTimeout: momentRequestTimeout,
         );
-        final posts = parsePosts(result.text, names: names, limit: batchSize);
-        if (posts.isEmpty) {
+        final batch = parseBatch(
+          result.text,
+          names: names,
+          limit: batchSize,
+          oldPosts: recentPosts,
+        );
+        if (batch.posts.isEmpty) {
           lastError = const MomentServiceException('parse_failed');
           continue;
         }
-        return _stamp(posts);
+        return MomentBatch(
+          posts: _stamp(_shapeInteractions(batch.posts)),
+          reactions: batch.reactions,
+        );
       } catch (error) {
         lastError = error;
       }
@@ -86,30 +112,195 @@ class MomentGenerator {
     );
   }
 
-  ({ProviderConfig config, String modelId}) _resolveModel() {
-    final providerKey =
-        settings.momentModelProvider ?? settings.currentModelProvider;
-    final modelId = settings.momentModelId ?? settings.currentModelId;
-    if (providerKey == null || modelId == null) {
-      throw const MomentServiceException('model_missing');
+  /// 把模型吐出来的文本解析成一批。
+  static MomentBatch parseBatch(
+    String raw, {
+    required List<String> names,
+    required int limit,
+    required List<MomentPost> oldPosts,
+  }) {
+    final decoded = _decodePayload(raw);
+    if (decoded is List) {
+      return MomentBatch(
+        posts: _parsePosts(decoded, names: names, limit: limit),
+      );
     }
-    final config = settings.getProviderConfig(providerKey);
-    if (!config.enabled || !config.isModelEnabled(modelId)) {
-      throw const MomentServiceException('model_missing');
+    if (decoded is! Map) return const MomentBatch();
+    final rawPosts = decoded['posts'];
+    final posts = _parsePosts(rawPosts, names: names, limit: limit);
+    final reactions = <MomentReaction>[];
+    final rawReactions = decoded['reactions'];
+    if (rawReactions is List) {
+      for (final item in rawReactions) {
+        if (item is! Map) continue;
+        final index = item['index'];
+        final position = index is int ? index : int.tryParse(index.toString());
+        if (position == null || position < 1 || position > oldPosts.length) {
+          continue;
+        }
+        final target = oldPosts[position - 1];
+        final reaction = _parseReaction(item, names, target);
+        if (reaction != null) reactions.add(reaction);
+      }
     }
-    return (config: config, modelId: modelId);
+    return MomentBatch(posts: posts, reactions: reactions);
   }
 
-  String _systemText() {
-    final buffer = StringBuffer();
-    final base = settings.momentSystemPrompt.trim();
-    buffer.write(base.isEmpty ? defaultMomentSystemPrompt : base);
-    final extra = settings.momentExtraInstruction.trim();
-    if (extra.isNotEmpty) {
-      buffer.write('\n\n');
-      buffer.write(extra);
+  static MomentReaction? _parseReaction(
+    Map item,
+    List<String> names,
+    MomentPost target,
+  ) {
+    final known = names.toSet();
+    final likes = <String>[];
+    final rawLikes = item['likes'];
+    if (rawLikes is List) {
+      for (final like in rawLikes) {
+        final name = like.toString().trim();
+        if (!known.contains(name)) continue;
+        if (name == target.author) continue;
+        if (likes.contains(name)) continue;
+        likes.add(name);
+        if (likes.length >= 4) break;
+      }
     }
-    return buffer.toString();
+    final comments = <MomentComment>[];
+    final rawComments = item['comments'];
+    if (rawComments is List) {
+      for (final comment in rawComments) {
+        if (comment is! Map) continue;
+        final author = (comment['author'] ?? '').toString().trim();
+        final text = (comment['text'] ?? '').toString().trim();
+        if (!known.contains(author) || text.isEmpty) continue;
+        if (author == target.author) continue;
+        comments.add(
+          MomentComment(author: author, text: text, replyTo: target.author),
+        );
+        if (comments.length >= 2) break;
+      }
+    }
+    if (likes.isEmpty && comments.isEmpty) return null;
+    return MomentReaction(postId: target.id, likes: likes, comments: comments);
+  }
+
+  static dynamic _decodePayload(String raw) {
+    var text = raw.trim();
+    if (text.isEmpty) return null;
+    // 去掉 ``` 代码块标记，模型偶尔会自己加。
+    if (text.contains('```')) {
+      text = text
+          .split('\n')
+          .where((line) => !line.trim().startsWith('```'))
+          .join('\n')
+          .trim();
+    }
+    final objectStart = text.indexOf('{');
+    final objectEnd = text.lastIndexOf('}');
+    final arrayStart = text.indexOf('[');
+    final arrayEnd = text.lastIndexOf(']');
+    final candidates = <String>[
+      if (objectStart >= 0 && objectEnd > objectStart)
+        text.substring(objectStart, objectEnd + 1),
+      if (arrayStart >= 0 && arrayEnd > arrayStart)
+        text.substring(arrayStart, arrayEnd + 1),
+    ];
+    for (final candidate in candidates) {
+      try {
+        return jsonDecode(candidate);
+      } catch (_) {
+        // 换个形状再试一次。
+      }
+    }
+    return null;
+  }
+
+  static List<MomentPost> _parsePosts(
+    dynamic rawList, {
+    required List<String> names,
+    required int limit,
+  }) {
+    if (rawList is! List) return const <MomentPost>[];
+    final known = names.toSet();
+    final out = <MomentPost>[];
+    for (final item in rawList) {
+      if (item is! Map) continue;
+      final author = (item['author'] ?? '').toString().trim();
+      final text = (item['text'] ?? '').toString().trim();
+      if (!known.contains(author) || text.isEmpty) continue;
+      final likes = <String>[];
+      final rawLikes = item['likes'];
+      if (rawLikes is List) {
+        for (final like in rawLikes) {
+          final name = like.toString().trim();
+          if (!known.contains(name) || name == author) continue;
+          if (likes.contains(name)) continue;
+          likes.add(name);
+          if (likes.length >= 4) break;
+        }
+      }
+      final comments = <MomentComment>[];
+      final rawComments = item['comments'];
+      if (rawComments is List) {
+        for (final comment in rawComments) {
+          if (comment is! Map) continue;
+          final who = (comment['author'] ?? '').toString().trim();
+          final what = (comment['text'] ?? '').toString().trim();
+          if (!known.contains(who) || who == author || what.isEmpty) continue;
+          comments.add(MomentComment(author: who, text: what, replyTo: author));
+          if (comments.length >= 2) break;
+        }
+      }
+      out.add(
+        MomentPost(
+          id: newMomentPostId(),
+          author: author,
+          createdAt: DateTime.now(),
+          text: text,
+          hasImage: item['withImage'] == true || item['image'] == true,
+          likes: likes,
+          comments: comments,
+        ),
+      );
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  /// 互动在代码里强制不均匀，不靠模型自觉：
+  /// 约三成帖子没人理，两成只有赞没有评论，其余正常。
+  static List<MomentPost> _shapeInteractions(List<MomentPost> posts) {
+    final random = Random();
+    final out = <MomentPost>[];
+    for (final post in posts) {
+      final roll = random.nextInt(10);
+      if (roll < 3) {
+        out.add(
+          post.copyWith(
+            likes: const <String>[],
+            comments: const <MomentComment>[],
+          ),
+        );
+      } else if (roll < 5) {
+        out.add(post.copyWith(comments: const <MomentComment>[]));
+      } else {
+        out.add(post);
+      }
+    }
+    return out;
+  }
+
+  /// 按现实时间给这一批排个先后：最新的一条是现在，
+  /// 往前的每条比后一条早几分钟，看起来像一小时内陆续发的。
+  static List<MomentPost> _stamp(List<MomentPost> posts) {
+    final random = Random();
+    final cursor0 = DateTime.now();
+    var cursor = cursor0;
+    final out = <MomentPost>[];
+    for (final post in posts) {
+      out.add(post.copyWith(createdAt: cursor));
+      cursor = cursor.subtract(Duration(minutes: 3 + random.nextInt(22)));
+    }
+    return out;
   }
 
   static Map<String, String> _collectProfiles(
@@ -137,84 +328,39 @@ class MomentGenerator {
     return byName;
   }
 
-  /// 把模型吐出来的文本当成 JSON 数组解析，坏格式就原样丢掉。
-  static List<MomentPost> parsePosts(
-    String raw, {
-    required List<String> names,
-    required int limit,
-  }) {
-    final start = raw.indexOf('[');
-    final end = raw.lastIndexOf(']');
-    if (start < 0 || end <= start) return const <MomentPost>[];
-    Object? decoded;
-    try {
-      decoded = jsonDecode(raw.substring(start, end + 1));
-    } catch (_) {
-      return const <MomentPost>[];
+  static ({ProviderConfig config, String modelId}) _resolveModel(
+    SettingsProvider settings,
+  ) {
+    final providerKey =
+        settings.momentModelProvider ?? settings.currentModelProvider;
+    final modelId = settings.momentModelId ?? settings.currentModelId;
+    if (providerKey == null || modelId == null) {
+      throw const MomentServiceException('model_missing');
     }
-    if (decoded is! List) return const <MomentPost>[];
-    final known = names.toSet();
-    final out = <MomentPost>[];
-    for (final item in decoded) {
-      if (item is! Map) continue;
-      final author = (item['author'] ?? '').toString().trim();
-      final text = (item['text'] ?? '').toString().trim();
-      if (!known.contains(author) || text.isEmpty) continue;
-      final likes = <String>[];
-      final rawLikes = item['likes'];
-      if (rawLikes is List) {
-        for (final like in rawLikes) {
-          final name = like.toString().trim();
-          if (known.contains(name) && name != author && !likes.contains(name)) {
-            likes.add(name);
-          }
-        }
-      }
-      final comments = <MomentComment>[];
-      final rawComments = item['comments'];
-      if (rawComments is List) {
-        for (final comment in rawComments) {
-          if (comment is! Map) continue;
-          final who = (comment['author'] ?? '').toString().trim();
-          final what = (comment['text'] ?? '').toString().trim();
-          if (!known.contains(who) || who == author || what.isEmpty) continue;
-          comments.add(MomentComment(author: who, text: what));
-        }
-      }
-      final withImage = item['withImage'] == true || item['image'] == true;
-      out.add(
-        MomentPost(
-          id: newMomentPostId(),
-          author: author,
-          createdAt: DateTime.now(),
-          text: text,
-          hasImage: withImage,
-          likes: likes,
-          comments: comments,
-        ),
-      );
-      if (out.length >= limit) break;
+    final config = settings.getProviderConfig(providerKey);
+    if (!config.enabled || !config.isModelEnabled(modelId)) {
+      throw const MomentServiceException('model_missing');
     }
-    return out;
+    return (config: config, modelId: modelId);
   }
 
-  /// 按现实时间给这一批排个先后：最新的一条是现在，
-  /// 往前的每条比后一条早几分钟，看起来像一小时内陆续发的。
-  static List<MomentPost> _stamp(List<MomentPost> posts) {
-    final random = Random();
-    final now = DateTime.now();
-    final out = <MomentPost>[];
-    var cursor = now;
-    for (final post in posts) {
-      out.add(post.copyWith(createdAt: cursor));
-      cursor = cursor.subtract(Duration(minutes: 3 + random.nextInt(22)));
+  static String _systemText(SettingsProvider settings) {
+    final buffer = StringBuffer();
+    final base = settings.momentSystemPrompt.trim();
+    buffer.write(base.isEmpty ? defaultMomentSystemPrompt : base);
+    final extra = settings.momentExtraInstruction.trim();
+    if (extra.isNotEmpty) {
+      buffer.write('\n\n');
+      buffer.write(extra);
     }
-    return out;
+    return buffer.toString();
   }
 
   static String buildUserPrompt({
     required Map<String, String> profiles,
     required List<String> names,
+    required String personaName,
+    required List<MomentPost> oldPosts,
     required int count,
   }) {
     final buffer = StringBuffer();
@@ -222,33 +368,188 @@ class MomentGenerator {
     for (final name in names) {
       final profile = profiles[name] ?? '';
       buffer.writeln('角色名：$name');
-      if (profile.isNotEmpty) {
-        buffer.writeln(profile);
-      }
+      if (profile.isNotEmpty) buffer.writeln(profile);
       buffer.writeln('---');
+    }
+    if (oldPosts.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln('【最近的旧帖】给它们补一点新的互动，编号从 1 开始');
+      var index = 1;
+      for (final post in oldPosts) {
+        final tail = post.text.replaceAll('\n', ' ');
+        final snippet = tail.length > 40 ? '${tail.substring(0, 40)}…' : tail;
+        buffer.writeln('$index. ${post.author}：$snippet');
+        index++;
+      }
     }
     buffer.writeln();
     buffer.writeln('【要求】');
     buffer.writeln('从上面的角色里随机挑 $count 个（每次都不一样），每人发一条朋友圈。');
     buffer.writeln(
-      '每条 1~3 句，写他此刻真实会发的日常：心情、见闻、牢骚、小事都行。'
+      '写他此刻真实会发的日常：心情、见闻、牢骚、小事都行。'
       '口气必须像这个人自己说的话，贴合他的人设和世界观，'
       '不要复述设定，不要写旁白，不要出现「作为一个人设」之类的解释。',
     );
-    buffer.writeln('大约每三条里有一条带图：带图的那条 withImage 写 true，其余写 false。');
     buffer.writeln(
-      '点赞和评论只能来自【角色】名单里的人：每条点赞 0~4 个，'
-      '评论 0~2 条，评论只写一句话。',
+      '长度必须长短不一：这批里至少一条只有一句短话、不超过 12 个字；'
+      '至少一条能写到 60 个字以上；其余的随便，别全挤在同一个长度。',
+    );
+    buffer.write(
+      '互动也要不均匀：这 $count 条里要有 1~2 条完全没有点赞也没有评论，'
+      '有 1 条只点赞不评论，剩下的正常。点赞最多 4 个，评论最多 2 条。',
+    );
+    if (personaName.trim().isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln(
+        '名单里的「${personaName.trim()}」是我本人，不算角色，'
+        '不要替我发帖，也不要替我在评论区说话。',
+      );
+    }
+    buffer.writeln('大约每三条里有一条带图：带图的那条 withImage 写 true，其余写 false。');
+    buffer.writeln();
+    buffer.writeln('【输出】');
+    buffer.writeln('只输出一个 JSON 对象，不要代码块标记，不要任何多余文字，格式如下：');
+    buffer.writeln('{');
+    buffer.writeln('  "posts": [');
+    buffer.writeln(
+      '    {"author": "角色名", "text": "动态正文", "withImage": true, '
+      '"likes": ["角色名"], "comments": [{"author": "角色名", "text": "评论"}]}',
+    );
+    buffer.writeln('  ],');
+    buffer.writeln('  "reactions": [');
+    buffer.writeln(
+      '    {"index": 2, "likes": ["角色名"], "comments": '
+      '[{"author": "角色名", "text": "新评论"}]}',
+    );
+    buffer.writeln('  ]');
+    buffer.writeln('}');
+    buffer.writeln(
+      'reactions 只挑 0~2 条旧帖，index 用上面【最近的旧帖】里的编号；'
+      '没有要补的就输出空数组。',
+    );
+    return buffer.toString();
+  }
+}
+
+/// 我在某条帖子下评论后，让一两个角色回我一句。
+class MomentReplyComposer {
+  const MomentReplyComposer({
+    required this.settings,
+    required this.worldBooks,
+    required this.bookId,
+    required this.characters,
+    required this.personaName,
+    required this.post,
+    required this.myText,
+  });
+
+  final SettingsProvider settings;
+  final WorldBookProvider worldBooks;
+  final String bookId;
+  final List<MomentCharacter> characters;
+  final String personaName;
+  final MomentPost post;
+  final String myText;
+
+  Future<List<MomentComment>> compose() async {
+    final me = personaName.trim();
+    if (me.isEmpty) return const <MomentComment>[];
+    if (characters.isEmpty) return const <MomentComment>[];
+    final book = worldBooks.getById(bookId);
+    if (book == null) return const <MomentComment>[];
+    final names = <String>[for (final c in characters) c.name];
+    final profiles = MomentGenerator._collectProfiles(book, characters);
+    final model = MomentGenerator._resolveModel(settings);
+    final system = MomentGenerator._systemText(settings);
+    final prompt = buildPrompt(
+      profiles: profiles,
+      names: names,
+      post: post,
+      me: me,
+      myText: myText,
+    );
+
+    try {
+      final result = await ChatApiService.generateMessage(
+        config: model.config,
+        modelId: model.modelId,
+        messages: <Map<String, dynamic>>[
+          <String, dynamic>{'role': 'system', 'content': system},
+          <String, dynamic>{'role': 'user', 'content': prompt},
+        ],
+        builtInToolMode: BuiltInToolMode.none,
+        skipImageParsing: true,
+        allowImagesApiRouting: false,
+        textOnly: true,
+        requestTimeout: momentReplyTimeout,
+      );
+      return parseReplies(result.text, names: names, me: me);
+    } catch (_) {
+      return const <MomentComment>[];
+    }
+  }
+
+  static List<MomentComment> parseReplies(
+    String raw, {
+    required List<String> names,
+    required String me,
+  }) {
+    final decoded = MomentGenerator._decodePayload(raw);
+    List<dynamic> items;
+    if (decoded is Map) {
+      final rawReplies = decoded['replies'];
+      items = rawReplies is List ? rawReplies : const <dynamic>[];
+    } else if (decoded is List) {
+      items = decoded;
+    } else {
+      return const <MomentComment>[];
+    }
+    final known = names.toSet();
+    final out = <MomentComment>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      final author = (item['author'] ?? '').toString().trim();
+      final text = (item['text'] ?? '').toString().trim();
+      if (!known.contains(author) || text.isEmpty) continue;
+      out.add(MomentComment(author: author, text: text, replyTo: me));
+      if (out.length >= 2) break;
+    }
+    return out;
+  }
+
+  static String buildPrompt({
+    required Map<String, String> profiles,
+    required List<String> names,
+    required MomentPost post,
+    required String me,
+    required String myText,
+  }) {
+    final buffer = StringBuffer();
+    buffer.writeln('【角色】');
+    for (final name in names) {
+      final profile = profiles[name] ?? '';
+      buffer.writeln('角色名：$name');
+      if (profile.isNotEmpty) buffer.writeln(profile);
+      buffer.writeln('---');
+    }
+    buffer.writeln();
+    buffer.writeln('【这条帖子】');
+    buffer.writeln('作者：${post.author}');
+    buffer.writeln(post.text);
+    buffer.writeln();
+    buffer.writeln('【我刚发的评论】');
+    buffer.writeln('$me：$myText');
+    buffer.writeln();
+    buffer.writeln('【要求】');
+    buffer.writeln('让名单里 1~2 个角色回我一句，口气像熟人随口一接。');
+    buffer.writeln(
+      '谁回都行，最好挑跟这条帖子和这个人关系最自然的；'
+      '不要客套，不要讲道理，不要一次让所有人都上来。',
     );
     buffer.writeln();
     buffer.writeln('【输出】');
-    buffer.writeln('只输出一个 JSON 数组，不要代码块标记，不要任何多余文字，格式如下：');
-    buffer.writeln('[');
-    buffer.writeln(
-      '  {"author": "角色名", "text": "动态正文", "withImage": true, '
-      '"likes": ["角色名"], "comments": [{"author": "角色名", "text": "评论"}]}',
-    );
-    buffer.writeln(']');
+    buffer.writeln('只输出一个 JSON 对象，不要代码块标记，不要多余文字：');
+    buffer.writeln('{"replies": [{"author": "角色名", "text": "回复我的话"}]}');
     return buffer.toString();
   }
 }

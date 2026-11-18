@@ -15,6 +15,7 @@ class MomentColors {
   static const Color name = Color(0xFF3B5A8C);
   static const Color commentBlock = Color(0xFFF6F7F9);
   static const Color hairline = Color(0xFFE8EAEE);
+  static const Color liked = Color(0xFFE06C6C);
 }
 
 /// 朋友圈一律浅色，进来就把主题换掉，不看夜间模式。
@@ -39,12 +40,18 @@ ThemeData momentLightTheme() {
   );
 }
 
-/// 头像先不做上传：圆形，取角色名的第一个字。
+/// 头像先不做上传：圆形，取名字的第一个字。
 class MomentAvatar extends StatelessWidget {
-  const MomentAvatar({super.key, required this.name, this.size = 42});
+  const MomentAvatar({
+    super.key,
+    required this.name,
+    this.size = 42,
+    this.onTap,
+  });
 
   final String name;
   final double size;
+  final VoidCallback? onTap;
 
   static const List<Color> _palette = <Color>[
     Color(0xFFDCE6F7),
@@ -78,7 +85,7 @@ class MomentAvatar extends StatelessWidget {
       hash = (hash + unit) % 9973;
     }
     final index = hash % _palette.length;
-    return Container(
+    final circle = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
@@ -91,6 +98,12 @@ class MomentAvatar extends StatelessWidget {
           color: _ink[index],
         ),
       ),
+    );
+    if (onTap == null) return circle;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: circle,
     );
   }
 }
@@ -108,6 +121,30 @@ const String _momentPlaceholderSvg = '''
   <circle cx="660" cy="180" r="72" fill="#F7F9FC"/>
   <path d="M0 675 L250 400 L420 560 L560 430 L900 675 Z" fill="#C6D2E4"/>
   <path d="M0 675 L180 520 L330 620 L470 520 L620 620 L900 500 L900 675 Z" fill="#B3C1D6"/>
+</svg>
+''';
+
+/// 角色主页顶部的背景。同样先占位，以后换成本地图。
+const String momentBannerSvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3F6FB"/>
+      <stop offset="1" stop-color="#DCE6F4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="900" height="420" fill="url(#sky)"/>
+  <circle cx="330" cy="170" r="120" fill="url(#glow)"/>
+  <circle cx="330" cy="170" r="58" fill="#E7EEF9"/>
+  <ellipse cx="330" cy="182" rx="118" ry="26" fill="none" stroke="#C9D7EB" stroke-width="5"/>
+  <circle cx="700" cy="120" r="6" fill="#D6E1F2"/>
+  <circle cx="760" cy="210" r="4" fill="#D6E1F2"/>
+  <circle cx="620" cy="250" r="3" fill="#D6E1F2"/>
+  <path d="M0 420 L180 320 L330 400 L480 300 L680 400 L900 330 L900 420 Z" fill="#C5D3E6"/>
 </svg>
 ''';
 
@@ -138,9 +175,24 @@ String momentRelativeTime(DateTime time) {
 }
 
 class MomentPostCard extends StatelessWidget {
-  const MomentPostCard({super.key, required this.post});
+  const MomentPostCard({
+    super.key,
+    required this.post,
+    this.likedByMe = false,
+    this.onTapAvatar,
+    this.onTapLike,
+    this.onTapComment,
+    this.waitingReply = false,
+  });
 
   final MomentPost post;
+  final bool likedByMe;
+  final VoidCallback? onTapAvatar;
+  final VoidCallback? onTapLike;
+  final VoidCallback? onTapComment;
+
+  /// 我刚评论完，角色正在回我。
+  final bool waitingReply;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +206,7 @@ class MomentPostCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          MomentAvatar(name: post.author, size: 42),
+          MomentAvatar(name: post.author, size: 42, onTap: onTapAvatar),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -192,10 +244,12 @@ class MomentPostCard extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    const Icon(
-                      Lucide.Heart,
-                      size: 16,
-                      color: MomentColors.secondaryText,
+                    _TapIcon(
+                      onTap: onTapLike,
+                      icon: Lucide.Heart,
+                      color: likedByMe
+                          ? MomentColors.liked
+                          : MomentColors.secondaryText,
                     ),
                     if (post.likes.isNotEmpty) ...<Widget>[
                       const SizedBox(width: 4),
@@ -208,9 +262,9 @@ class MomentPostCard extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(width: 16),
-                    const Icon(
-                      Lucide.MessageCircle,
-                      size: 16,
+                    _TapIcon(
+                      onTap: onTapComment,
+                      icon: Lucide.MessageCircle,
                       color: MomentColors.secondaryText,
                     ),
                     if (post.comments.isNotEmpty) ...<Widget>[
@@ -225,7 +279,9 @@ class MomentPostCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (post.likes.isNotEmpty || post.comments.isNotEmpty) ...[
+                if (post.likes.isNotEmpty ||
+                    post.comments.isNotEmpty ||
+                    waitingReply) ...[
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -262,7 +318,7 @@ class MomentPostCard extends StatelessWidget {
                               ),
                             ],
                           ),
-                          if (post.comments.isNotEmpty)
+                          if (post.comments.isNotEmpty || waitingReply)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 6),
                               child: Divider(
@@ -273,32 +329,155 @@ class MomentPostCard extends StatelessWidget {
                             ),
                         ],
                         for (final comment in post.comments)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: RichText(
-                              text: TextSpan(
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  height: 1.4,
-                                  color: MomentColors.primaryText,
+                          _commentRow(comment),
+                        if (waitingReply) ...<Widget>[
+                          const SizedBox(height: 6),
+                          const Row(
+                            children: <Widget>[
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.6,
                                 ),
-                                children: <InlineSpan>[
-                                  TextSpan(
-                                    text: '${comment.author}：',
-                                    style: const TextStyle(
-                                      color: MomentColors.name,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  TextSpan(text: comment.text),
-                                ],
                               ),
-                            ),
+                              SizedBox(width: 8),
+                            ],
                           ),
+                        ],
                       ],
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _commentRow(MomentComment comment) {
+    final replyTo = comment.replyTo;
+    final showReply =
+        replyTo != null && replyTo.isNotEmpty && replyTo != comment.author;
+    final spans = <InlineSpan>[
+      TextSpan(
+        text: comment.author,
+        style: const TextStyle(
+          color: MomentColors.name,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      if (showReply)
+        TextSpan(
+          text: ' 回复 $replyTo',
+          style: const TextStyle(
+            color: MomentColors.name,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      TextSpan(text: '：${comment.text}'),
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            fontSize: 12.5,
+            height: 1.4,
+            color: MomentColors.primaryText,
+          ),
+          children: spans,
+        ),
+      ),
+    );
+  }
+}
+
+class _TapIcon extends StatelessWidget {
+  const _TapIcon({required this.icon, required this.color, this.onTap});
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Icon(icon, size: 16, color: color);
+    if (onTap == null) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// 角色主页顶部：SVG 背景 + 头像 + 名字。
+class MomentAuthorHeader extends StatelessWidget {
+  const MomentAuthorHeader({super.key, required this.name, this.postCount = 0});
+
+  final String name;
+  final int postCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 210,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Positioned.fill(
+            child: SvgPicture.string(momentBannerSvg, fit: BoxFit.cover),
+          ),
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: 16,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                  child: MomentAvatar(name: name, size: 62),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w600,
+                          color: MomentColors.primaryText,
+                          shadows: <Shadow>[
+                            Shadow(color: Color(0x33FFFFFF), blurRadius: 6),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$postCount 条动态',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: MomentColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),

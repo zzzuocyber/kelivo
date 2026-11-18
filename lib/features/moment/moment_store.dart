@@ -43,15 +43,23 @@ List<MomentCharacter> momentCharactersOf(Conversation? conversation) =>
 List<MomentPost> momentPostsOf(Conversation? conversation) =>
     momentPostsFromExtras(conversation?.extras);
 
+/// 最近 N 条帖子，按时间倒序（新的在前），刷新时拿去让模型补互动。
+const int momentReactionWindow = 10;
+
 /// 朋友圈数据进出的唯一入口。
 class MomentStore {
   MomentStore(this.chat);
 
   final ChatService chat;
 
+  /// 找那条隐藏对话。
+  ///
+  /// 注意：会话列表那份是缓存过的旧对象，写入之后它不会自己更新，
+  /// 所以这里一定要按 id 再取一次最新对象，否则页面会显示写之前的旧数据。
   Conversation? findConversation() {
     for (final conversation in chat.getAllConversations()) {
-      if (isMomentConversation(conversation)) return conversation;
+      if (!isMomentConversation(conversation)) continue;
+      return chat.getConversation(conversation.id) ?? conversation;
     }
     return null;
   }
@@ -87,17 +95,85 @@ class MomentStore {
     });
   }
 
-  Future<void> appendPosts(List<MomentPost> incoming) async {
-    if (incoming.isEmpty) return;
+  /// 改帖子的统一入口：读出来、交给 [update]、整包写回去。
+  Future<void> updatePosts(
+    List<MomentPost> Function(List<MomentPost> posts) update,
+  ) async {
     final id = await ensureConversation();
     await chat.updateConversationExtras(id, (extras) {
+      final current = momentPostsFromExtras(extras);
+      final nextPosts = update(current);
       final next = Map<String, dynamic>.from(extras);
-      final existing = momentPostsFromExtras(extras);
-      next[momentPostsKey] = <Map<String, dynamic>>[
-        ...existing.map((p) => p.toJson()),
-        ...incoming.map((p) => p.toJson()),
-      ];
+      next[momentPostsKey] = nextPosts
+          .map((p) => p.toJson())
+          .toList(growable: false);
       return next;
+    });
+  }
+
+  /// 一次刷新拿回来的整批：新帖追加，旧帖补互动，一次写完。
+  Future<void> applyBatch(MomentBatch batch) async {
+    if (batch.posts.isEmpty && batch.reactions.isEmpty) return;
+    await updatePosts((posts) {
+      final byId = <String, MomentPost>{
+        for (final post in posts) post.id: post,
+      };
+      for (final reaction in batch.reactions) {
+        final target = byId[reaction.postId];
+        if (target == null) continue;
+        final likes = <String>[...target.likes];
+        for (final name in reaction.likes) {
+          if (!likes.contains(name)) likes.add(name);
+        }
+        byId[reaction.postId] = target.copyWith(
+          likes: likes,
+          comments: <MomentComment>[...target.comments, ...reaction.comments],
+        );
+      }
+      return <MomentPost>[
+        for (final post in posts) byId[post.id] ?? post,
+        ...batch.posts,
+      ];
+    });
+  }
+
+  /// 我自己发的一条。
+  Future<void> addPost(MomentPost post) async {
+    await updatePosts((posts) => <MomentPost>[...posts, post]);
+  }
+
+  /// 我点赞 / 取消点赞。
+  Future<void> toggleLike(String postId, String personaName) async {
+    final name = personaName.trim();
+    if (name.isEmpty) return;
+    await updatePosts((posts) {
+      return <MomentPost>[
+        for (final post in posts)
+          if (post.id == postId)
+            post.copyWith(
+              likes: post.likes.contains(name)
+                  ? (<String>[...post.likes]..remove(name))
+                  : <String>[...post.likes, name],
+            )
+          else
+            post,
+      ];
+    });
+  }
+
+  /// 我的评论（顺手挂上后面角色回我的那几条）。
+  Future<void> addComments(String postId, List<MomentComment> comments) async {
+    if (comments.isEmpty) return;
+    await updatePosts((posts) {
+      return <MomentPost>[
+        for (final post in posts)
+          if (post.id == postId)
+            post.copyWith(
+              comments: <MomentComment>[...post.comments, ...comments],
+            )
+          else
+            post,
+      ];
     });
   }
 

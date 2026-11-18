@@ -27,14 +27,18 @@ class MomentCharacter {
 }
 
 class MomentComment {
-  const MomentComment({required this.author, required this.text});
+  const MomentComment({required this.author, required this.text, this.replyTo});
 
   final String author;
   final String text;
 
+  /// 这条是「回谁」的。角色回我的评论时填我的马甲名。
+  final String? replyTo;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'author': author,
     'text': text,
+    if (replyTo != null && replyTo!.isNotEmpty) 'replyTo': replyTo,
   };
 
   static MomentComment? fromJson(dynamic raw) {
@@ -42,7 +46,12 @@ class MomentComment {
     final author = (raw['author'] ?? '').toString().trim();
     final text = (raw['text'] ?? '').toString().trim();
     if (author.isEmpty || text.isEmpty) return null;
-    return MomentComment(author: author, text: text);
+    final replyTo = (raw['replyTo'] ?? '').toString().trim();
+    return MomentComment(
+      author: author,
+      text: text,
+      replyTo: replyTo.isEmpty ? null : replyTo,
+    );
   }
 }
 
@@ -53,6 +62,7 @@ class MomentPost {
     required this.createdAt,
     required this.text,
     this.hasImage = false,
+    this.isMine = false,
     this.likes = const <String>[],
     this.comments = const <MomentComment>[],
   });
@@ -64,6 +74,9 @@ class MomentPost {
 
   /// 这条是不是「带图」的。图先不接生图接口，显示占位图。
   final bool hasImage;
+
+  /// 我自己发的（马甲），跟角色区分开。
+  final bool isMine;
   final List<String> likes;
   final List<MomentComment> comments;
 
@@ -73,6 +86,7 @@ class MomentPost {
     DateTime? createdAt,
     String? text,
     bool? hasImage,
+    bool? isMine,
     List<String>? likes,
     List<MomentComment>? comments,
   }) {
@@ -82,6 +96,7 @@ class MomentPost {
       createdAt: createdAt ?? this.createdAt,
       text: text ?? this.text,
       hasImage: hasImage ?? this.hasImage,
+      isMine: isMine ?? this.isMine,
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,
     );
@@ -93,6 +108,7 @@ class MomentPost {
     'at': createdAt.microsecondsSinceEpoch,
     'text': text,
     'image': hasImage,
+    'mine': isMine,
     'likes': likes,
     'comments': comments.map((c) => c.toJson()).toList(growable: false),
   };
@@ -126,10 +142,35 @@ class MomentPost {
       createdAt: createdAt,
       text: text,
       hasImage: raw['image'] == true,
+      isMine: raw['mine'] == true,
       likes: likes,
       comments: comments,
     );
   }
+}
+
+/// 模型给某条旧帖补的互动。
+class MomentReaction {
+  const MomentReaction({
+    required this.postId,
+    this.likes = const <String>[],
+    this.comments = const <MomentComment>[],
+  });
+
+  final String postId;
+  final List<String> likes;
+  final List<MomentComment> comments;
+}
+
+/// 一次刷新拿回来的整批东西：新帖 + 给旧帖补的互动。
+class MomentBatch {
+  const MomentBatch({
+    this.posts = const <MomentPost>[],
+    this.reactions = const <MomentReaction>[],
+  });
+
+  final List<MomentPost> posts;
+  final List<MomentReaction> reactions;
 }
 
 /// 帖子 id 只要页面内不撞车就行，不上数据库也不用保证全局唯一。

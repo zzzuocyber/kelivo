@@ -5,6 +5,7 @@ import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
 import '../../icons/lucide_adapter.dart';
+import 'moment_author_page.dart';
 import 'moment_characters_page.dart';
 import 'moment_models.dart';
 import 'moment_service.dart';
@@ -27,6 +28,9 @@ class _MomentPageState extends State<MomentPage> {
   bool _generating = false;
   bool _loading = true;
 
+  /// 我正在等谁的回我一句，那一条帖子底下就转个小圈。
+  String? _waitingReplyPostId;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +50,13 @@ class _MomentPageState extends State<MomentPage> {
   void _reload() {
     _loadNow();
     if (mounted) setState(() {});
+  }
+
+  String _personaName([SettingsProvider? settings]) {
+    final value = (settings ?? context.read<SettingsProvider>())
+        .momentPersonaName
+        .trim();
+    return value.isEmpty ? '我' : value;
   }
 
   void _toast(String text) {
@@ -88,9 +99,11 @@ class _MomentPageState extends State<MomentPage> {
         worldBooks: worldBooks,
         bookId: settings.momentBookId,
         characters: _characters,
+        personaName: _personaName(settings),
+        recentPosts: _posts.take(momentReactionWindow).toList(growable: false),
       );
-      final posts = await generator.generate();
-      await _store.appendPosts(posts);
+      final batch = await generator.generate();
+      await _store.applyBatch(batch);
       if (!mounted) return;
       _reload();
     } catch (error) {
@@ -115,6 +128,111 @@ class _MomentPageState extends State<MomentPage> {
       MaterialPageRoute<void>(builder: (_) => const MomentSettingsPage()),
     );
     _reload();
+  }
+
+  Future<void> _openAuthor(String author) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => MomentAuthorPage(author: author)),
+    );
+    _reload();
+  }
+
+  Future<void> _toggleLike(MomentPost post) async {
+    try {
+      await _store.toggleLike(post.id, _personaName());
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      _toast('点赞没存上，再试一次');
+    }
+  }
+
+  Future<void> _compose() async {
+    final result = await showModalBottomSheet<_ComposeResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => const _ComposeSheet(),
+    );
+    if (result == null || !mounted) return;
+    final text = result.text.trim();
+    if (text.isEmpty) return;
+    try {
+      await _store.addPost(
+        MomentPost(
+          id: newMomentPostId(),
+          author: _personaName(),
+          createdAt: DateTime.now(),
+          text: text,
+          hasImage: result.withImage,
+          isMine: true,
+        ),
+      );
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      _toast('没发出去，再试一次');
+    }
+  }
+
+  Future<void> _comment(MomentPost post) async {
+    final myText = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _CommentSheet(post: post),
+    );
+    if (!mounted) return;
+    final text = (myText ?? '').trim();
+    if (text.isEmpty) return;
+    final me = _personaName();
+    final myComment = MomentComment(
+      author: me,
+      text: text,
+      replyTo: post.author == me ? null : post.author,
+    );
+    try {
+      await _store.addComments(post.id, <MomentComment>[myComment]);
+    } catch (_) {
+      _toast('评论没存上，再试一次');
+      return;
+    }
+    if (!mounted) return;
+    _reload();
+    await _askForReplies(post, text, me);
+  }
+
+  Future<void> _askForReplies(MomentPost post, String myText, String me) async {
+    setState(() => _waitingReplyPostId = post.id);
+    try {
+      final settings = context.read<SettingsProvider>();
+      final worldBooks = context.read<WorldBookProvider>();
+      final composer = MomentReplyComposer(
+        settings: settings,
+        worldBooks: worldBooks,
+        bookId: settings.momentBookId,
+        characters: _characters,
+        personaName: me,
+        post: post,
+        myText: myText,
+      );
+      final replies = await composer.compose();
+      if (replies.isNotEmpty) {
+        await _store.addComments(post.id, replies);
+      }
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      // 没人回就算了，不打扰。
+    } finally {
+      if (mounted) setState(() => _waitingReplyPostId = null);
+    }
   }
 
   Future<void> _clearAll() async {
@@ -143,13 +261,18 @@ class _MomentPageState extends State<MomentPage> {
       ),
     );
     if (confirmed != true) return;
-    await _store.clearPosts();
-    if (!mounted) return;
-    _reload();
+    try {
+      await _store.clearPosts();
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      _toast('清空没成功，再试一次');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final persona = _personaName(context.watch<SettingsProvider>());
     return Theme(
       data: momentLightTheme(),
       child: Scaffold(
@@ -172,21 +295,30 @@ class _MomentPageState extends State<MomentPage> {
                   : const Icon(Lucide.RefreshCw, size: 21),
             ),
             IconButton(
-              tooltip: '添加角色',
-              onPressed: _openCharacters,
-              icon: const Icon(Lucide.MessageCirclePlus, size: 21),
+              tooltip: '发布',
+              onPressed: _compose,
+              icon: const Icon(Lucide.Plus, size: 22),
             ),
             PopupMenuButton<String>(
               icon: const Icon(Lucide.Ellipsis, size: 21),
               color: Colors.white,
               onSelected: (value) {
-                if (value == 'settings') {
+                if (value == 'characters') {
+                  _openCharacters();
+                } else if (value == 'settings') {
                   _openSettings();
                 } else if (value == 'clear') {
                   _clearAll();
                 }
               },
               itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'characters',
+                  child: Text(
+                    '添加角色',
+                    style: TextStyle(color: MomentColors.primaryText),
+                  ),
+                ),
                 PopupMenuItem<String>(
                   value: 'settings',
                   child: Text(
@@ -206,12 +338,12 @@ class _MomentPageState extends State<MomentPage> {
             const SizedBox(width: 4),
           ],
         ),
-        body: _buildBody(),
+        body: _buildBody(persona),
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(String persona) {
     if (_loading) {
       return const Center(
         child: SizedBox(
@@ -230,7 +362,17 @@ class _MomentPageState extends State<MomentPage> {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 6),
       itemCount: _posts.length,
-      itemBuilder: (_, index) => MomentPostCard(post: _posts[index]),
+      itemBuilder: (_, index) {
+        final post = _posts[index];
+        return MomentPostCard(
+          post: post,
+          likedByMe: post.likes.contains(persona),
+          onTapAvatar: () => _openAuthor(post.author),
+          onTapLike: () => _toggleLike(post),
+          onTapComment: () => _comment(post),
+          waitingReply: _waitingReplyPostId == post.id,
+        );
+      },
     );
   }
 }
@@ -269,6 +411,174 @@ class _Hint extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposeResult {
+  const _ComposeResult({required this.text, required this.withImage});
+
+  final String text;
+  final bool withImage;
+}
+
+/// 我自己发一条动态。
+class _ComposeSheet extends StatefulWidget {
+  const _ComposeSheet();
+
+  @override
+  State<_ComposeSheet> createState() => _ComposeSheetState();
+}
+
+class _ComposeSheetState extends State<_ComposeSheet> {
+  final TextEditingController _controller = TextEditingController();
+  bool _withImage = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    Navigator.of(
+      context,
+    ).pop(_ComposeResult(text: text, withImage: _withImage));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Text(
+            '发一条动态',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: MomentColors.primaryText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 8,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.45,
+              color: MomentColors.primaryText,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: '随便写点什么',
+              hintStyle: TextStyle(
+                fontSize: 14,
+                color: MomentColors.secondaryText,
+              ),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              Switch(
+                value: _withImage,
+                onChanged: (value) => setState(() => _withImage = value),
+              ),
+              const Text(
+                '带图',
+                style: TextStyle(fontSize: 13, color: MomentColors.primaryText),
+              ),
+              const Spacer(),
+              TextButton(onPressed: _submit, child: const Text('发布')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 我在某条帖子下评论。
+class _CommentSheet extends StatefulWidget {
+  const _CommentSheet({required this.post});
+
+  final MomentPost post;
+
+  @override
+  State<_CommentSheet> createState() => _CommentSheetState();
+}
+
+class _CommentSheetState extends State<_CommentSheet> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    Navigator.of(context).pop(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            '评论 ${widget.post.author} 的动态',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: MomentColors.primaryText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            minLines: 2,
+            maxLines: 6,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.45,
+              color: MomentColors.primaryText,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: '说一句',
+              hintStyle: TextStyle(
+                fontSize: 14,
+                color: MomentColors.secondaryText,
+              ),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(onPressed: _submit, child: const Text('发送')),
+          ),
         ],
       ),
     );

@@ -299,6 +299,7 @@ class SettingsProvider extends ChangeNotifier {
       'moment_extra_instruction_v1';
   static const String _momentModelProviderKey = 'moment_model_provider_v1';
   static const String _momentModelIdKey = 'moment_model_id_v1';
+  static const String _momentPersonaNameKey = 'moment_persona_name_v1';
   static const String _displayLongPasteAsFileKey =
       'display_long_paste_as_file_v1';
   static const String _displayLongPasteAsFileThresholdKey =
@@ -1170,6 +1171,7 @@ class SettingsProvider extends ChangeNotifier {
     _momentExtraInstruction = prefs.getString(_momentExtraInstructionKey) ?? '';
     _momentModelProvider = prefs.getString(_momentModelProviderKey);
     _momentModelId = prefs.getString(_momentModelIdKey);
+    _momentPersonaName = prefs.getString(_momentPersonaNameKey) ?? '';
     _longPasteAsFile = prefs.getBool(_displayLongPasteAsFileKey) ?? true;
     _longPasteAsFileThreshold =
         (prefs.getInt(_displayLongPasteAsFileThresholdKey) ??
@@ -5311,6 +5313,17 @@ Requirements:
     await prefs.setString(_momentModelIdKey, modelId);
   }
 
+  // 我在朋友圈里的马甲名。
+  String _momentPersonaName = '';
+  String get momentPersonaName => _momentPersonaName;
+  Future<void> setMomentPersonaName(String value) async {
+    final v = value.trim();
+    if (_momentPersonaName == v) return;
+    _momentPersonaName = v;
+    notifyListeners();
+    await _preferences.setString(_momentPersonaNameKey, v);
+  }
+
   static const int defaultLongPasteAsFileThreshold = 5000;
   static const int minLongPasteAsFileThreshold = 1;
   static const int maxLongPasteAsFileThreshold = 999999;
@@ -6278,6 +6291,7 @@ Requirements:
     copy._momentExtraInstruction = _momentExtraInstruction;
     copy._momentModelProvider = _momentModelProvider;
     copy._momentModelId = _momentModelId;
+    copy._momentPersonaName = _momentPersonaName;
     copy._titleModelProvider = _titleModelProvider;
     copy._titleModelId = _titleModelId;
     copy._titleGenerationEnabled = _titleGenerationEnabled;
