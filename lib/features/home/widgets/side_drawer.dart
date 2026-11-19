@@ -21,6 +21,7 @@ import '../../settings/pages/settings_page.dart';
 import '../../translate/pages/translate_page.dart';
 import '../../moment/moment_phone_page.dart';
 import '../../moment/moment_store.dart';
+import '../../wechat/wechat_store.dart';
 import '../../backup/pages/backup_page.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/update_provider.dart';
@@ -850,7 +851,9 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
       final candidates =
           chatService
               .getAllConversations()
-              .where((c) => !isMomentConversation(c))
+              .where(
+                (c) => !isMomentConversation(c) && !isWechatConversation(c),
+              )
               .where(
                 (c) =>
                     c.assistantId == currentAid && !excludeIds.contains(c.id),
@@ -1474,7 +1477,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     final resolvedOwnerIds = <String, String?>{};
     // Single pass: filter assistant + query, split pinned/rest via ChatItem.isPinned.
     for (final c in chatService.getAllConversations()) {
-      if (isMomentConversation(c)) continue;
+      if (isMomentConversation(c) || isWechatConversation(c)) continue;
       if (c.assistantId != null &&
           resolvedOwnerIds.putIfAbsent(
                 c.assistantId!,

@@ -13,10 +13,14 @@ import 'wechat_ui.dart';
 
 /// 通讯录：**手动添加**的联系人。人设还是去世界书取，但人得自己加。
 class WechatContactsPage extends StatefulWidget {
-  const WechatContactsPage({super.key, this.onChanged});
+  const WechatContactsPage({super.key, this.onChanged, this.revision = 0});
 
   /// 加人 / 删人之后通知外层刷新会话列表。
   final VoidCallback? onChanged;
+
+  /// 外层每次刷新就 +1，子页看到变化自己也重读一遍
+  /// （IndexedStack 里的子页 initState 只跑一次，不然设置改了这里看不见）。
+  final int revision;
 
   @override
   State<WechatContactsPage> createState() => _WechatContactsPageState();
@@ -35,6 +39,12 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
     _reload();
   }
 
+  @override
+  void didUpdateWidget(covariant WechatContactsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) _reload();
+  }
+
   void _reload() {
     if (!mounted) return;
     setState(() {
@@ -48,9 +58,13 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
   // ---------------- 加人 ----------------
 
   Future<void> _add() async {
+    // 这里必须**现读**：世界观页可能刚改过世界书，而这一页是
+    // IndexedStack 里的子页，initState 只跑一次，缓存的值早就过期了。
+    final settings = _store.wechatSettings();
+    _settings = settings;
     final provider = context.read<WorldBookProvider>();
     final books = <WorldBook>[
-      for (final id in _settings.bookIds)
+      for (final id in settings.bookIds)
         if (provider.getById(id) != null) provider.getById(id)!,
     ];
     if (books.isEmpty) {
@@ -119,13 +133,33 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
                 contact.name,
                 style: const TextStyle(
                   fontSize: 13,
-                  color: WechatColors.secondaryText,
+                  color: WechatColors.primaryText,
                 ),
               ),
             ),
             ListTile(
-              leading: const Icon(Lucide.Trash2, size: 19),
-              title: const Text('从通讯录删除'),
+              leading: const Icon(
+                Lucide.MessageCircle,
+                size: 19,
+                color: WechatColors.primaryText,
+              ),
+              title: const Text(
+                '召唤他来找我',
+                style: TextStyle(color: WechatColors.primaryText),
+              ),
+              subtitle: const Text('进私聊，他先开口'),
+              onTap: () => Navigator.of(sheetCtx).pop('summon'),
+            ),
+            ListTile(
+              leading: const Icon(
+                Lucide.Trash2,
+                size: 19,
+                color: WechatColors.primaryText,
+              ),
+              title: const Text(
+                '从通讯录删除',
+                style: TextStyle(color: WechatColors.primaryText),
+              ),
               subtitle: const Text('群里的他也会一起移出'),
               onTap: () => Navigator.of(sheetCtx).pop('delete'),
             ),
@@ -134,7 +168,20 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
         ),
       ),
     );
-    if (!mounted || action != 'delete') return;
+    if (!mounted || action == null) return;
+    if (action == 'summon') {
+      // 召唤：进私聊，让他先开口（跟群里长按空白那个召唤一套逻辑）。
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => WechatDmPage(contactName: contact.name, summon: true),
+        ),
+      );
+      if (!mounted) return;
+      _reload();
+      widget.onChanged?.call();
+      return;
+    }
+    if (action != 'delete') return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(

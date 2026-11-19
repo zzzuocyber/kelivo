@@ -400,7 +400,8 @@ class WechatDmGenerator {
     } else {
       buffer.writeln('【最近的聊天】');
       for (final message in history) {
-        final who = message.mine ? persona : contact.name;
+        // 天意替他说的话，是“他说的”，不是“我说的”。
+        final who = message.mine && !message.divine ? persona : contact.name;
         buffer.writeln('$who：${message.text}');
       }
       buffer.writeln();

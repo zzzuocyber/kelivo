@@ -50,6 +50,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
 
   Timer? _timer;
 
+  /// 天意：用他的身份说话（夺舍）。私聊里也一样能用。
+  bool _asDivine = false;
+
   @override
   void initState() {
     super.initState();
@@ -106,7 +109,19 @@ class _WechatDmPageState extends State<WechatDmPage> {
     if (text.isEmpty) return;
     if (_contact == null) return;
     _input.clear();
-    await _store.appendDmMessage(widget.contactName, text: text, mine: true);
+    final contact = _contact;
+    // 夺舍：以他的身份发，气泡落在左边、署名他的。
+    // 一般情况：署我的马甲名——**不能**用默认值（默认会填成对方的名字，
+    // 于是对方下一句就成了“同一个人连发”，头像会被判成连发而不显示）。
+    await _store.appendDmMessage(
+      widget.contactName,
+      text: text,
+      mine: true,
+      sender: _asDivine
+          ? (contact?.name ?? widget.contactName)
+          : _settings.effectivePersona,
+      divine: _asDivine,
+    );
     if (!mounted) return;
     setState(() => _messages = _store.dmMessages(widget.contactName));
     _jumpToBottom();
@@ -296,9 +311,19 @@ class _WechatDmPageState extends State<WechatDmPage> {
               icon: const Icon(Lucide.Ellipsis, color: Colors.black),
               onSelected: (value) async {
                 if (value == 'interval') await _pickInterval();
+                if (value == 'divine') {
+                  setState(() => _asDivine = !_asDivine);
+                }
               },
-              itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                PopupMenuItem<String>(value: 'interval', child: Text('回复间隔')),
+              itemBuilder: (_) => <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'divine',
+                  child: Text(_asDivine ? '恢复成我自己说话' : '天意：用他的身份说话'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'interval',
+                  child: Text('回复间隔'),
+                ),
               ],
             ),
           ],
@@ -333,10 +358,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
     final items = <Widget>[];
     String? lastSender;
     for (final message in _messages) {
-      final sameAsPrevious = lastSender == message.sender && !message.mine;
-      items.add(
-        _bubbleRow(message, showHead: !message.mine && !sameAsPrevious),
-      );
+      final mineHere = message.mine && !message.divine;
+      final sameAsPrevious = lastSender == message.sender && !mineHere;
+      items.add(_bubbleRow(message, showHead: !mineHere && !sameAsPrevious));
       lastSender = message.sender;
     }
     if (_typing) {
@@ -350,7 +374,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
   }
 
   Widget _bubbleRow(WechatMessage message, {required bool showHead}) {
-    final mine = message.mine;
+    final mine = message.mine && !message.divine;
     final maxWidth = MediaQuery.of(context).size.width * 0.68;
     final bubble = Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -373,6 +397,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
         ? WechatAvatarText(
             name: _settings.effectivePersona,
             size: 38,
+            // 我的头像在朋友圈的 @me 底下，store 里已经按马甲名挂了一份。
             imagePath: _avatars[_settings.effectivePersona],
           )
         : WechatAvatarText(
@@ -440,66 +465,90 @@ class _WechatDmPageState extends State<WechatDmPage> {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              _placeholderIcon(Lucide.Mic),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 36),
-                  padding: const EdgeInsets.symmetric(horizontal: 11),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: TextField(
-                    controller: _input,
-                    focusNode: _focus,
-                    minLines: 1,
-                    maxLines: 4,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _send(),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: WechatColors.primaryText,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (_asDivine)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(Lucide.User, size: 13, color: Color(0xFF07C160)),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        '正在用「${widget.contactName}」的身份说话',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF07C160),
+                        ),
+                      ),
                     ),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 9),
-                      hintText: '',
-                    ),
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              // 占位：表情、加号。真功能以后再加，先把位置留着。
-              _placeholderIcon(Lucide.Sparkles),
-              const SizedBox(width: 6),
-              _placeholderIcon(Lucide.Plus),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: _send,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: WechatColors.green,
-                    borderRadius: BorderRadius.circular(5),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  _placeholderIcon(Lucide.Mic),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 11),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: TextField(
+                        controller: _input,
+                        focusNode: _focus,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: WechatColors.primaryText,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 9),
+                          hintText: '',
+                        ),
+                      ),
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    '发送',
-                    style: TextStyle(fontSize: 14, color: Colors.white),
+                  const SizedBox(width: 8),
+                  // 占位：表情、加号。真功能以后再加，先把位置留着。
+                  _placeholderIcon(Lucide.Sparkles),
+                  const SizedBox(width: 6),
+                  _placeholderIcon(Lucide.Plus),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: _send,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: WechatColors.green,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        '发送',
+                        style: TextStyle(fontSize: 14, color: Colors.white),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

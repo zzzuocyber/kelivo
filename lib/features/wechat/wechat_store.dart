@@ -25,9 +25,25 @@ class WechatStore {
 
   /// 找那条隐藏对话。跟朋友圈一样，会话列表里的是缓存对象，
   /// 写完要按 id 再取一次最新值，不然读到的是旧的。
+  ///
+  /// 兜底：标记有可能没写进去（`updateConversationExtras` 抛异常被吞了）。
+  /// 那种情况下按「extras 里有没有微信自己的数据键」认人——用户的普通对话
+  /// 不会带 `wechat.groups` 这种键，所以不会认错。
   Conversation? findConversation() {
-    for (final conversation in chat.getAllConversations()) {
+    final all = chat.getAllConversations();
+    for (final conversation in all) {
       if (!isWechatConversation(conversation)) continue;
+      return chat.getConversation(conversation.id) ?? conversation;
+    }
+    for (final conversation in all) {
+      final extras = conversation.extras;
+      final looksLikeOurs =
+          extras.containsKey(wechatGroupsKey) ||
+          extras.containsKey(wechatMessagesKey) ||
+          extras.containsKey(wechatSettingsKey) ||
+          extras.containsKey(wechatContactsKey) ||
+          extras.containsKey(wechatReadsKey);
+      if (!looksLikeOurs) continue;
       return chat.getConversation(conversation.id) ?? conversation;
     }
     return null;
@@ -35,7 +51,21 @@ class WechatStore {
 
   Future<String> ensureConversation() async {
     final existing = findConversation();
-    if (existing != null) return existing.id;
+    if (existing != null) {
+      // 认下来了但标记还缺（老数据），补一次，免得它一直露在会话列表里。
+      if (!isWechatConversation(existing)) {
+        try {
+          await chat.updateConversationExtras(existing.id, (extras) {
+            final next = Map<String, dynamic>.from(extras);
+            next[wechatHiddenKey] = true;
+            return next;
+          });
+        } catch (_) {
+          // 补不上也还能用，只是列表里会露出来。
+        }
+      }
+      return existing.id;
+    }
     final created = await chat.createConversation(
       title: wechatContainerTitle,
       activate: false,
@@ -142,16 +172,26 @@ class WechatStore {
 
   /// 名字 → 头像路径。直接读朋友圈那份（`moment.assets`），
   /// 所以两边上传同一份文件，天然联动；朋友圈没传过的这里也没有。
+  ///
+  /// 我自己的那张存在 `@me` 底下，这里顺手按马甲名再挂一份，
+  /// 免得每个调用点都要记住「我的头像不是按名字存的」。
   Map<String, String> avatarPaths() {
     final out = <String, String>{};
+    String? mine;
     try {
       final assets = MomentStore(chat).readAssets();
       for (final entry in assets.entries) {
         final avatar = (entry.value.avatar ?? '').trim();
-        if (avatar.isNotEmpty) out[entry.key] = avatar;
+        if (avatar.isEmpty) continue;
+        out[entry.key] = avatar;
+        if (entry.key == '@me') mine = avatar;
       }
     } catch (_) {
       // 朋友圈那边还没建容器之类的，当作没有头像。
+    }
+    if (mine != null) {
+      final persona = wechatSettings().effectivePersona;
+      out.putIfAbsent(persona, () => mine!);
     }
     return out;
   }
@@ -324,11 +364,13 @@ class WechatStore {
     required String text,
     required bool mine,
     String? sender,
+    bool divine = false,
   }) => appendMessage(
     wechatDmKey(name),
     sender: sender ?? name,
     text: text,
     mine: mine,
+    divine: divine,
   );
 
   // ---------------- 未读 ----------------

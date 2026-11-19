@@ -67,6 +67,9 @@ class _WechatPageState extends State<WechatPage> {
   /// 老数据迁完没有。没迁完先别建子页面，不然通讯录会读到空的。
   bool _ready = false;
 
+  /// 每刷新一次 +1，拿去通知 IndexedStack 里的子页重读设置。
+  int _revision = 0;
+
   List<WechatGroup> _groups = const <WechatGroup>[];
   List<WechatContact> _contacts = const <WechatContact>[];
   Map<String, String> _avatars = const <String, String>{};
@@ -89,6 +92,7 @@ class _WechatPageState extends State<WechatPage> {
   void _reload() {
     if (!mounted) return;
     setState(() {
+      _revision++;
       _groups = _store.groups();
       _contacts = _store.contacts();
       _avatars = _store.avatarPaths();
@@ -316,7 +320,7 @@ class _WechatPageState extends State<WechatPage> {
                 index: _tab,
                 children: <Widget>[
                   _sessionList(),
-                  WechatContactsPage(onChanged: _reload),
+                  WechatContactsPage(onChanged: _reload, revision: _revision),
                   _discoverPlaceholder(),
                   WechatMePage(onChanged: _reload),
                 ],
@@ -506,7 +510,9 @@ class _WechatPageState extends State<WechatPage> {
     }
     final who = last.system
         ? ''
-        : (last.mine ? '我：' : (session.isGroup ? '${last.sender}：' : ''));
+        : (last.mine && !last.divine
+              ? '我：'
+              : (session.isGroup ? '${last.sender}：' : ''));
     return Text(
       '$who${last.text}',
       maxLines: 1,
@@ -1225,9 +1231,13 @@ class _WechatChatPageState extends State<WechatChatPage> {
         lastSender = null;
         continue;
       }
-      final sameAsPrevious = lastSender == message.sender && !message.mine;
+      final sameAsPrevious = lastSender == message.sender && !_isMine(message);
       items.add(
-        _bubbleRow(group, message, showHead: !message.mine && !sameAsPrevious),
+        _bubbleRow(
+          group,
+          message,
+          showHead: !_isMine(message) && !sameAsPrevious,
+        ),
       );
       lastSender = message.sender;
     }
@@ -1270,7 +1280,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
     WechatMessage message, {
     required bool showHead,
   }) {
-    final mine = message.mine;
+    // 天意发的消息算“他说的”：气泡在左边、头像名字都是他。
+    final mine = _isMine(message);
     final marked = _showDivineMark && message.divine;
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 258),
@@ -1330,12 +1341,20 @@ class _WechatChatPageState extends State<WechatChatPage> {
           Flexible(child: column),
           if (mine) ...<Widget>[
             const SizedBox(width: 9),
-            WechatAvatarText(name: group.effectivePersona, size: 38),
+            WechatAvatarText(
+              name: group.effectivePersona,
+              size: 38,
+              // 我自己那张头像存在朋友圈的 @me 底下，不走名字查。
+              imagePath: _avatars[group.effectivePersona],
+            ),
           ],
         ],
       ),
     );
   }
+
+  /// 这条是不是“我这边发的”。天意替别人说的话不算。
+  bool _isMine(WechatMessage message) => message.mine && !message.divine;
 
   /// 气泡里的字：把 `@某某` 挑出来染成微信那种蓝，别的照旧。
   Widget _bubbleText(String text) {

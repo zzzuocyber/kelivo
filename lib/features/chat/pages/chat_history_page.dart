@@ -5,6 +5,7 @@ import '../../../shared/animations/widgets.dart';
 import '../../../shared/widgets/snackbar.dart';
 import 'package:provider/provider.dart';
 import '../../moment/moment_store.dart';
+import '../../wechat/wechat_store.dart';
 
 import '../../../icons/lucide_adapter.dart';
 import '../../../core/services/chat/chat_service.dart';
@@ -43,7 +44,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage>
     final chatService = context.read<ChatService>();
     final List<Conversation> all = chatService
         .getAllConversations()
-        .where((c) => !isMomentConversation(c))
+        .where((c) => !isMomentConversation(c) && !isWechatConversation(c))
         .where(
           (c) =>
               widget.assistantId == null ||
