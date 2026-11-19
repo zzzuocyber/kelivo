@@ -61,6 +61,7 @@ class WechatDmReplyRunner {
     required SettingsProvider settings,
     required WorldBookProvider worldBooks,
     required Duration delay,
+    bool selfInitiated = false,
   }) {
     if (isPending(key)) return;
     _errors.remove(key);
@@ -72,6 +73,7 @@ class WechatDmReplyRunner {
         store: store,
         settings: settings,
         worldBooks: worldBooks,
+        selfInitiated: selfInitiated,
       ));
     });
     _notify();
@@ -83,6 +85,7 @@ class WechatDmReplyRunner {
     required WechatStore store,
     required SettingsProvider settings,
     required WorldBookProvider worldBooks,
+    required bool selfInitiated,
   }) async {
     _inFlight.add(key);
     _notify();
@@ -100,6 +103,7 @@ class WechatDmReplyRunner {
         persona: wechatSettings.effectivePersona,
         worldPrompt: wechatSettings.worldPrompt,
         history: wechatRecentContext(store.dmMessages(contactName), limit: 40),
+        selfInitiated: selfInitiated,
       );
       final text = await generator.generate(burstCount: burst);
       final parts = wechatSplitReply(text, maxParts: burst);

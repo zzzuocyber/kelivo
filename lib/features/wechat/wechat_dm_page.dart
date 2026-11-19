@@ -156,6 +156,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
   /// 等待和生成都交给后台执行器，退出页面也不会停。
   void _scheduleReply([Duration? summonDelay]) {
     if (WechatDmReplyRunner.instance.isPending(_chatKey)) return;
+    final isSummon = summonDelay != null;
     final delay = summonDelay ?? _replyDelay();
     WechatDmReplyRunner.instance.schedule(
       key: _chatKey,
@@ -164,6 +165,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
       settings: context.read<SettingsProvider>(),
       worldBooks: context.read<WorldBookProvider>(),
       delay: delay,
+      selfInitiated: isSummon,
     );
   }
 

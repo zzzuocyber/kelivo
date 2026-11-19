@@ -324,6 +324,7 @@ class WechatDmGenerator {
     required this.persona,
     required this.history,
     this.worldPrompt = '',
+    this.selfInitiated = false,
   });
 
   final SettingsProvider settings;
@@ -342,6 +343,9 @@ class WechatDmGenerator {
   final String worldPrompt;
 
   final List<WechatMessage> history;
+
+  /// 这次是你主动去找对方开口（召唤私聊），不是回应他。
+  final bool selfInitiated;
 
   /// [burstCount] 是这次抽到的连发条数（1~7），写进提示词让模型按行数回。
   Future<String> generate({int burstCount = 1}) async {
@@ -421,13 +425,25 @@ class WechatDmGenerator {
     buffer.writeln('【这次的规矩】');
     _writeChatRules(buffer, contact.name, burstCount: burstCount);
     buffer.writeln('- 这是两个人的私聊，没有别人在场，说话可以更随意一点。');
+    if (selfInitiated) {
+      buffer.writeln(
+        '- 这次是你自己突然想找「$persona」聊聊，主动给他发消息，'
+        '没有任何人叫你、催你或召唤你。'
+        '绝对不要提「召唤」「你叫我」「你找我」「是你让我来」这类话，'
+        '也不要表现出是被谁指使的——就当你一念之间想跟他说两句。',
+      );
+    }
     return buffer.toString().trim();
   }
 
   String _userPrompt() {
     final buffer = StringBuffer();
     if (history.isEmpty) {
-      buffer.writeln('你们还没聊过，这是第一句。');
+      if (selfInitiated) {
+        buffer.writeln('这是你主动找「$persona」开口的第一句，他还没回过你。');
+      } else {
+        buffer.writeln('你们还没聊过，这是第一句。');
+      }
     } else {
       buffer.writeln('【最近的聊天】');
       for (final message in history) {
@@ -442,7 +458,15 @@ class WechatDmGenerator {
       }
       buffer.writeln();
     }
-    buffer.writeln('现在轮到「${contact.name}」说话。只输出${contact.name}这一次要发的内容。');
+    if (selfInitiated) {
+      buffer.writeln(
+        '现在由「${contact.name}」主动开口找「$persona」，只输出${contact.name}这一次要发的内容。',
+      );
+    } else {
+      buffer.writeln(
+        '现在轮到「${contact.name}」说话。只输出${contact.name}这一次要发的内容。',
+      );
+    }
     return buffer.toString().trim();
   }
 }
