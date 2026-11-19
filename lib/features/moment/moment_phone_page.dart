@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../icons/lucide_adapter.dart';
+import '../wechat/wechat_page.dart';
 import 'moment_page.dart';
 import 'moment_widgets.dart';
 
@@ -38,6 +39,12 @@ class MomentPhonePage extends StatelessWidget {
                     MaterialPageRoute<void>(builder: (_) => const MomentPage()),
                   ),
                 ),
+                _AppIcon(
+                  label: '微信',
+                  icon: Lucide.MessagesSquare,
+                  tint: const Color(0xFF07C160),
+                  onTap: () => openWechat(context),
+                ),
               ],
             ),
           ),
@@ -52,11 +59,15 @@ class _AppIcon extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onTap,
+    this.tint,
   });
 
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+
+  /// 图标颜色，不传就跟朋友圈那个一致。
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +93,7 @@ class _AppIcon extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, size: 26, color: MomentColors.name),
+            child: Icon(icon, size: 26, color: tint ?? MomentColors.name),
           ),
           const SizedBox(height: 6),
           Text(
