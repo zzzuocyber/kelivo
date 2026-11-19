@@ -23,6 +23,7 @@ import '../../../shared/widgets/section_card.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
+import 'chat_suggestion_module.dart';
 
 Future<void> showReasoningLevelSheet(
   BuildContext context, {
@@ -179,26 +180,34 @@ class ReasoningLevelPicker extends StatelessWidget {
     final settings = context.watch<SettingsProvider>();
     final config = settings.providerConfigs[this.config.id] ?? this.config;
     final spec = ModelSpecResolver.instance.spec(config, modelId);
-    if (!spec.supportsReasoning) {
-      return const _UnsupportedState();
-    }
-    final snapshot = buildReasoningLevelPickerSnapshot(
-      settings: settings,
-      config: config,
-      modelId: modelId,
-      spec: spec,
-      assistant: assistant,
-    );
-    if (snapshot.sliderStops.isEmpty) {
-      return const _UnsupportedState();
-    }
-    return _SliderPicker(
-      snapshot: snapshot,
-      config: config,
-      modelId: modelId,
-      assistant: assistant,
-      conversationId: conversationId,
-      compact: compact,
+    final snapshot = spec.supportsReasoning
+        ? buildReasoningLevelPickerSnapshot(
+            settings: settings,
+            config: config,
+            modelId: modelId,
+            spec: spec,
+            assistant: assistant,
+          )
+        : null;
+    final hasSlider = snapshot != null && snapshot.sliderStops.isNotEmpty;
+    // The suggestion block is per conversation, so this sheet stays reachable
+    // even when the model exposes no reasoning levels.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasSlider)
+          _SliderPicker(
+            snapshot: snapshot!,
+            config: config,
+            modelId: modelId,
+            assistant: assistant,
+            conversationId: conversationId,
+            compact: compact,
+          )
+        else
+          const _UnsupportedState(),
+        ChatSuggestionModule(conversationId: conversationId, compact: compact),
+      ],
     );
   }
 }

@@ -146,14 +146,16 @@ The suggestions array must contain 0 to 3 distinct, concise strings, each at mos
     required int truncateIndex,
     required String locale,
     ReasoningRequest reasoning = ReasoningRequest.auto,
+    String? promptOverride,
   }) async {
     final content = buildContent(messages, truncateIndex: truncateIndex);
     if (content.isEmpty) return const <String>[];
     // Substitute once so literal placeholders in conversation text stay data.
-    final prompt = settings.suggestionPrompt.replaceAllMapped(
-      RegExp(r'\{(content|locale)\}'),
-      (match) => match.group(1) == 'content' ? content : locale,
-    );
+    final prompt = (promptOverride ?? settings.suggestionPrompt)
+        .replaceAllMapped(
+          RegExp(r'\{(content|locale)\}'),
+          (match) => match.group(1) == 'content' ? content : locale,
+        );
     final result = await ChatApiService.generateMessage(
       conversationId: conversationId,
       config: settings.getProviderConfig(providerKey),

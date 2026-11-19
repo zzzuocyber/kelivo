@@ -237,7 +237,9 @@ class ChatInputSection extends StatelessWidget {
       onConfigureReasoning: onConfigureReasoning,
       reasoningButtonKey: reasoningButtonKey,
       onOpenContextUsage: onOpenContextUsage,
-      reasoningActive: isReasoningEnabled(effectiveReasoning),
+      reasoningActive:
+          (pk != null && mid != null && isReasoningModel(pk, mid)) &&
+          isReasoningEnabled(effectiveReasoning),
       reasoning: effectiveReasoning,
       reasoningCustomBudget: reasoningSpec != null
           ? isCustomBudgetSelection(reasoningSpec, selectedReasoning)
@@ -245,6 +247,9 @@ class ChatInputSection extends StatelessWidget {
       supportsReasoning: (pk != null && mid != null)
           ? isReasoningModel(pk, mid)
           : false,
+      // The composer sheet also hosts the per-conversation chat suggestion
+      // module, so its entry stays visible for every resolved model.
+      showReasoningEntry: pk != null && mid != null,
       onOpenSearch: onOpenSearch,
       onSend: onSend,
       loading: isLoading,

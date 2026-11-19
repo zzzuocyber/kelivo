@@ -21,6 +21,7 @@ import '../../chat/controllers/quote_editing_controller.dart';
 import '../../chat/widgets/quote_interaction_scope.dart';
 import '../../../core/models/quote_ref.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../core/services/chat/conversation_suggestion_settings.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
@@ -41,7 +42,6 @@ import '../../../theme/app_font_weights.dart';
 import '../../../theme/design_tokens.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/hotkey_provider.dart';
-import '../../../core/services/model_spec/model_spec_resolver.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/quick_phrase_provider.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
@@ -1486,12 +1486,16 @@ class _HomePageState extends State<HomePage>
     }
 
     final settings = context.watch<SettingsProvider>();
-    final suggestionsEnabled = settings.isSuggestionGenerationEnabled;
-    final suggestions = context.select<ChatService, List<String>>(
-      (chat) => suggestionsEnabled && conversationId != null
-          ? (chat.getConversation(conversationId)?.chatSuggestions ?? const [])
-          : const [],
-    );
+    final suggestions = context.select<ChatService, List<String>>((chat) {
+      if (conversationId == null) return const [];
+      final conversation = chat.getConversation(conversationId);
+      if (!ConversationSuggestionSettings.fromConversation(
+        conversation,
+      ).effectiveEnabled(settings)) {
+        return const [];
+      }
+      return conversation?.chatSuggestions ?? const [];
+    });
     return MessageListView(
       contextTask: compression,
       contextTaskRevision: compression == null
@@ -2077,9 +2081,8 @@ class _HomePageState extends State<HomePage>
     if (providerKey == null || modelId == null) return;
     final settings = context.read<SettingsProvider>();
     final config = settings.getProviderConfig(providerKey);
-    if (!ModelSpecResolver.instance.spec(config, modelId).supportsReasoning) {
-      return;
-    }
+    // The sheet also hosts the per-conversation chat suggestion module, so it
+    // must stay available even when the model has no reasoning levels.
     final assistant = context.read<AssistantProvider>().currentAssistant;
     final conversationId = await ensureConversationId(
       context,

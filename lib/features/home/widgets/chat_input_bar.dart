@@ -733,6 +733,7 @@ class ChatInputBar extends StatefulWidget {
     this.reasoning,
     this.reasoningCustomBudget = false,
     this.supportsReasoning = true,
+    this.showReasoningEntry = true,
     this.showToolsButton = false,
     this.toolsActive = false,
     this.toolsConnectionIssue = false,
@@ -803,6 +804,11 @@ class ChatInputBar extends StatefulWidget {
   final ReasoningRequest? reasoning;
   final bool reasoningCustomBudget;
   final bool supportsReasoning;
+
+  /// Whether the composer sheet entry is shown. The sheet also hosts the
+  /// per-conversation chat suggestion block, so it is offered even for models
+  /// without reasoning levels.
+  final bool showReasoningEntry;
   final bool showToolsButton;
   final bool toolsActive;
   final bool toolsConnectionIssue;
@@ -3453,9 +3459,10 @@ class _ChatInputBarState extends State<ChatInputBar>
           ),
         );
 
-        if (widget.supportsReasoning) {
+        if (widget.showReasoningEntry) {
           final request = widget.reasoning ?? ReasoningRequest.auto;
-          final compactLabel = settings.showReasoningLevelBadge
+          final compactLabel =
+              widget.supportsReasoning && settings.showReasoningLevelBadge
               ? _reasoningCompactLabel(
                   l10n,
                   request,

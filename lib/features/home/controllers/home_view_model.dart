@@ -23,6 +23,7 @@ import '../../../core/models/chat_message.dart';
 import '../../../core/models/compress_context_options.dart';
 import '../../../core/models/conversation.dart';
 import '../../../core/services/chat/context_compression_service.dart';
+import '../../../core/services/chat/conversation_suggestion_settings.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/api/chat_api_service.dart';
@@ -2102,7 +2103,8 @@ class HomeViewModel extends ChangeNotifier {
     if (convo == null) return;
 
     final settings = _contextProvider.read<SettingsProvider>();
-    if (!settings.isSuggestionGenerationEnabled) return;
+    final overrides = ConversationSuggestionSettings.fromConversation(convo);
+    if (!overrides.effectiveEnabled(settings)) return;
 
     // Read context-dependent inputs before the async gap below.
     final assistantProvider = _contextProvider.read<AssistantProvider>();
@@ -2114,8 +2116,12 @@ class HomeViewModel extends ChangeNotifier {
       conversation: convo,
       assistant: assistant,
     );
-    final provKey = settings.suggestionModelProvider ?? chatModel.providerKey;
-    final mdlId = settings.suggestionModelId ?? chatModel.modelId;
+    final provKey =
+        overrides.providerKey ??
+        settings.suggestionModelProvider ??
+        chatModel.providerKey;
+    final mdlId =
+        overrides.modelId ?? settings.suggestionModelId ?? chatModel.modelId;
     if (provKey == null || mdlId == null) return;
     final locale = Localizations.localeOf(_contextProvider).toLanguageTag();
     final reasoning = settings.suggestionGenerationReasoningFor(assistant);
@@ -2123,13 +2129,18 @@ class HomeViewModel extends ChangeNotifier {
     final request = Object();
     _suggestionRequests[conversationId] = request;
     final truncateIndex = _chatService.getContextStartIndex(conversationId);
-    final prompt = settings.suggestionPrompt;
-    bool isCurrent() =>
-        identical(_suggestionRequests[conversationId], request) &&
-        settings.isSuggestionGenerationEnabled &&
-        settings.suggestionPrompt == prompt &&
-        _chatService.getConversation(conversationId) != null &&
-        _chatService.getContextStartIndex(conversationId) == truncateIndex;
+    final prompt = overrides.effectivePrompt(settings);
+    bool isCurrent() {
+      final current = _chatService.getConversation(conversationId);
+      if (current == null) return false;
+      final currentOverrides = ConversationSuggestionSettings.fromConversation(
+        current,
+      );
+      return identical(_suggestionRequests[conversationId], request) &&
+          currentOverrides.effectiveEnabled(settings) &&
+          currentOverrides.effectivePrompt(settings) == prompt &&
+          _chatService.getContextStartIndex(conversationId) == truncateIndex;
+    }
 
     Future<List<ChatMessage>> loadSelectedMessages() async {
       final loaded = await _chatService.loadMessages(conversationId);
@@ -2161,6 +2172,7 @@ class HomeViewModel extends ChangeNotifier {
         truncateIndex: truncateIndex,
         locale: locale,
         reasoning: reasoning,
+        promptOverride: overrides.prompt,
       );
       // An empty array is a valid decision to offer no suggestions.
       if (suggestions.isEmpty || !isCurrent()) return;
