@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
 import '../../utils/avatar_files.dart';
 import '../model/widgets/model_select_sheet.dart';
@@ -489,7 +490,7 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
   void _reload() {
     if (!mounted) return;
     setState(() {
-      _contacts = _store.contacts();
+      _contacts = sortedByPinyin(_store.contacts(), (c) => c.name);
       _avatars = _store.avatarPaths();
     });
   }

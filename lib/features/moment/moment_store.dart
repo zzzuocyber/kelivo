@@ -16,6 +16,9 @@ const String momentDivineKey = 'moment.divine';
 /// 上次召唤过谁：评论区菜单里的「再叫一次 某某」用。没有这个键 = 没召唤过。
 const String momentSummonKey = 'moment.summon';
 
+/// 召唤列表里收藏了谁。收藏的人排在「收藏」那一组，不随全部分组乱跑。
+const String momentSummonFavoritesKey = 'moment.summon.favorites';
+
 /// 隐藏对话的标题，只在备份/导出里可见。
 const String momentFeedTitle = '朋友圈';
 
@@ -209,6 +212,37 @@ class MomentStore {
       }
       return next;
     });
+  }
+
+  /// 召唤列表里收藏了谁。顺序按存进来的顺序，界面自己再排。
+  List<String> summonFavorites() {
+    final raw = findConversation()?.extras[momentSummonFavoritesKey];
+    if (raw is! List) return const <String>[];
+    final out = <String>[];
+    for (final item in raw) {
+      final name = item.toString().trim();
+      if (name.isNotEmpty && !out.contains(name)) out.add(name);
+    }
+    return out;
+  }
+
+  /// 收藏 / 取消收藏。返回更新后的名单。
+  Future<List<String>> toggleSummonFavorite(String name) async {
+    final key = name.trim();
+    if (key.isEmpty) return summonFavorites();
+    final next = summonFavorites();
+    if (!next.remove(key)) next.add(key);
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final map = Map<String, dynamic>.from(extras);
+      if (next.isEmpty) {
+        map.remove(momentSummonFavoritesKey);
+      } else {
+        map[momentSummonFavoritesKey] = next;
+      }
+      return map;
+    });
+    return next;
   }
 
   /// 改帖子的统一入口：读出来、交给 [update]、整包写回去。

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/models/world_book.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
 import 'wechat_dm_page.dart';
 import 'wechat_models.dart';
@@ -37,7 +38,8 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
   void _reload() {
     if (!mounted) return;
     setState(() {
-      _contacts = _store.contacts();
+      // 按首字母排，加了人也不会跳来跳去。
+      _contacts = sortedByPinyin(_store.contacts(), (c) => c.name);
       _settings = _store.wechatSettings();
       _avatars = _store.avatarPaths();
     });
@@ -52,7 +54,7 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
         if (provider.getById(id) != null) provider.getById(id)!,
     ];
     if (books.isEmpty) {
-      _toast('还没选世界书。先去「我 → 设置 → 世界书」选几本');
+      _toast('还没选世界书。先去「我 → 设置 → 世界观」选几本');
       return;
     }
     final existing = <String>{for (final c in _contacts) c.name};
@@ -223,78 +225,100 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
   }
 
   Widget _list() {
-    return ListView.builder(
-      padding: EdgeInsets.zero,
-      itemCount: _contacts.length + 1,
-      itemBuilder: (_, index) {
-        if (index == _contacts.length) {
-          return InkWell(
-            onTap: _add,
-            child: Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-              child: Row(
-                children: <Widget>[
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF2F2F2),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Lucide.Plus,
-                      size: 22,
-                      color: WechatColors.secondaryText,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    '添加联系人',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: WechatColors.primaryText,
-                    ),
-                  ),
-                ],
+    final rows = <Widget>[];
+    String? lastLetter;
+    for (final contact in _contacts) {
+      final letter = pinyinInitialOf(contact.name);
+      if (letter != lastLetter) {
+        rows.add(_letterRow(letter));
+        lastLetter = letter;
+      }
+      rows.add(_contactRow(contact));
+    }
+    rows.add(_addRow());
+    return ListView(padding: EdgeInsets.zero, children: rows);
+  }
+
+  /// 首字母那行小灰条（A、B、C…），跟通讯录 App 一个意思。
+  Widget _letterRow(String letter) {
+    return Container(
+      color: const Color(0xFFF2F2F2),
+      padding: const EdgeInsets.fromLTRB(16, 5, 16, 5),
+      child: Text(
+        letter,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: WechatColors.secondaryText,
+        ),
+      ),
+    );
+  }
+
+  Widget _contactRow(WechatContact contact) {
+    return InkWell(
+      onTap: () => _openDm(contact),
+      onLongPress: () => _showContactMenu(contact),
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Row(
+          children: <Widget>[
+            WechatAvatarText(
+              name: contact.name,
+              size: 44,
+              imagePath: _avatars[contact.name],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                contact.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: WechatColors.primaryText,
+                ),
               ),
             ),
-          );
-        }
-        final contact = _contacts[index];
-        return InkWell(
-          onTap: () => _openDm(contact),
-          onLongPress: () => _showContactMenu(contact),
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: Row(
-              children: <Widget>[
-                WechatAvatarText(
-                  name: contact.name,
-                  size: 44,
-                  imagePath: _avatars[contact.name],
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    contact.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: WechatColors.primaryText,
-                    ),
-                  ),
-                ),
-                if (contact.modelId != null)
-                  const Icon(Lucide.Bot, size: 15, color: Color(0xFF07C160)),
-              ],
+            if (contact.modelId != null)
+              const Icon(Lucide.Bot, size: 15, color: Color(0xFF07C160)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _addRow() {
+    return InkWell(
+      onTap: _add,
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F2F2),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Lucide.Plus,
+                size: 22,
+                color: WechatColors.secondaryText,
+              ),
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 12),
+            const Text(
+              '添加联系人',
+              style: TextStyle(fontSize: 16, color: WechatColors.primaryText),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

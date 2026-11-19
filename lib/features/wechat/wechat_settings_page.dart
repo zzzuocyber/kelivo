@@ -5,6 +5,7 @@ import '../../core/models/world_book.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
 import '../model/widgets/model_select_sheet.dart';
 import '../moment/moment_models.dart';
@@ -125,7 +126,7 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     final group = _group;
     if (group == null) return;
     // 拉人只从通讯录里挑：世界书里有人但没加进通讯录的，这里看不到。
-    final contacts = _store.contacts();
+    final contacts = sortedByPinyin(_store.contacts(), (c) => c.name);
     if (contacts.isEmpty) {
       _toast('通讯录里还没人，先去通讯录取加几个');
       return;

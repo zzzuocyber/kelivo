@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
 import 'moment_assets_page.dart';
 import 'moment_contacts_dialog.dart';
@@ -451,49 +452,37 @@ class _MomentPageState extends State<MomentPage> {
   }
 
   /// 召唤：挑一个人，让他去回这条评论。名单里排掉评论作者自己。
+  ///
+  /// 名单分两段：**收藏**在上，**全部**在下按首字母排。
+  /// 顺序固定下来，就不会每次点开看到的人不一样。
   Future<void> _pickSummon(MomentPost post, MomentComment comment) async {
     final author = comment.author.trim();
-    final pool = <MomentCharacter>[
+    final pool = sortedByPinyin(<MomentCharacter>[
       for (final character in _characters)
         if (character.name.trim().isNotEmpty && character.name.trim() != author)
           character,
-    ];
+    ], (character) => character.name);
     if (pool.isEmpty) {
       _toast('通讯录里没人可以召唤');
       return;
     }
+    // 作者本人被排掉了，说一句，不然看着像"人没了"。
+    final authorIsCharacter = _characters.any(
+      (c) => c.name.trim() == author && author.isNotEmpty,
+    );
     final picked = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
-      builder: (sheetCtx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
-              child: Text(
-                '召唤谁来回复这条',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: MomentColors.secondaryText,
-                ),
-              ),
-            ),
-            for (final character in pool)
-              ListTile(
-                leading: MomentAvatar(
-                  name: character.name,
-                  size: 34,
-                  imagePath: _assets[character.name]?.avatar,
-                ),
-                title: Text(character.name),
-                onTap: () => Navigator.of(sheetCtx).pop(character.name),
-              ),
-          ],
-        ),
+      builder: (sheetCtx) => _SummonSheet(
+        pool: pool,
+        avatars: _assets,
+        favorites: _store.summonFavorites(),
+        onToggleFavorite: _store.toggleSummonFavorite,
+        hiddenAuthor: authorIsCharacter ? author : '',
       ),
     );
     if (!mounted || picked == null) return;
@@ -1067,4 +1056,256 @@ Future<void> openMomentPage(BuildContext context) {
   return Navigator.of(
     context,
   ).push<void>(MaterialPageRoute<void>(builder: (_) => const MomentPage()));
+}
+
+// ============================================================
+// 召唤列表：收藏在上，全部在下按首字母排
+// ============================================================
+
+/// 召唤谁去回这条评论。
+///
+/// 这个面板是插到根 Overlay 上的，**不继承朋友圈那套浅色主题**，
+/// 所以配色一律写死（浅底 + 深字），不然夜间模式下白底白字看不见。
+class _SummonSheet extends StatefulWidget {
+  const _SummonSheet({
+    required this.pool,
+    required this.avatars,
+    required this.favorites,
+    required this.onToggleFavorite,
+    required this.hiddenAuthor,
+  });
+
+  /// 候选角色，进来之前已经按首字母排好序。
+  final List<MomentCharacter> pool;
+  final Map<String, MomentAssets> avatars;
+
+  /// 收藏了谁。
+  final List<String> favorites;
+
+  /// 点星星时调它，返回更新后的收藏名单。
+  final Future<List<String>> Function(String name) onToggleFavorite;
+
+  /// 被排掉的评论作者（空 = 没排掉谁），界面上要说一句。
+  final String hiddenAuthor;
+
+  @override
+  State<_SummonSheet> createState() => _SummonSheetState();
+}
+
+class _SummonSheetState extends State<_SummonSheet> {
+  final Set<String> _favorites = <String>{};
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _favorites.addAll(widget.favorites);
+  }
+
+  Future<void> _toggle(String name) async {
+    if (_busy) return;
+    _busy = true;
+    final before = <String>{..._favorites};
+    setState(() {
+      if (!_favorites.remove(name)) _favorites.add(name);
+    });
+    try {
+      final next = await widget.onToggleFavorite(name);
+      if (!mounted) return;
+      setState(() => _favorites = <String>{...next});
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _favorites = before);
+    } finally {
+      _busy = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final starred = <MomentCharacter>[
+      for (final character in widget.pool)
+        if (_favorites.contains(character.name.trim())) character,
+    ];
+    final rest = <MomentCharacter>[
+      for (final character in widget.pool)
+        if (!_favorites.contains(character.name.trim())) character,
+    ];
+
+    final tiles = <Widget>[];
+    if (starred.isNotEmpty) {
+      tiles.add(_header('收藏', trailing: '${starred.length}'));
+      for (final character in starred) {
+        tiles.add(_row(character, starred: true));
+      }
+    }
+    if (rest.isNotEmpty) {
+      tiles.add(_header('全部召唤', trailing: '${rest.length}'));
+      String? lastLetter;
+      for (final character in rest) {
+        final letter = pinyinInitialOf(character.name);
+        if (letter != lastLetter) {
+          tiles.add(_letter(letter));
+          lastLetter = letter;
+        }
+        tiles.add(_row(character, starred: false));
+      }
+    }
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.72,
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
+              child: Row(
+                children: <Widget>[
+                  const Expanded(
+                    child: Text(
+                      '召唤谁来回复这条',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: MomentColors.primaryText,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: MomentColors.secondaryText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.hiddenAuthor.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(
+                      Lucide.BadgeInfo,
+                      size: 13,
+                      color: MomentColors.secondaryText,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        '「${widget.hiddenAuthor}」就是这条回复的作者，不在这里',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: MomentColors.secondaryText,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const Divider(
+              height: 0.5,
+              thickness: 0.5,
+              color: MomentColors.hairline,
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 12),
+                children: tiles,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(String text, {String trailing = ''}) {
+    return Container(
+      color: const Color(0xFFF4F5F7),
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
+      child: Row(
+        children: <Widget>[
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: MomentColors.secondaryText,
+            ),
+          ),
+          const Spacer(),
+          if (trailing.isNotEmpty)
+            Text(
+              trailing,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: MomentColors.secondaryText,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _letter(String letter) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 2),
+      child: Text(
+        letter,
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w500,
+          color: MomentColors.secondaryText,
+        ),
+      ),
+    );
+  }
+
+  Widget _row(MomentCharacter character, {required bool starred}) {
+    final name = character.name.trim();
+    return InkWell(
+      onTap: () => Navigator.of(context).pop(name),
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+        child: Row(
+          children: <Widget>[
+            MomentAvatar(
+              name: name,
+              size: 34,
+              imagePath: widget.avatars[name]?.avatar,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: MomentColors.primaryText,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () => _toggle(name),
+              tooltip: starred ? '取消收藏' : '收藏',
+              icon: Icon(
+                Lucide.Bookmark,
+                size: 19,
+                color: starred
+                    ? const Color(0xFFE0A33E)
+                    : const Color(0xFFC8CCD4),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
