@@ -28,6 +28,9 @@ class WechatContact {
     this.bookId = '',
     this.providerKey,
     this.modelId,
+    this.intervalPreset = WechatIntervalPreset.normal,
+    this.customMinSeconds = 2,
+    this.customMaxSeconds = 12,
     this.addedAt = 0,
   });
 
@@ -42,6 +45,11 @@ class WechatContact {
   final String? providerKey;
   final String? modelId;
 
+  /// 私聊里他回你一句要磨多久。跟群聊的间隔是分开的两套。
+  final WechatIntervalPreset intervalPreset;
+  final int customMinSeconds;
+  final int customMaxSeconds;
+
   final int addedAt;
 
   WechatContact copyWith({
@@ -50,6 +58,9 @@ class WechatContact {
     String? bookId,
     String? providerKey,
     String? modelId,
+    WechatIntervalPreset? intervalPreset,
+    int? customMinSeconds,
+    int? customMaxSeconds,
     bool clearModel = false,
   }) {
     return WechatContact(
@@ -58,6 +69,9 @@ class WechatContact {
       bookId: bookId ?? this.bookId,
       providerKey: clearModel ? null : (providerKey ?? this.providerKey),
       modelId: clearModel ? null : (modelId ?? this.modelId),
+      intervalPreset: intervalPreset ?? this.intervalPreset,
+      customMinSeconds: customMinSeconds ?? this.customMinSeconds,
+      customMaxSeconds: customMaxSeconds ?? this.customMaxSeconds,
       addedAt: addedAt,
     );
   }
@@ -68,6 +82,9 @@ class WechatContact {
     if (bookId.isNotEmpty) 'book': bookId,
     if (providerKey != null) 'provider': providerKey,
     if (modelId != null) 'model': modelId,
+    'interval': intervalPreset.name,
+    'min': customMinSeconds,
+    'max': customMaxSeconds,
     'at': addedAt,
   };
 
@@ -83,6 +100,9 @@ class WechatContact {
       bookId: (raw['book'] ?? '').toString(),
       providerKey: provider is String && provider.isNotEmpty ? provider : null,
       modelId: model is String && model.isNotEmpty ? model : null,
+      intervalPreset: WechatIntervalPresetX.parse(raw['interval']),
+      customMinSeconds: _intOr(raw['min'], 2),
+      customMaxSeconds: _intOr(raw['max'], 12),
       addedAt: _intOr(raw['at'], 0),
     );
   }
@@ -120,9 +140,17 @@ const String wechatSettingsKey = 'wechat.settings';
 
 /// 微信自己的全局设置（跟「设置 → 默认模型」那套无关）。
 ///
-/// 现在只放两样：通讯录/私聊用哪几本世界书，以及我的马甲名。
+/// 放四样：通讯录/私聊用哪几本世界书、我的马甲名、**世界观**（手写的系统提示）、
+/// 以及新建群继承的那份默认发言间隔。
 class WechatSettings {
-  const WechatSettings({this.bookIds = const <String>[], this.persona = ''});
+  const WechatSettings({
+    this.bookIds = const <String>[],
+    this.persona = '',
+    this.worldPrompt = '',
+    this.intervalPreset = WechatIntervalPreset.normal,
+    this.customMinSeconds = 4,
+    this.customMaxSeconds = 30,
+  });
 
   /// 通讯录添加人、私聊生成都用这几本世界书（群聊各有自己的一份）。
   final List<String> bookIds;
@@ -130,21 +158,45 @@ class WechatSettings {
   /// 我在微信里的名字。空 = 叫「我」。
   final String persona;
 
+  /// 世界观：手写的设定，往群聊和私聊的系统提示里都塞一段。
+  /// 跟世界书是两条路——世界书按条目给，这里是想写什么写什么。
+  final String worldPrompt;
+
+  /// 新建群的默认发言间隔。群建好后仍可在群设置里单独改。
+  final WechatIntervalPreset intervalPreset;
+  final int customMinSeconds;
+  final int customMaxSeconds;
+
   String get effectivePersona {
     final value = persona.trim();
     return value.isEmpty ? '我' : value;
   }
 
-  WechatSettings copyWith({List<String>? bookIds, String? persona}) {
+  WechatSettings copyWith({
+    List<String>? bookIds,
+    String? persona,
+    String? worldPrompt,
+    WechatIntervalPreset? intervalPreset,
+    int? customMinSeconds,
+    int? customMaxSeconds,
+  }) {
     return WechatSettings(
       bookIds: bookIds ?? this.bookIds,
       persona: persona ?? this.persona,
+      worldPrompt: worldPrompt ?? this.worldPrompt,
+      intervalPreset: intervalPreset ?? this.intervalPreset,
+      customMinSeconds: customMinSeconds ?? this.customMinSeconds,
+      customMaxSeconds: customMaxSeconds ?? this.customMaxSeconds,
     );
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'books': bookIds,
     'persona': persona,
+    'world': worldPrompt,
+    'interval': intervalPreset.name,
+    'min': customMinSeconds,
+    'max': customMaxSeconds,
   };
 
   static WechatSettings fromJson(Object? raw) {
@@ -160,6 +212,10 @@ class WechatSettings {
     return WechatSettings(
       bookIds: books,
       persona: (raw['persona'] ?? '').toString(),
+      worldPrompt: (raw['world'] ?? '').toString(),
+      intervalPreset: WechatIntervalPresetX.parse(raw['interval']),
+      customMinSeconds: _intOr(raw['min'], 4),
+      customMaxSeconds: _intOr(raw['max'], 30),
     );
   }
 }
@@ -274,6 +330,42 @@ extension WechatIntervalPresetX on WechatIntervalPreset {
   }
 }
 
+/// 一个间隔预设算出来的等待时间。
+///
+/// 群聊（全局 / 单群）和私聊（单角色）共用一个算法，
+/// 免得三处各写一遍、改一处忘两处。
+Duration wechatDelayOf(
+  WechatIntervalPreset preset, {
+  int customMinSeconds = 3,
+  int customMaxSeconds = 30,
+  required Random random,
+}) {
+  final range = preset.range;
+  var lo = range.min;
+  var hi = range.max;
+  if (preset == WechatIntervalPreset.custom) {
+    lo = customMinSeconds.clamp(0, 3600);
+    hi = customMaxSeconds.clamp(lo, 3600);
+  }
+  if (hi <= lo) return Duration(seconds: lo);
+  // 不均等分布：多数落在前段，偶尔拖很久，比死板均匀更像真人。
+  final span = hi - lo;
+  final skewed = pow(random.nextDouble(), 1.7).toDouble();
+  return Duration(seconds: lo + (skewed * span).round());
+}
+
+/// 设置行右边显示的那句话：「正常 · 4~30 秒」。
+String wechatIntervalLabel(
+  WechatIntervalPreset preset, {
+  int customMinSeconds = 3,
+  int customMaxSeconds = 30,
+}) {
+  if (preset != WechatIntervalPreset.custom) return preset.label;
+  final lo = customMinSeconds.clamp(0, 3600);
+  final hi = customMaxSeconds.clamp(lo, 3600);
+  return '自定义 · $lo~$hi 秒';
+}
+
 /// 一个群。
 class WechatGroup {
   const WechatGroup({
@@ -315,20 +407,15 @@ class WechatGroup {
   final int createdAt;
 
   /// 这个间隔预设下，随机出来的一段时间。
-  Duration nextDelay(Random random) {
-    final range = intervalPreset.range;
-    var lo = range.min;
-    var hi = range.max;
-    if (intervalPreset == WechatIntervalPreset.custom) {
-      lo = customMinSeconds.clamp(0, 3600);
-      hi = customMaxSeconds.clamp(lo, 3600);
-    }
-    if (hi <= lo) return Duration(seconds: lo);
-    // 不均等分布：多数落在前段，偶尔拖很久，比死板均匀更像真人。
-    final span = hi - lo;
-    final skewed = pow(random.nextDouble(), 1.7).toDouble();
-    return Duration(seconds: lo + (skewed * span).round());
-  }
+  Duration nextDelay(Random random) => wechatDelayOf(
+    intervalPreset,
+    customMinSeconds: customMinSeconds,
+    customMaxSeconds: customMaxSeconds,
+    random: random,
+  );
+
+  /// 群里一共几个人。**含我自己**：界面上写「4 人」是三个人加我一个。
+  int get memberCount => members.length + 1;
 
   String get effectivePersona {
     final value = persona.trim();

@@ -91,12 +91,17 @@ class WechatStore {
     String persona = '',
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    // 新群继承「微信设置 → 群聊默认间隔」，建好之后还能在群设置里单独改。
+    final defaults = wechatSettings();
     final group = WechatGroup(
       id: '${now}_${_random.nextInt(99999)}',
       name: name.trim().isEmpty ? '新群聊' : name.trim(),
       members: members,
       bookIds: bookIds,
       persona: persona,
+      intervalPreset: defaults.intervalPreset,
+      customMinSeconds: defaults.customMinSeconds,
+      customMaxSeconds: defaults.customMaxSeconds,
       createdAt: now,
     );
     final next = <WechatGroup>[...groups(), group];

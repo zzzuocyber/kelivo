@@ -1,6 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'wechat_models.dart';
 
 /// 底部弹出菜单里的字色。微信一律浅色，这里的字必须够深，
 /// 不然夜间模式下会浅到看不清。
@@ -103,6 +106,219 @@ class WechatAvatarText extends StatelessWidget {
               cacheWidth: (size * 3).round(),
               errorBuilder: (_, _, _) => fallback,
             ),
+    );
+  }
+}
+
+/// 发言间隔选择器：一排预设 + 自定义时的两个数字框。
+///
+/// 三处共用同一份（全局默认 / 单个群 / 单个角色私聊），
+/// 以前群设置里自己写了一份，现在抽出来，别再各写一遍。
+class WechatIntervalPicker extends StatelessWidget {
+  const WechatIntervalPicker({
+    super.key,
+    required this.preset,
+    required this.customMin,
+    required this.customMax,
+    required this.onChanged,
+    this.note,
+  });
+
+  final WechatIntervalPreset preset;
+  final int customMin;
+  final int customMax;
+
+  /// 改完（点预设、或者数字框提交）回传三个值。
+  final void Function(WechatIntervalPreset preset, int min, int max) onChanged;
+
+  /// 底下那行灰字说明，不同场景写的不一样。
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final item in WechatIntervalPreset.values) _chip(item),
+            ],
+          ),
+        ),
+        if (preset == WechatIntervalPreset.custom)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Row(
+              children: <Widget>[
+                _NumberField(
+                  label: '最短',
+                  value: customMin,
+                  onDone: (value) => onChanged(
+                    preset,
+                    value,
+                    value > customMax ? value : customMax,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                _NumberField(
+                  label: '最长',
+                  value: customMax,
+                  onDone: (value) => onChanged(
+                    preset,
+                    value < customMin ? customMin : value,
+                    value,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  '秒',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (note != null)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              note!,
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: WechatColors.secondaryText,
+                height: 1.6,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _chip(WechatIntervalPreset item) {
+    final active = preset == item;
+    return GestureDetector(
+      onTap: () => onChanged(item, customMin, customMax),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFE7F8EE) : const Color(0xFFF2F2F2),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: active ? WechatColors.green : Colors.transparent,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              item.label,
+              style: TextStyle(
+                fontSize: 13,
+                color: active ? WechatColors.green : WechatColors.primaryText,
+                fontWeight: active ? FontWeight.w500 : FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              item.hint,
+              style: const TextStyle(
+                fontSize: 9.5,
+                color: WechatColors.secondaryText,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 间隔里的秒数输入框。
+///
+/// 必须是有状态的：直接拿 TextField 受父级 setState 重建会把光标顶回开头。
+class _NumberField extends StatefulWidget {
+  const _NumberField({
+    required this.label,
+    required this.value,
+    required this.onDone,
+  });
+
+  final String label;
+  final int value;
+  final void Function(int value) onDone;
+
+  @override
+  State<_NumberField> createState() => _NumberFieldState();
+}
+
+class _NumberFieldState extends State<_NumberField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: '${widget.value}',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _commit(String text) {
+    final parsed = int.tryParse(text.trim());
+    if (parsed == null || parsed < 0) return;
+    widget.onDone(parsed > 3600 ? 3600 : parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Row(
+        children: <Widget>[
+          Text(
+            widget.label,
+            style: const TextStyle(
+              fontSize: 13,
+              color: WechatColors.secondaryText,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              alignment: Alignment.center,
+              child: TextField(
+                controller: _controller,
+                keyboardType: TextInputType.number,
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onSubmitted: _commit,
+                onEditingComplete: () => _commit(_controller.text),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

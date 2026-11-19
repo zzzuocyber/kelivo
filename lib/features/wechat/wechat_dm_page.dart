@@ -15,9 +15,16 @@ import 'wechat_ui.dart';
 
 /// 一对一私聊。没有调度器，就是「我发一句，他回一句」。
 class WechatDmPage extends StatefulWidget {
-  const WechatDmPage({super.key, required this.contactName});
+  const WechatDmPage({
+    super.key,
+    required this.contactName,
+    this.summon = false,
+  });
 
   final String contactName;
+
+  /// 召唤进来的：不等你说话，他先开口。
+  final bool summon;
 
   @override
   State<WechatDmPage> createState() => _WechatDmPageState();
@@ -52,6 +59,10 @@ class _WechatDmPageState extends State<WechatDmPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _jumpToBottom();
     });
+    // 召唤进来的：他先说话。给一小段时间让页面站稳再开口。
+    if (widget.summon) {
+      _timer = Timer(const Duration(milliseconds: 500), _reply);
+    }
   }
 
   @override
@@ -66,7 +77,10 @@ class _WechatDmPageState extends State<WechatDmPage> {
   void _reload() {
     if (!mounted) return;
     setState(() {
-      _contact = _store.contact(widget.contactName);
+      // 通讯录里没有也照样能聊（老数据/召唤进来的人），只是没有人设和绑定。
+      _contact =
+          _store.contact(widget.contactName) ??
+          WechatContact(name: widget.contactName);
       _settings = _store.wechatSettings();
       _avatars = _store.avatarPaths();
       _messages = _store.dmMessages(widget.contactName);
@@ -99,13 +113,19 @@ class _WechatDmPageState extends State<WechatDmPage> {
     _scheduleReply();
   }
 
-  /// 隔一小会儿他再回，太秒回像机器人。
-  /// 第二批会接上「回复间隔」那套设置，现在先给个短随机。
+  /// 隔一会儿他再回，太秒回像机器人。
+  /// 磨多久由「这个人自己的回复间隔」决定（第三处间隔：单角色私聊）。
   void _scheduleReply() {
     if (_waiting) return;
     _timer?.cancel();
-    final seconds = 2 + _random.nextInt(6);
-    _timer = Timer(Duration(seconds: seconds), _reply);
+    final contact = _contact;
+    final delay = wechatDelayOf(
+      contact?.intervalPreset ?? WechatIntervalPreset.normal,
+      customMinSeconds: contact?.customMinSeconds ?? 2,
+      customMaxSeconds: contact?.customMaxSeconds ?? 12,
+      random: _random,
+    );
+    _timer = Timer(delay, _reply);
   }
 
   Future<void> _reply() async {
@@ -122,6 +142,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
         contact: contact,
         bookIds: _settings.bookIds,
         persona: _settings.effectivePersona,
+        worldPrompt: _settings.worldPrompt,
         history: _messages.length > 40
             ? _messages.sublist(_messages.length - 40)
             : _messages,
@@ -151,6 +172,78 @@ class _WechatDmPageState extends State<WechatDmPage> {
         });
       }
     }
+  }
+
+  /// 这个过程改了隔多久回你：第三处间隔（单角色私聊）就存在联系人身上。
+  Future<void> _pickInterval() async {
+    final contact = _contact;
+    if (contact == null) return;
+    var preset = contact.intervalPreset;
+    var min = contact.customMinSeconds;
+    var max = contact.customMaxSeconds;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
+                  child: Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Text(
+                          '他多久回你一句',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: WechatColors.primaryText,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('好'),
+                      ),
+                    ],
+                  ),
+                ),
+                WechatIntervalPicker(
+                  preset: preset,
+                  customMin: min,
+                  customMax: max,
+                  note: '只管你们两个人的私聊，跟群里的间隔不通用。',
+                  onChanged: (nextPreset, nextMin, nextMax) {
+                    setSheetState(() {
+                      preset = nextPreset;
+                      min = nextMin;
+                      max = nextMax;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    await _store.saveContact(
+      contact.copyWith(
+        intervalPreset: preset,
+        customMinSeconds: min,
+        customMaxSeconds: max,
+      ),
+    );
+    if (!mounted) return;
+    _reload();
   }
 
   void _toast(String text) {
@@ -198,6 +291,17 @@ class _WechatDmPageState extends State<WechatDmPage> {
               color: Colors.black,
             ),
           ),
+          actions: <Widget>[
+            PopupMenuButton<String>(
+              icon: const Icon(Lucide.Ellipsis, color: Colors.black),
+              onSelected: (value) async {
+                if (value == 'interval') await _pickInterval();
+              },
+              itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(value: 'interval', child: Text('回复间隔')),
+              ],
+            ),
+          ],
         ),
         body: Column(
           children: <Widget>[

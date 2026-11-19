@@ -203,7 +203,7 @@ class _WechatPageState extends State<WechatPage> {
                                 ),
                               ),
                               subtitle: Text(
-                                '${group.members.length} 人',
+                                '${group.memberCount} 人',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: WechatColors.secondaryText,
@@ -641,6 +641,9 @@ class _WechatChatPageState extends State<WechatChatPage> {
   /// 长按空白后才把天意消息标出来。
   bool _showDivineMark = false;
 
+  /// 被 @ 的人：下一次一定轮到他说话。发完就清掉。
+  String? _pendingSpeaker;
+
   /// 通讯录（名字 → 联系人），生成时用角色自己绑的模型。
   Map<String, WechatContact> _contactModels = const <String, WechatContact>{};
 
@@ -718,6 +721,69 @@ class _WechatChatPageState extends State<WechatChatPage> {
     _restartLoop();
   }
 
+  /// @ 一个人：下一次一定是他说话，等的间隔照旧按群聊那套。
+  Future<void> _pickMention(WechatGroup group) async {
+    if (group.members.isEmpty) {
+      _toast('群里还没人，先拉个人进来');
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              const Padding(
+                padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
+                child: Text(
+                  '@ 谁（下一句一定是他接）',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+              ),
+              const Divider(height: 0.5, thickness: 0.5),
+              for (final member in group.members)
+                ListTile(
+                  leading: WechatAvatarText(
+                    name: member.name,
+                    size: 34,
+                    imagePath: _avatars[member.name],
+                  ),
+                  title: Text(
+                    member.name,
+                    style: const TextStyle(fontSize: 15, color: wechatMenuInk),
+                  ),
+                  onTap: () => Navigator.of(sheetCtx).pop(member.name),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || picked == null) return;
+    final insert = '@$picked ';
+    final selection = _input.selection;
+    if (selection.isValid) {
+      final start = selection.start;
+      final end = selection.end;
+      _input.text = _input.text.replaceRange(start, end, insert);
+      _input.selection = TextSelection.collapsed(offset: start + insert.length);
+    } else {
+      _input.text = '${_input.text}$insert';
+      _input.selection = TextSelection.collapsed(offset: _input.text.length);
+    }
+    setState(() => _pendingSpeaker = picked);
+    _focus.requestFocus();
+  }
+
   // ---------------- 自动循环 ----------------
 
   void _restartLoop() {
@@ -731,9 +797,22 @@ class _WechatChatPageState extends State<WechatChatPage> {
     if (!mounted || !_autoLoop) return;
     final group = _group;
     if (group == null) return;
-    final speaker = _scheduler.pickSpeaker(group, _messages);
+    // 被 @ 的人优先：说了叫谁就一定是谁，但等的间隔还是按群聊那套。
+    final forced = _pendingSpeaker;
+    WechatMember? wanted;
+    if (forced != null) {
+      for (final member in group.members) {
+        if (member.name == forced) {
+          wanted = member;
+          break;
+        }
+      }
+    }
+    final speaker = wanted ?? _scheduler.pickSpeaker(group, _messages);
     if (speaker == null) return;
-    setState(() => _typingName = speaker.name);
+    final isForced = forced != null && speaker.name == forced;
+    final speakerName = speaker.name;
+    setState(() => _typingName = speakerName);
     try {
       final generator = WechatGenerator(
         settings: context.read<SettingsProvider>(),
@@ -741,17 +820,19 @@ class _WechatChatPageState extends State<WechatChatPage> {
         group: group,
         history: wechatRecentContext(_messages),
         contacts: _contactModels,
+        worldPrompt: _store.wechatSettings().worldPrompt,
       );
       final text = await generator.generateFor(speaker);
       if (!mounted) return;
       final message = await _store.appendMessage(
         group.id,
-        sender: speaker.name,
+        sender: speakerName,
         text: text,
       );
       if (!mounted) return;
       setState(() {
         _typingName = null;
+        if (isForced) _pendingSpeaker = null;
         _messages = <WechatMessage>[..._messages, message];
       });
       _jumpToBottom();
@@ -822,12 +903,24 @@ class _WechatChatPageState extends State<WechatChatPage> {
               ),
               ListTile(
                 leading: const Icon(
+                  Lucide.MessageCircle,
+                  size: 20,
+                  color: wechatMenuInk,
+                ),
+                title: const Text(
+                  '召唤：叫他私聊我',
+                  style: TextStyle(fontSize: 15, color: wechatMenuInk),
+                ),
+                onTap: () => Navigator.of(sheetCtx).pop('summon'),
+              ),
+              ListTile(
+                leading: const Icon(
                   Lucide.User,
                   size: 20,
                   color: wechatMenuInk,
                 ),
                 title: const Text(
-                  '天意：换个身份说话',
+                  '切换天意：用他的身份说话',
                   style: TextStyle(fontSize: 15, color: wechatMenuInk),
                 ),
                 onTap: () => Navigator.of(sheetCtx).pop('divine'),
@@ -864,7 +957,80 @@ class _WechatChatPageState extends State<WechatChatPage> {
     }
     if (action == 'divine') {
       await _pickDivine(group);
+      return;
     }
+    if (action == 'summon') {
+      await _summon(group);
+    }
+  }
+
+  /// 召唤：挑一个人，让他主动私聊我（不是你发他回，是他先开口）。
+  Future<void> _summon(WechatGroup group) async {
+    if (group.members.isEmpty) {
+      _toast('群里还没人，先拉个人进来');
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              const Padding(
+                padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
+                child: Text(
+                  '叫谁来找你（他会先开口）',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+              ),
+              const Divider(height: 0.5, thickness: 0.5),
+              for (final member in group.members)
+                ListTile(
+                  leading: WechatAvatarText(
+                    name: member.name,
+                    size: 34,
+                    imagePath: _avatars[member.name],
+                  ),
+                  title: Text(
+                    member.name,
+                    style: const TextStyle(fontSize: 15, color: wechatMenuInk),
+                  ),
+                  onTap: () => Navigator.of(sheetCtx).pop(member.name),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || picked == null) return;
+    // 万一群里有人没进通讯录（老数据），先补进去，不然私聊页找不到人设。
+    if (_store.contact(picked) == null) {
+      for (final member in group.members) {
+        if (member.name == picked) {
+          await _store.addContacts(<WechatContact>[
+            WechatContact.ofMember(member),
+          ]);
+          break;
+        }
+      }
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => WechatDmPage(contactName: picked, summon: true),
+      ),
+    );
+    if (!mounted) return;
+    _reload();
   }
 
   Future<void> _pickDivine(WechatGroup group) async {
@@ -954,7 +1120,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Text(
-                '${group.name} (${group.members.length})',
+                '${group.name} (${group.memberCount})',
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -992,6 +1158,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   }
                 } else if (value == 'divine') {
                   await _pickDivine(group);
+                } else if (value == 'summon') {
+                  await _summon(group);
                 }
               },
               itemBuilder: (_) => <PopupMenuEntry<String>>[
@@ -1000,8 +1168,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   child: Text(_autoLoop ? '暂停自动回复' : '继续自动回复'),
                 ),
                 const PopupMenuItem<String>(
+                  value: 'summon',
+                  child: Text('召唤：叫他私聊我'),
+                ),
+                const PopupMenuItem<String>(
                   value: 'divine',
-                  child: Text('天意：换个身份说话'),
+                  child: Text('切换天意：用他的身份说话'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'settings',
@@ -1110,16 +1282,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
             ? Border.all(color: const Color(0xFF07C160), width: 1)
             : null,
       ),
-      child: Text(
-        message.text,
-        style: const TextStyle(
-          fontSize: 15.5,
-          height: 1.42,
-          color: WechatColors.primaryText,
-        ),
-      ),
+      child: _bubbleText(message.text),
     );
-
     // 气泡上吞掉长按，免得点消息也弹出空白菜单。
     final guardedBubble = GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1173,6 +1337,38 @@ class _WechatChatPageState extends State<WechatChatPage> {
     );
   }
 
+  /// 气泡里的字：把 `@某某` 挑出来染成微信那种蓝，别的照旧。
+  Widget _bubbleText(String text) {
+    const base = TextStyle(
+      fontSize: 15.5,
+      height: 1.42,
+      color: WechatColors.primaryText,
+    );
+    final pattern = RegExp(r'@[^\s@]+');
+    final matches = pattern.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(text, style: base);
+    }
+    final spans = <TextSpan>[];
+    var last = 0;
+    for (final match in matches) {
+      if (match.start > last) {
+        spans.add(TextSpan(text: text.substring(last, match.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(0),
+          style: const TextStyle(color: WechatColors.link),
+        ),
+      );
+      last = match.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last)));
+    }
+    return Text.rich(TextSpan(style: base, children: spans));
+  }
+
   Widget _typingRow() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
@@ -1205,6 +1401,26 @@ class _WechatChatPageState extends State<WechatChatPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// @ 按钮。图标库里没有 AtSign，就直接写一个 @，比找个近似图标清楚。
+  Widget _mentionButton(WechatGroup group) {
+    final armed = _pendingSpeaker != null;
+    return GestureDetector(
+      onTap: () => _pickMention(group),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 3, left: 1, right: 1),
+        child: Text(
+          '@',
+          style: TextStyle(
+            fontSize: 21,
+            fontWeight: FontWeight.w600,
+            color: armed ? WechatColors.green : const Color(0xFF4A4A4A),
+          ),
+        ),
       ),
     );
   }
@@ -1295,6 +1511,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  _mentionButton(group),
                   const SizedBox(width: 6),
                   _placeholderIcon(Lucide.Sparkles),
                   const SizedBox(width: 6),

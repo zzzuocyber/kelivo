@@ -134,6 +134,7 @@ class WechatGenerator {
     required this.group,
     required this.history,
     this.contacts = const <String, WechatContact>{},
+    this.worldPrompt = '',
   });
 
   final SettingsProvider settings;
@@ -143,6 +144,9 @@ class WechatGenerator {
 
   /// 通讯录，用来取角色级的模型绑定。群里没有这个人的时候退回群设置。
   final Map<String, WechatContact> contacts;
+
+  /// 「我 → 设置 → 世界观」里手写的设定，全局生效。
+  final String worldPrompt;
 
   /// 真正去要一句话。[speaker] 是这次轮到的人。
   Future<String> generateFor(WechatMember speaker) async {
@@ -224,9 +228,17 @@ class WechatGenerator {
       buffer.writeln();
     }
 
+    final worldSetting = worldPrompt.trim();
+    if (worldSetting.isNotEmpty) {
+      buffer.writeln('【世界观】');
+      buffer.writeln(worldSetting);
+      buffer.writeln();
+    }
+
     buffer.writeln('【这次的规矩】');
     _writeChatRules(buffer, speaker.name);
     buffer.writeln('- 群里有好几个人，说话可以接着上面某个人，但不是每次都非得接。');
+    buffer.writeln('- 消息里带 @名字 的是专门叫那个人，被 @ 的人优先接这句。');
     return buffer.toString().trim();
   }
 
@@ -281,6 +293,7 @@ class WechatDmGenerator {
     required this.bookIds,
     required this.persona,
     required this.history,
+    this.worldPrompt = '',
   });
 
   final SettingsProvider settings;
@@ -294,6 +307,9 @@ class WechatDmGenerator {
 
   /// 我的马甲名。
   final String persona;
+
+  /// 「我 → 设置 → 世界观」里手写的设定，全局生效。
+  final String worldPrompt;
 
   final List<WechatMessage> history;
 
@@ -361,6 +377,13 @@ class WechatDmGenerator {
     if (worldText.isNotEmpty) {
       buffer.writeln('【世界背景】');
       buffer.writeln(worldText);
+      buffer.writeln();
+    }
+
+    final worldSetting = worldPrompt.trim();
+    if (worldSetting.isNotEmpty) {
+      buffer.writeln('【世界观】');
+      buffer.writeln(worldSetting);
       buffer.writeln();
     }
 

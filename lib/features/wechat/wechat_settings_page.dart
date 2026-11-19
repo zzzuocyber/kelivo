@@ -7,6 +7,7 @@ import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
 import '../../icons/lucide_adapter.dart';
 import '../model/widgets/model_select_sheet.dart';
+import '../moment/moment_models.dart';
 import 'wechat_models.dart';
 import 'wechat_store.dart';
 import 'wechat_ui.dart';
@@ -265,6 +266,7 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                 _row(
                   title: '群名称',
                   value: group.name,
+                  strong: true,
                   onTap: () => _editText(
                     title: '群名称',
                     initial: group.name,
@@ -278,6 +280,7 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                 _row(
                   title: '我的名字',
                   value: group.effectivePersona,
+                  strong: true,
                   onTap: () => _editText(
                     title: '我在群里的名字',
                     initial: group.persona,
@@ -289,8 +292,9 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                 ),
               ]),
 
-              _header('成员（${group.members.length}）'),
+              _header('成员（${group.memberCount}）'),
               _section(<Widget>[
+                _meRow(group),
                 for (final member in group.members) _memberRow(member),
                 _addRow(),
               ]),
@@ -299,7 +303,21 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
               _bookSection(group),
 
               _header('发言间隔'),
-              _intervalSection(group),
+              WechatIntervalPicker(
+                preset: group.intervalPreset,
+                customMin: group.customMinSeconds,
+                customMax: group.customMaxSeconds,
+                note: '群里两个人说话的间隔。人越多建议越慢，不然像在抢话。',
+                onChanged: (preset, min, max) async {
+                  await _apply(
+                    group.copyWith(
+                      intervalPreset: preset,
+                      customMinSeconds: min,
+                      customMaxSeconds: max,
+                    ),
+                  );
+                },
+              ),
 
               _header('默认模型'),
               _section(<Widget>[
@@ -368,6 +386,7 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     required String title,
     required String value,
     required VoidCallback onTap,
+    bool strong = false,
   }) {
     return InkWell(
       onTap: onTap,
@@ -394,9 +413,13 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: WechatColors.secondaryText,
+                // 群名和我的名字是要看清楚的东西，不能跟其他说明一样用浅灰。
+                style: TextStyle(
+                  fontSize: strong ? 15 : 14,
+                  fontWeight: strong ? FontWeight.w500 : FontWeight.w400,
+                  color: strong
+                      ? WechatColors.primaryText
+                      : WechatColors.secondaryText,
                 ),
               ),
             ),
@@ -404,6 +427,63 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
             const Icon(Lucide.ChevronRight, size: 15, color: Color(0xFFC8C8C8)),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 成员列表第一行永远是「我」。人数也算上我，不然拉了三个显示三人不对。
+  Widget _meRow(WechatGroup group) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFEEEEEE), width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          WechatAvatarText(
+            name: group.effectivePersona,
+            size: 36,
+            imagePath: _store.avatarPaths()[MomentAssets.personaKey],
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: <Widget>[
+                  Flexible(
+                    child: Text(
+                      group.effectivePersona,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: WechatColors.primaryText,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE7F8EE),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: const Text(
+                      '我',
+                      style: TextStyle(fontSize: 10, color: WechatColors.green),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -533,110 +613,6 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                   border: Border.all(color: Color(0xFFCFCFCF), width: 1.4),
                 ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _intervalSection(WechatGroup group) {
-    return Column(
-      children: <Widget>[
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              for (final preset in WechatIntervalPreset.values)
-                _presetChip(group, preset),
-            ],
-          ),
-        ),
-        if (group.intervalPreset == WechatIntervalPreset.custom)
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-            child: Row(
-              children: <Widget>[
-                _WechatNumberField(
-                  label: '最短',
-                  value: group.customMinSeconds,
-                  onDone: (value) async {
-                    await _apply(
-                      group.copyWith(
-                        customMinSeconds: value,
-                        customMaxSeconds: value > group.customMaxSeconds
-                            ? value
-                            : group.customMaxSeconds,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 14),
-                _WechatNumberField(
-                  label: '最长',
-                  value: group.customMaxSeconds,
-                  onDone: (value) async {
-                    await _apply(
-                      group.copyWith(
-                        customMaxSeconds: value < group.customMinSeconds
-                            ? group.customMinSeconds
-                            : value,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  '秒',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: WechatColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _presetChip(WechatGroup group, WechatIntervalPreset preset) {
-    final active = group.intervalPreset == preset;
-    return GestureDetector(
-      onTap: () async {
-        await _apply(group.copyWith(intervalPreset: preset));
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFE7F8EE) : const Color(0xFFF2F2F2),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: active ? WechatColors.green : Colors.transparent,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              preset.label,
-              style: TextStyle(
-                fontSize: 13,
-                color: active ? WechatColors.green : WechatColors.primaryText,
-                fontWeight: active ? FontWeight.w500 : FontWeight.w400,
-              ),
-            ),
-            const SizedBox(height: 1),
-            Text(
-              preset.hint,
-              style: const TextStyle(
-                fontSize: 9.5,
-                color: WechatColors.secondaryText,
-              ),
-            ),
           ],
         ),
       ),
@@ -810,78 +786,6 @@ class _InviteSheetState extends State<_InviteSheet> {
                 },
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WechatNumberField extends StatefulWidget {
-  const _WechatNumberField({
-    required this.label,
-    required this.value,
-    required this.onDone,
-  });
-
-  final String label;
-  final int value;
-  final Future<void> Function(int value) onDone;
-
-  @override
-  State<_WechatNumberField> createState() => _WechatNumberFieldState();
-}
-
-class _WechatNumberFieldState extends State<_WechatNumberField> {
-  late final TextEditingController _controller = TextEditingController(
-    text: '${widget.value}',
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        children: <Widget>[
-          Text(
-            widget.label,
-            style: const TextStyle(
-              fontSize: 13,
-              color: WechatColors.secondaryText,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Container(
-              height: 34,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              alignment: Alignment.center,
-              child: TextField(
-                controller: _controller,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14),
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onSubmitted: (text) {
-                  final parsed = int.tryParse(text.trim());
-                  if (parsed == null || parsed < 0) return;
-                  widget.onDone(parsed > 3600 ? 3600 : parsed);
-                },
-              ),
-            ),
-          ),
         ],
       ),
     );

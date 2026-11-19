@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/models/world_book.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
@@ -14,6 +13,7 @@ import '../moment/moment_store.dart';
 import 'wechat_models.dart';
 import 'wechat_store.dart';
 import 'wechat_ui.dart';
+import 'wechat_world_page.dart';
 
 /// 「我」这一页：头像、马甲名、设置入口。
 ///
@@ -254,25 +254,23 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
     setState(() => _settings = _store.wechatSettings());
   }
 
-  Future<void> _pickBooks() async {
-    final books = context.read<WorldBookProvider>().books;
-    if (books.isEmpty) {
-      _toast('还没有世界书');
-      return;
-    }
-    final selected = <String>{..._settings.bookIds};
-    final picked = await showModalBottomSheet<List<String>>(
+  /// 全局那份间隔：只当**新建群**的默认值，已经建好的群各改各的。
+  Future<void> _pickGlobalInterval() async {
+    var preset = _settings.intervalPreset;
+    var min = _settings.customMinSeconds;
+    var max = _settings.customMaxSeconds;
+    final saved = await showModalBottomSheet<bool>(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.6,
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) => SafeArea(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
@@ -280,7 +278,7 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
                     children: <Widget>[
                       const Expanded(
                         child: Text(
-                          '选择世界书（可以多本）',
+                          '群聊默认间隔',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -289,65 +287,24 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () =>
-                            Navigator.of(ctx).pop(selected.toList()),
-                        child: const Text('完成'),
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('好'),
                       ),
                     ],
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    '通讯录加人、私聊聊天都从这几本里找人设。\n群聊各自还留着自己那份，不受影响。',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: WechatColors.secondaryText,
-                      height: 1.6,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    children: <Widget>[
-                      for (final book in books)
-                        InkWell(
-                          onTap: () => setSheetState(() {
-                            if (!selected.remove(book.id)) {
-                              selected.add(book.id);
-                            }
-                          }),
-                          child: Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            child: Row(
-                              children: <Widget>[
-                                Expanded(
-                                  child: Text(
-                                    book.name.trim().isEmpty
-                                        ? '未命名世界书'
-                                        : book.name,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: WechatColors.primaryText,
-                                    ),
-                                  ),
-                                ),
-                                if (selected.contains(book.id))
-                                  const Icon(
-                                    Lucide.Check,
-                                    size: 18,
-                                    color: WechatColors.green,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                WechatIntervalPicker(
+                  preset: preset,
+                  customMin: min,
+                  customMax: max,
+                  note: '只影响以后新建的群；已经建好的群在「群设置」里单独调。',
+                  onChanged: (nextPreset, nextMin, nextMax) {
+                    setSheetState(() {
+                      preset = nextPreset;
+                      min = nextMin;
+                      max = nextMax;
+                    });
+                  },
                 ),
               ],
             ),
@@ -355,8 +312,14 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
         ),
       ),
     );
-    if (picked == null || !mounted) return;
-    await _store.saveWechatSettings(_settings.copyWith(bookIds: picked));
+    if (saved != true || !mounted) return;
+    await _store.saveWechatSettings(
+      _settings.copyWith(
+        intervalPreset: preset,
+        customMinSeconds: min,
+        customMaxSeconds: max,
+      ),
+    );
     if (!mounted) return;
     _reload();
   }
@@ -382,11 +345,17 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
       final name = book.name.trim();
       names.add(name.isEmpty ? '未命名世界书' : name);
     }
-    final bookText = names.isEmpty
-        ? '未选择'
-        : (names.length <= 2
-              ? names.join('、')
-              : '${names.take(2).join('、')} 等 ${names.length} 本');
+    // 世界观那行的摘要：写没写设定，勾了几本书。
+    final worldParts = <String>[
+      if (_settings.worldPrompt.trim().isNotEmpty) '已写设定',
+      if (names.isNotEmpty) '${names.length} 本世界书',
+    ];
+    final worldText = worldParts.isEmpty ? '未设置' : worldParts.join(' · ');
+    final intervalText = wechatIntervalLabel(
+      _settings.intervalPreset,
+      customMinSeconds: _settings.customMinSeconds,
+      customMaxSeconds: _settings.customMaxSeconds,
+    );
 
     return Theme(
       data: wechatLightTheme(),
@@ -418,7 +387,26 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
           padding: EdgeInsets.zero,
           children: <Widget>[
             const SizedBox(height: 10),
-            _settingRow(title: '世界书', value: bookText, onTap: _pickBooks),
+            _settingRow(
+              title: '世界观',
+              value: worldText,
+              onTap: () async {
+                await Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const WechatWorldPage(),
+                  ),
+                );
+                if (!mounted) return;
+                _reload();
+              },
+            ),
+            const SizedBox(height: 10),
+            _settingRow(
+              title: '群聊默认间隔',
+              value: intervalText,
+              onTap: _pickGlobalInterval,
+            ),
+            const SizedBox(height: 10),
             _settingRow(
               title: '角色管理',
               value: '头像、模型',
