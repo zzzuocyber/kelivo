@@ -2230,6 +2230,8 @@ class _HomePageState extends State<HomePage>
                 assistantId: assistantId,
                 conversationId: _controller.currentConversation?.id,
                 onClose: () => Navigator.of(ctx).maybePop(),
+                onInsertImagePaths: _mediaController.addImages,
+                onInsertDocuments: _mediaController.addFiles,
               ),
             );
           },

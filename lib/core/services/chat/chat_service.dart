@@ -3992,6 +3992,12 @@ class ChatService extends ChangeNotifier {
     errorCode: errorCode,
   );
 
+  /// Assets already used by earlier messages, for the composer asset picker.
+  Future<List<ComposerAssetEntry>> listComposerAssets({
+    required String kind,
+    int limit = 400,
+  }) => _repo.listComposerAssets(kind: kind, limit: limit);
+
   Future<GenerationRun?> finalizeGenerationRunSilent({
     required ChatMessage message,
     required List<Map<String, dynamic>> toolEvents,

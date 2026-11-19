@@ -7635,6 +7635,51 @@ class ChatDatabaseRepository {
     );
   }
 
+  /// Distinct assets already referenced by message revisions, newest first.
+  ///
+  /// [kind] matches `message_asset_rows.kind` (`image` / `file`). One asset can
+  /// be referenced by several messages, so rows are grouped by asset id and the
+  /// most recent conversation wins for the label.
+  Future<List<ComposerAssetEntry>> listComposerAssets({
+    required String kind,
+    int limit = 400,
+  }) async {
+    if (kind.trim().isEmpty || limit <= 0) return const [];
+    final rows = await _db
+        .customSelect(
+          '''
+          SELECT a.id AS asset_id,
+                 a.path AS path,
+                 a.thumbnail_path AS thumb,
+                 MAX(r.conversation_id) AS conversation_id,
+                 MAX(a.last_referenced_at) AS last_at
+          FROM asset_rows a
+          JOIN message_asset_rows r ON r.asset_id = a.id
+          WHERE r.kind = ?
+          GROUP BY a.id
+          ORDER BY last_at DESC, a.created_at DESC
+          LIMIT ?;
+          ''',
+          variables: [Variable<String>(kind), Variable<int>(limit)],
+        )
+        .get();
+    final entries = <ComposerAssetEntry>[];
+    for (final row in rows) {
+      final assetId = row.read<String>('asset_id');
+      final path = row.readNullable<String>('path') ?? '';
+      if (assetId.isEmpty || path.isEmpty) continue;
+      entries.add(
+        ComposerAssetEntry(
+          assetId: assetId,
+          path: path,
+          thumbnailPath: row.readNullable<String>('thumb'),
+          conversationId: row.readNullable<String>('conversation_id'),
+        ),
+      );
+    }
+    return entries;
+  }
+
   /// Look up content hashes for known asset paths.
   ///
   /// Paths with multiple distinct content hashes are omitted so callers cannot
@@ -9387,4 +9432,19 @@ class ChatStorageMetaKeys {
   static const sandboxPathVersion = 'sandbox_path_migration_version';
   static const assetReferenceBackfillVersion =
       'asset_reference_backfill_version';
+}
+
+/// One reusable attachment surfaced by the composer asset picker.
+class ComposerAssetEntry {
+  const ComposerAssetEntry({
+    required this.assetId,
+    required this.path,
+    this.thumbnailPath,
+    this.conversationId,
+  });
+
+  final String assetId;
+  final String path;
+  final String? thumbnailPath;
+  final String? conversationId;
 }

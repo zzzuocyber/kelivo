@@ -5,13 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/models/assistant.dart';
+import '../../../core/models/chat_input_data.dart';
 import '../../../core/models/skills_binding.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
-import '../../../core/services/chat/conversation_background.dart';
-import '../../../shared/widgets/snackbar.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/services/haptics.dart';
 import '../../../core/services/skills/skills_service.dart';
 import '../../../icons/lucide_adapter.dart';
@@ -23,7 +21,8 @@ import '../../home/widgets/instruction_injection_sheet.dart';
 import '../../home/widgets/world_book_sheet.dart';
 import '../../instruction_injection/pages/instruction_injection_page.dart';
 import '../../world_book/pages/world_book_page.dart';
-import '../../model/widgets/ocr_prompt_sheet.dart';
+import 'composer_asset_picker_sheet.dart';
+import 'tools_drawer_sheet.dart';
 import '../../workspace/pages/skills_page.dart';
 import '../../workspace/widgets/skills/conversation_skills_sheet.dart';
 import '../utils/ensure_conversation.dart';
@@ -48,6 +47,8 @@ class BottomToolsSheet extends StatelessWidget {
     this.assistantId,
     this.conversationId,
     this.onClose,
+    this.onInsertImagePaths,
+    this.onInsertDocuments,
   });
 
   final VoidCallback? onCamera;
@@ -58,6 +59,10 @@ class BottomToolsSheet extends StatelessWidget {
   final String? assistantId;
   final String? conversationId;
   final VoidCallback? onClose;
+
+  /// Reuse assets already attached to earlier messages.
+  final ValueChanged<List<String>>? onInsertImagePaths;
+  final ValueChanged<List<DocumentAttachment>>? onInsertDocuments;
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +152,31 @@ class BottomToolsSheet extends StatelessWidget {
                       l10n: l10n,
                       roundedAction: roundedAction,
                     ),
+                    if (conversationId != null &&
+                        onInsertImagePaths != null &&
+                        onInsertDocuments != null) ...[
+                      ToolsSheetRow(
+                        key: const ValueKey('bottom-tools-assets'),
+                        icon: Lucide.Library,
+                        label: '资产',
+                        onTap: () {
+                          Haptics.light();
+                          final navigatorContext = Navigator.of(
+                            context,
+                          ).context;
+                          onClose?.call();
+                          unawaited(
+                            showComposerAssetPicker(
+                              navigatorContext,
+                              conversationId: conversationId!,
+                              onInsertImages: onInsertImagePaths!,
+                              onInsertDocuments: onInsertDocuments!,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     ToolsSheetRow(
                       key: const ValueKey('bottom-tools-browser'),
                       icon: Lucide.AppWindow,
@@ -171,6 +201,27 @@ class BottomToolsSheet extends StatelessWidget {
                       conversationId: conversationId,
                       onClose: onClose,
                     ),
+                    if (conversationId != null || _hasOcrModel(context)) ...[
+                      const SizedBox(height: 8),
+                      ToolsSheetRow(
+                        key: const ValueKey('bottom-tools-drawer'),
+                        icon: Lucide.Boxes,
+                        label: '抽屉',
+                        onTap: () {
+                          Haptics.light();
+                          final navigatorContext = Navigator.of(
+                            context,
+                          ).context;
+                          onClose?.call();
+                          unawaited(
+                            showToolsDrawerSheet(
+                              navigatorContext,
+                              conversationId: conversationId,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -179,6 +230,11 @@ class BottomToolsSheet extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static bool _hasOcrModel(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    return settings.ocrModelProvider != null && settings.ocrModelId != null;
   }
 
   List<Widget> _attachmentActions({
@@ -295,72 +351,14 @@ class _LearningAndClearSectionState extends State<_LearningAndClearSection> {
     );
   }
 
-  Future<void> _pickConversationBackground() async {
-    final id = widget.conversationId;
-    if (id == null) return;
-    final chat = context.read<ChatService>();
-    try {
-      final file = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        imageQuality: 85,
-      );
-      if (file == null || !mounted) return;
-      await ConversationBackgroundService(chat).setImage(id, file.path);
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: '已设置对话背景图',
-        type: NotificationType.success,
-      );
-    } catch (error) {
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: '设置失败：$error',
-        type: NotificationType.error,
-      );
-    }
-  }
-
-  Future<void> _clearConversationBackground() async {
-    final id = widget.conversationId;
-    if (id == null) return;
-    final chat = context.read<ChatService>();
-    if (ConversationBackground.pathOf(chat.getConversation(id)) == null) {
-      if (!mounted) return;
-      showAppSnackBar(
-        context,
-        message: '当前没有对话背景图',
-        type: NotificationType.info,
-      );
-      return;
-    }
-    await ConversationBackgroundService(chat).clear(id);
-    if (!mounted) return;
-    showAppSnackBar(
-      context,
-      message: '已删除对话背景图，恢复助手背景',
-      type: NotificationType.success,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final settings = context.watch<SettingsProvider>();
     final worldBookProvider = context.watch<WorldBookProvider>();
     final injections = context.watch<InstructionInjectionProvider>();
     final skills = context.watch<SkillsService>();
     final chat = context.watch<ChatService>();
-    final followsAssistant = ConversationBackground.followsAssistant(
-      widget.conversationId == null
-          ? null
-          : chat.getConversation(widget.conversationId!),
-    );
     final assistant = _assistant(listen: true);
-    final hasOcrModel =
-        settings.ocrModelProvider != null && settings.ocrModelId != null;
     final hasWorldBooks = worldBookProvider.books.isNotEmpty;
     final scoped = assistant?.allowConversationPromptInjection == true;
     final scopeId = _promptConversationId ?? widget.conversationId;
@@ -487,22 +485,6 @@ class _LearningAndClearSectionState extends State<_LearningAndClearSection> {
             ),
           ),
         ],
-        if (hasOcrModel) ...[
-          const SizedBox(height: 8),
-          ToolsSheetRow(
-            icon: Lucide.Eye,
-            label: l10n.bottomToolsSheetOcr,
-            selected: settings.ocrEnabled,
-            onTap: () async {
-              Haptics.light();
-              final sp = context.read<SettingsProvider>();
-              await sp.setOcrEnabled(!sp.ocrEnabled);
-              if (!context.mounted) return;
-              Navigator.of(context).maybePop();
-            },
-            onLongPress: () => showOcrPromptSheet(context),
-          ),
-        ],
         const SizedBox(height: 8),
         ToolsSheetRow(
           icon: Lucide.workflow,
@@ -513,37 +495,6 @@ class _LearningAndClearSectionState extends State<_LearningAndClearSection> {
           },
           trailing: chevron,
         ),
-        if (widget.conversationId != null) ...[
-          const SizedBox(height: 8),
-          ToolsSheetRow(
-            icon: Lucide.Image,
-            label: '对话背景图',
-            subtitle: followsAssistant ? '跟随助手背景' : '使用本对话的图片',
-            onTap: () {
-              Haptics.light();
-              _pickConversationBackground();
-            },
-            onLongPress: () {
-              Haptics.light();
-              _clearConversationBackground();
-            },
-            trailing: Transform.scale(
-              scale: 0.78,
-              child: Switch.adaptive(
-                value: followsAssistant,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                onChanged: (value) {
-                  Haptics.light();
-                  if (value) {
-                    _clearConversationBackground();
-                  } else {
-                    _pickConversationBackground();
-                  }
-                },
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
