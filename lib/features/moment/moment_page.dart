@@ -1083,7 +1083,8 @@ class _SummonSheet extends StatefulWidget {
 }
 
 class _SummonSheetState extends State<_SummonSheet> {
-  final Set<String> _favorites = <String>{};
+  // 不是 final：收藏状态更新时要整组替换（见 _toggle）。
+  Set<String> _favorites = <String>{};
   bool _busy = false;
 
   @override

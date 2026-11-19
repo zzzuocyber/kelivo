@@ -551,7 +551,10 @@ class WechatStore {
   }
 
   /// 拉人进群，同时留一条系统消息——角色看得见，能顺着这事聊。
-  Future<WechatGroup> addMembers(List<WechatMember> added) async {
+  Future<WechatGroup> addMembers(
+    WechatGroup group,
+    List<WechatMember> added,
+  ) async {
     if (added.isEmpty) return group;
     final existing = <String>{for (final m in group.members) m.name};
     final fresh = <WechatMember>[
