@@ -15,6 +15,16 @@ export 'moment_service_exception.dart';
 /// 一次刷新生成的帖子条数。
 const int momentBatchSize = 5;
 
+/// 把选中的多本世界书取出来，跳过已经被删掉的。
+List<WorldBook> momentBooks(WorldBookProvider provider, List<String> ids) {
+  final out = <WorldBook>[];
+  for (final id in ids) {
+    final book = provider.getById(id);
+    if (book != null) out.add(book);
+  }
+  return out;
+}
+
 /// 一次生成最多等多久。卡住就报错，不让刷新按钮无限挂着。
 const Duration momentRequestTimeout = Duration(seconds: 150);
 
@@ -33,7 +43,7 @@ class MomentGenerator {
   const MomentGenerator({
     required this.settings,
     required this.worldBooks,
-    required this.bookId,
+    required this.bookIds,
     required this.characters,
     required this.personaName,
     required this.recentPosts,
@@ -43,7 +53,7 @@ class MomentGenerator {
 
   final SettingsProvider settings;
   final WorldBookProvider worldBooks;
-  final String bookId;
+  final List<String> bookIds;
   final List<MomentCharacter> characters;
 
   /// 我的马甲名，只用来在提示词里点明「这是我」。
@@ -60,12 +70,12 @@ class MomentGenerator {
     if (characters.isEmpty) {
       throw const MomentServiceException('no_characters');
     }
-    final book = worldBooks.getById(bookId);
-    if (book == null) {
+    final books = momentBooks(worldBooks, bookIds);
+    if (books.isEmpty) {
       throw const MomentServiceException('no_book');
     }
     final names = <String>[for (final c in characters) c.name];
-    final profiles = _collectProfiles(book, characters);
+    final profiles = _collectProfiles(books, characters);
     final model = _resolveModel(settings);
     final system = _systemText(settings);
     final prompt = buildUserPrompt(
@@ -327,25 +337,30 @@ class MomentGenerator {
   }
 
   static Map<String, String> _collectProfiles(
-    WorldBook book,
+    List<WorldBook> books,
     List<MomentCharacter> characters,
   ) {
     final out = <String, String>{};
     for (final character in characters) {
-      final entry = _findEntry(book, character);
+      final entry = _findEntry(books, character);
       out[character.name] = entry == null ? '' : entry.content.trim();
     }
     return out;
   }
 
-  static WorldBookEntry? _findEntry(WorldBook book, MomentCharacter character) {
+  static WorldBookEntry? _findEntry(
+    List<WorldBook> books,
+    MomentCharacter character,
+  ) {
     WorldBookEntry? byName;
-    for (final entry in book.entries) {
-      if (character.entryId.isNotEmpty && entry.id == character.entryId) {
-        return entry;
-      }
-      if (byName == null && entry.name.trim() == character.name) {
-        byName = entry;
+    for (final book in books) {
+      for (final entry in book.entries) {
+        if (character.entryId.isNotEmpty && entry.id == character.entryId) {
+          return entry;
+        }
+        if (byName == null && entry.name.trim() == character.name) {
+          byName = entry;
+        }
       }
     }
     return byName;
@@ -478,7 +493,7 @@ class MomentReplyComposer {
   const MomentReplyComposer({
     required this.settings,
     required this.worldBooks,
-    required this.bookId,
+    required this.bookIds,
     required this.characters,
     required this.personaName,
     required this.post,
@@ -489,7 +504,7 @@ class MomentReplyComposer {
 
   final SettingsProvider settings;
   final WorldBookProvider worldBooks;
-  final String bookId;
+  final List<String> bookIds;
   final List<MomentCharacter> characters;
   final String personaName;
   final MomentPost post;
@@ -505,10 +520,10 @@ class MomentReplyComposer {
     final me = personaName.trim();
     if (me.isEmpty) return const <MomentComment>[];
     if (characters.isEmpty) return const <MomentComment>[];
-    final book = worldBooks.getById(bookId);
-    if (book == null) return const <MomentComment>[];
+    final books = momentBooks(worldBooks, bookIds);
+    if (books.isEmpty) return const <MomentComment>[];
     final names = <String>[for (final c in characters) c.name];
-    final profiles = MomentGenerator._collectProfiles(book, characters);
+    final profiles = MomentGenerator._collectProfiles(books, characters);
     final model = MomentGenerator._resolveModel(settings);
     final system = MomentGenerator._systemText(settings);
     final prompt = buildPrompt(
@@ -652,18 +667,19 @@ class MomentMentionReplies {
   const MomentMentionReplies({
     required this.settings,
     required this.worldBooks,
-    required this.bookId,
+    required this.bookIds,
     required this.characters,
     required this.personaName,
     required this.post,
     required this.myText,
     required this.mentioned,
+    this.replyTarget,
     this.recentPosts = const <MomentPost>[],
   });
 
   final SettingsProvider settings;
   final WorldBookProvider worldBooks;
-  final String bookId;
+  final List<String> bookIds;
   final List<MomentCharacter> characters;
 
   /// 我这条评论的署名（开了天意就是那个角色的名字）。
@@ -673,6 +689,11 @@ class MomentMentionReplies {
 
   /// 被 @ 到的名字，已经排掉了我的马甲和现在穿着的角色。
   final List<String> mentioned;
+
+  /// 「召唤」用：要回的是哪条评论的作者。
+  /// 空 = 老模式（我发评论 @ 了人）；有值 = 让 who 去回这个人的评论。
+  final String? replyTarget;
+
   final List<MomentPost> recentPosts;
 
   Future<List<MomentComment>> compose() async {
@@ -684,10 +705,10 @@ class MomentMentionReplies {
         if (name.trim().isNotEmpty && name.trim() != me) name.trim(),
     ];
     if (targets.isEmpty) return const <MomentComment>[];
-    final book = worldBooks.getById(bookId);
-    if (book == null) return const <MomentComment>[];
+    final books = momentBooks(worldBooks, bookIds);
+    if (books.isEmpty) return const <MomentComment>[];
     final names = <String>[for (final c in characters) c.name];
-    final profiles = MomentGenerator._collectProfiles(book, characters);
+    final profiles = MomentGenerator._collectProfiles(books, characters);
     final results = await Future.wait(<Future<MomentComment?>>[
       for (final target in targets) _askOne(target, me, names, profiles),
     ]);
@@ -714,6 +735,7 @@ class MomentMentionReplies {
           me: me,
           myText: myText,
           who: who,
+          replyTarget: replyTarget,
           recentPosts: recentPosts,
           strict: attempt > 0,
         );
@@ -738,7 +760,12 @@ class MomentMentionReplies {
         );
         for (final reply in replies) {
           if (reply.author.trim() == who) {
-            return MomentComment(author: who, text: reply.text, replyTo: me);
+            final target = (replyTarget ?? '').trim();
+            return MomentComment(
+              author: who,
+              text: reply.text,
+              replyTo: target.isEmpty ? me : target,
+            );
           }
         }
       } catch (_) {
@@ -755,9 +782,12 @@ class MomentMentionReplies {
     required String me,
     required String myText,
     required String who,
+    String? replyTarget,
     List<MomentPost> recentPosts = const <MomentPost>[],
     bool strict = false,
   }) {
+    final target = (replyTarget ?? '').trim();
+    final summon = target.isNotEmpty;
     final buffer = StringBuffer();
     buffer.writeln('【角色】');
     for (final name in names) {
@@ -793,11 +823,20 @@ class MomentMentionReplies {
       }
     }
     buffer.writeln();
-    buffer.writeln('【我刚发的评论】');
-    buffer.writeln('$me：$myText');
+    if (summon) {
+      buffer.writeln('【要回的那条评论】');
+      buffer.writeln('$target：$myText');
+    } else {
+      buffer.writeln('【我刚发的评论】');
+      buffer.writeln('$me：$myText');
+    }
     buffer.writeln();
     buffer.writeln('【要求】');
-    buffer.writeln('我这条评论 @ 了「$who」，这次只有 $who 开口：他回我一句，一到两句话。');
+    if (summon) {
+      buffer.writeln('这次只有「$who」开口：他回 $target 这一句，一到两句话。');
+    } else {
+      buffer.writeln('我这条评论 @ 了「$who」，这次只有 $who 开口：他回我一句，一到两句话。');
+    }
     buffer.writeln(
       '别让名单里的其他人说话，也别让 $who 替别人转述；'
       '内容只围绕这条帖子和我说的话，可以接梗、吐槽、装傻、不耐烦，'
@@ -821,7 +860,7 @@ class MomentRewriter {
   const MomentRewriter({
     required this.settings,
     required this.worldBooks,
-    required this.bookId,
+    required this.bookIds,
     required this.characters,
     required this.personaName,
     required this.recentPosts,
@@ -829,7 +868,7 @@ class MomentRewriter {
 
   final SettingsProvider settings;
   final WorldBookProvider worldBooks;
-  final String bookId;
+  final List<String> bookIds;
   final List<MomentCharacter> characters;
   final String personaName;
   final List<MomentPost> recentPosts;
@@ -910,11 +949,11 @@ class MomentRewriter {
   }
 
   String _profileOf(String name) {
-    final book = worldBooks.getById(bookId);
-    if (book == null) return '角色名：$name';
+    final books = momentBooks(worldBooks, bookIds);
+    if (books.isEmpty) return '角色名：$name';
     for (final character in characters) {
       if (character.name != name) continue;
-      final entry = MomentGenerator._findEntry(book, character);
+      final entry = MomentGenerator._findEntry(books, character);
       final content = entry?.content.trim() ?? '';
       return content.isEmpty ? '角色名：$name' : '角色名：$name\n$content';
     }

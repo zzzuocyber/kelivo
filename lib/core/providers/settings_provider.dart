@@ -294,6 +294,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _composerQuickSymbolKey = 'composer_quick_symbol_v1';
   // 朋友圈：用哪本世界书、系统提示词、附加指令、跑哪个模型。
   static const String _momentBookIdKey = 'moment_book_id_v1';
+  static const String _momentBookIdsKey = 'moment_book_ids_v1';
   static const String _momentSystemPromptKey = 'moment_system_prompt_v1';
   static const String _momentExtraInstructionKey =
       'moment_extra_instruction_v1';
@@ -1169,6 +1170,11 @@ class SettingsProvider extends ChangeNotifier {
       _composerQuickSymbol = quickSymbolPref;
     }
     _momentBookId = prefs.getString(_momentBookIdKey) ?? '';
+    _momentBookIds = _decodeBookIds(prefs.getString(_momentBookIdsKey));
+    if (_momentBookIds.isEmpty && _momentBookId.trim().isNotEmpty) {
+      // 老版本只存了一本，这里兜底读进来，不用手动迁移。
+      _momentBookIds = <String>[_momentBookId.trim()];
+    }
     _momentSystemPrompt = prefs.getString(_momentSystemPromptKey) ?? '';
     _momentExtraInstruction = prefs.getString(_momentExtraInstructionKey) ?? '';
     _momentModelProvider = prefs.getString(_momentModelProviderKey);
@@ -5287,6 +5293,48 @@ Requirements:
     await _preferences.setString(_momentBookIdKey, v);
   }
 
+  /// 朋友圈同时用哪几本世界书（可以多本）。
+  /// 第一本仍然写进老的单本键，让还没改的地方和旧备份都能读。
+  List<String> _momentBookIds = const <String>[];
+  List<String> get momentBookIds => _momentBookIds;
+  Future<void> setMomentBookIds(List<String> value) async {
+    final next = <String>[
+      for (final id in value)
+        if (id.trim().isNotEmpty) id.trim(),
+    ];
+    if (_sameBookIds(_momentBookIds, next)) return;
+    _momentBookIds = List<String>.unmodifiable(next);
+    notifyListeners();
+    await _preferences.setString(_momentBookIdsKey, jsonEncode(next));
+    final first = next.isEmpty ? '' : next.first;
+    if (_momentBookId != first) {
+      _momentBookId = first;
+      await _preferences.setString(_momentBookIdKey, first);
+    }
+  }
+
+  static List<String> _decodeBookIds(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return const <String>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const <String>[];
+      return <String>[
+        for (final item in decoded)
+          if (item.toString().trim().isNotEmpty) item.toString().trim(),
+      ];
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  static bool _sameBookIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   String _momentSystemPrompt = '';
   String get momentSystemPrompt => _momentSystemPrompt;
   Future<void> setMomentSystemPrompt(String value) async {
@@ -6323,6 +6371,7 @@ Requirements:
     copy._momentBookId = _momentBookId;
     copy._momentSystemPrompt = _momentSystemPrompt;
     copy._momentExtraInstruction = _momentExtraInstruction;
+    copy._momentBookIds = _momentBookIds;
     copy._momentModelProvider = _momentModelProvider;
     copy._momentModelId = _momentModelId;
     copy._momentPersonaName = _momentPersonaName;

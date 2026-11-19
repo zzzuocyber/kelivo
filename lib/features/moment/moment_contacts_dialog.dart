@@ -8,9 +8,6 @@ import 'moment_widgets.dart';
 /// 返回 false 表示没存上，弹窗那边就不改自己的显示。
 typedef DivineChangeCallback = Future<bool> Function(String? name);
 
-/// 「已生效天意」那一行的底色：白卡上淡一档，看得出来但不刺眼。
-const Color _divineRowTint = Color(0xFFF2F3F5);
-
 /// 左下角那个悬浮圆钮点开的通讯录：屏幕中间一个圆角方框，带投影。
 /// 点里面的角色 → 关掉弹窗 → 由调用方负责跳到那个人的主页。
 /// 长按任意角色 → 开 / 切 / 关天意。改完**弹窗留着**，可以连着操作。
@@ -170,40 +167,53 @@ class _MomentContactsDialogState extends State<_MomentContactsDialog> {
       onLongPressStart: _saving
           ? null
           : (details) => _handleLongPress(character, details.globalPosition),
-      child: Ink(
-        decoration: BoxDecoration(color: usingThis ? _divineRowTint : null),
-        child: InkWell(
-          onTap: () => Navigator.of(
-            context,
-          ).pop(MomentContactsOutcome.open(character.name)),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: <Widget>[
-                MomentAvatar(
-                  name: character.name,
-                  size: 36,
-                  imagePath: assetsFor?.avatar,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    character.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      color: MomentColors.primaryText,
+      child: InkWell(
+        onTap: () => Navigator.of(
+          context,
+        ).pop(MomentContactsOutcome.open(character.name)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: <Widget>[
+              MomentAvatar(
+                name: character.name,
+                size: 36,
+                imagePath: assetsFor?.avatar,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Row(
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        character.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          color: MomentColors.primaryText,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (usingThis) ...<Widget>[
+                      const SizedBox(width: 8),
+                      const Text(
+                        '已开启天意',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: MomentColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                const Icon(
-                  Lucide.ChevronRight,
-                  size: 16,
-                  color: MomentColors.secondaryText,
-                ),
-              ],
-            ),
+              ),
+              const Icon(
+                Lucide.ChevronRight,
+                size: 16,
+                color: MomentColors.secondaryText,
+              ),
+            ],
           ),
         ),
       ),

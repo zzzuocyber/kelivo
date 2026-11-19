@@ -10,11 +10,12 @@ import 'moment_settings_page.dart';
 import 'moment_store.dart';
 import 'moment_widgets.dart';
 
-/// 从选定的那本世界书里挑角色：条目标题就是角色名，正文是人设。
+/// 从选中的世界书里挑角色：条目标题就是角色名，正文是人设。
+/// 可以同时用多本，同名的条目只算一次。
 class MomentCharactersPage extends StatefulWidget {
-  const MomentCharactersPage({super.key, required this.bookId});
+  const MomentCharactersPage({super.key, required this.bookIds});
 
-  final String bookId;
+  final List<String> bookIds;
 
   @override
   State<MomentCharactersPage> createState() => _MomentCharactersPageState();
@@ -24,8 +25,15 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
   late final MomentStore _store;
   late Set<String> _selected;
 
-  WorldBook? get _book =>
-      context.read<WorldBookProvider>().getById(widget.bookId.trim());
+  List<WorldBook> get _books {
+    final provider = context.read<WorldBookProvider>();
+    final out = <WorldBook>[];
+    for (final id in widget.bookIds) {
+      final book = provider.getById(id.trim());
+      if (book != null) out.add(book);
+    }
+    return out;
+  }
 
   @override
   void initState() {
@@ -46,10 +54,11 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
     });
     final allSelectedNames = <String>{..._selected};
     final characters = <MomentCharacter>[
-      for (final e in _book?.entries ?? const <WorldBookEntry>[])
-        if (allSelectedNames.contains(e.name.trim()) &&
-            e.name.trim().isNotEmpty)
-          MomentCharacter(name: e.name.trim(), entryId: e.id),
+      for (final book in _books)
+        for (final e in book.entries)
+          if (allSelectedNames.contains(e.name.trim()) &&
+              e.name.trim().isNotEmpty)
+            MomentCharacter(name: e.name.trim(), entryId: e.id),
     ];
     try {
       await _store.saveCharacters(characters);
@@ -60,7 +69,7 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final book = _book;
+    final books = _books;
     return Theme(
       data: momentLightTheme(),
       child: Scaffold(
@@ -71,13 +80,13 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
           ),
         ),
-        body: _buildBody(book),
+        body: _buildBody(books),
       ),
     );
   }
 
-  Widget _buildBody(WorldBook? book) {
-    if (widget.bookId.trim().isEmpty || book == null) {
+  Widget _buildBody(List<WorldBook> books) {
+    if (widget.bookIds.isEmpty || books.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -109,11 +118,20 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
         ),
       );
     }
-    final entries = book.entries.where((e) => e.name.trim().isNotEmpty);
+    final seen = <String>{};
+    final entries = <WorldBookEntry>[];
+    for (final book in books) {
+      for (final entry in book.entries) {
+        final name = entry.name.trim();
+        if (name.isEmpty) continue;
+        if (!seen.add(name)) continue;
+        entries.add(entry);
+      }
+    }
     if (entries.isEmpty) {
       return const Center(
         child: Text(
-          '这本世界书里没有带名字的条目',
+          '选中的世界书里没有带名字的条目',
           style: TextStyle(fontSize: 14, color: MomentColors.secondaryText),
         ),
       );
@@ -124,7 +142,7 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
       separatorBuilder: (context, index) =>
           const Divider(height: 1, color: MomentColors.hairline),
       itemBuilder: (_, index) {
-        final entry = entries.elementAt(index);
+        final entry = entries[index];
         final name = entry.name.trim();
         final on = _selected.contains(name);
         return InkWell(

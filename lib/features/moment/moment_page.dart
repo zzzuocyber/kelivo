@@ -137,7 +137,7 @@ class _MomentPageState extends State<MomentPage> {
       final generator = MomentGenerator(
         settings: settings,
         worldBooks: worldBooks,
-        bookId: settings.momentBookId,
+        bookIds: settings.momentBookIds,
         characters: _characters,
         personaName: _personaName(settings),
         recentPosts: _posts,
@@ -155,10 +155,10 @@ class _MomentPageState extends State<MomentPage> {
   }
 
   Future<void> _openCharacters() async {
-    final bookId = context.read<SettingsProvider>().momentBookId;
+    final bookIds = context.read<SettingsProvider>().momentBookIds;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => MomentCharactersPage(bookId: bookId),
+        builder: (_) => MomentCharactersPage(bookIds: bookIds),
       ),
     );
     _reload();
@@ -341,7 +341,7 @@ class _MomentPageState extends State<MomentPage> {
       final composer = MomentMentionReplies(
         settings: settings,
         worldBooks: worldBooks,
-        bookId: settings.momentBookId,
+        bookIds: settings.momentBookIds,
         characters: _characters,
         personaName: me,
         post: post,
@@ -375,7 +375,7 @@ class _MomentPageState extends State<MomentPage> {
       final composer = MomentReplyComposer(
         settings: settings,
         worldBooks: worldBooks,
-        bookId: settings.momentBookId,
+        bookIds: settings.momentBookIds,
         characters: _characters,
         personaName: me,
         post: post,
@@ -417,8 +417,28 @@ class _MomentPageState extends State<MomentPage> {
     Offset position,
   ) async {
     if (_rewritingCommentKey != null) return;
-    final action = await _showAnchorMenu(position, <String>['刷新', '删除']);
+    final author = comment.author.trim();
+    final lastSummon = _store.summonName();
+    final canRepeat =
+        lastSummon.isNotEmpty &&
+        lastSummon != author &&
+        _characters.any((c) => c.name.trim() == lastSummon);
+    final actions = <String>[
+      '召唤',
+      if (canRepeat) '再叫一次 $lastSummon',
+      '刷新',
+      '删除',
+    ];
+    final action = await _showAnchorMenu(position, actions);
     if (action == null) return;
+    if (action == '召唤') {
+      await _pickSummon(post, comment);
+      return;
+    }
+    if (canRepeat && action == '再叫一次 $lastSummon') {
+      await _summon(post, comment, lastSummon);
+      return;
+    }
     if (action == '删除') {
       await _confirmDelete(
         '删除这条回复？',
@@ -428,6 +448,93 @@ class _MomentPageState extends State<MomentPage> {
       return;
     }
     await _rewriteComment(post, index, comment);
+  }
+
+  /// 召唤：挑一个人，让他去回这条评论。名单里排掉评论作者自己。
+  Future<void> _pickSummon(MomentPost post, MomentComment comment) async {
+    final author = comment.author.trim();
+    final pool = <MomentCharacter>[
+      for (final character in _characters)
+        if (character.name.trim().isNotEmpty && character.name.trim() != author)
+          character,
+    ];
+    if (pool.isEmpty) {
+      _toast('通讯录里没人可以召唤');
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
+              child: Text(
+                '召唤谁来回复这条',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: MomentColors.secondaryText,
+                ),
+              ),
+            ),
+            for (final character in pool)
+              ListTile(
+                leading: MomentAvatar(
+                  name: character.name,
+                  size: 34,
+                  imagePath: _assets[character.name]?.avatar,
+                ),
+                title: Text(character.name),
+                onTap: () => Navigator.of(sheetCtx).pop(character.name),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || picked == null) return;
+    await _summon(post, comment, picked);
+  }
+
+  /// 让 [who] 去回这条评论。走的是「@ 某人单独回一次」那套引擎，
+  /// 只是把"回应我的评论"换成"回应某条评论"。
+  Future<void> _summon(
+    MomentPost post,
+    MomentComment comment,
+    String who,
+  ) async {
+    setState(() => _waitingReplyPostId = post.id);
+    try {
+      final settings = context.read<SettingsProvider>();
+      final worldBooks = context.read<WorldBookProvider>();
+      final composer = MomentMentionReplies(
+        settings: settings,
+        worldBooks: worldBooks,
+        bookIds: settings.momentBookIds,
+        characters: _characters,
+        personaName: _actingName(settings),
+        post: post,
+        myText: comment.text,
+        mentioned: <String>[who],
+        replyTarget: comment.author.trim(),
+        recentPosts: _posts,
+      );
+      final replies = await composer.compose();
+      if (replies.isNotEmpty) {
+        await _store.addComments(post.id, replies);
+        await _store.setSummon(who);
+      }
+      if (!mounted) return;
+      _reload();
+    } catch (_) {
+      // 没叫来就算了，不打扰。
+    } finally {
+      if (mounted) setState(() => _waitingReplyPostId = null);
+    }
   }
 
   /// 贴着手指弹的小菜单，不从底部升起。
@@ -513,7 +620,7 @@ class _MomentPageState extends State<MomentPage> {
       final rewriter = MomentRewriter(
         settings: settings,
         worldBooks: worldBooks,
-        bookId: settings.momentBookId,
+        bookIds: settings.momentBookIds,
         characters: _characters,
         personaName: _personaName(settings),
         recentPosts: _posts,
@@ -547,7 +654,7 @@ class _MomentPageState extends State<MomentPage> {
       final rewriter = MomentRewriter(
         settings: settings,
         worldBooks: worldBooks,
-        bookId: settings.momentBookId,
+        bookIds: settings.momentBookIds,
         characters: _characters,
         personaName: _personaName(settings),
         recentPosts: _posts,

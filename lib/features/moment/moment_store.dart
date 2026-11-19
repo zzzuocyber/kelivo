@@ -13,6 +13,9 @@ const String momentAssetsKey = 'moment.assets';
 /// 当前「天意」是谁：评论区署名用这个名字。没有这个键 = 没开。
 const String momentDivineKey = 'moment.divine';
 
+/// 上次召唤过谁：评论区菜单里的「再叫一次 某某」用。没有这个键 = 没召唤过。
+const String momentSummonKey = 'moment.summon';
+
 /// 隐藏对话的标题，只在备份/导出里可见。
 const String momentFeedTitle = '朋友圈';
 
@@ -67,6 +70,10 @@ String momentDivineFromExtras(Map<String, dynamic>? extras) =>
 
 String momentDivineOf(Conversation? conversation) =>
     momentDivineFromExtras(conversation?.extras);
+
+/// 上次召唤的人。空字符串 = 没召唤过。
+String momentSummonFromExtras(Map<String, dynamic>? extras) =>
+    (extras?[momentSummonKey] ?? '').toString().trim();
 
 /// 找某个作者的两张图。作者名就是我自己时，用马甲那一份。
 MomentAssets? momentAssetsForAuthor(
@@ -181,6 +188,24 @@ class MomentStore {
         next.remove(momentDivineKey);
       } else {
         next[momentDivineKey] = clean;
+      }
+      return next;
+    });
+  }
+
+  /// 上次召唤的人是谁，空 = 没召唤过。
+  String summonName() => momentSummonFromExtras(findConversation()?.extras);
+
+  /// 记一下这次召唤了谁，下次菜单里直接给「再叫一次」。
+  Future<void> setSummon(String? name) async {
+    final clean = (name ?? '').trim();
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final next = Map<String, dynamic>.from(extras);
+      if (clean.isEmpty) {
+        next.remove(momentSummonKey);
+      } else {
+        next[momentSummonKey] = clean;
       }
       return next;
     });
