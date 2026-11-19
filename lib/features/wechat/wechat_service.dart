@@ -113,13 +113,27 @@ String wechatWorldText(
 }
 
 /// 群里共用的说话规矩。
-void _writeChatRules(StringBuffer buffer, String speakerName) {
+///
+/// [burstCount] 是这次抽到的条数（1~7）：抽到几条就写几行，一行一条。
+/// 这样条数分布由概率档决定，不再靠模型自己老老实实只写两条。
+void _writeChatRules(
+  StringBuffer buffer,
+  String speakerName, {
+  required int burstCount,
+}) {
   buffer.writeln('- 你现在只扮演「$speakerName」这一个人，别的角色不要替他们说。');
   buffer.writeln('- 像真人在微信上打字：短句、口语，一两个短句就够，别写成大段独白。');
   buffer.writeln('- 不用 markdown、不用括号写动作神态、不要给自己加引号。');
   buffer.writeln('- 不要每句都感慨，不要客套，不要总结。');
   buffer.writeln('- 真的没什么可说，就发很短的一句，别硬凑内容。');
-  buffer.writeln('- 想连着发几条就用换行分开，一行就是一条消息，最多三条；不想连发就只写一行。');
+  if (burstCount <= 1) {
+    buffer.writeln('- 这次只发一条消息，就写一行，不要换行，不要连发。');
+  } else {
+    buffer.writeln(
+      '- 这次要连着发 $burstCount 条消息：用换行分开，一行就是一条，'
+      '写满 $burstCount 行，不多不少。每条都短，像真人分几次发出去的。',
+    );
+  }
   buffer.writeln(
     '- 偶尔可以发图：想给哪条配图，就在那一行末尾加 [图] 两个字符（例：今天吃的火锅[图]）。'
     '不用描述图片内容，图会按你这句话自己画出来。不是每条都发，聊到具体的东西或场景时来一张就行。',
@@ -160,9 +174,14 @@ class WechatGenerator {
   final String worldPrompt;
 
   /// 真正去要一句话。[speaker] 是这次轮到的人。
-  Future<String> generateFor(WechatMember speaker) async {
+  ///
+  /// [burstCount] 是这次抽到的连发条数（1~7），写进提示词让模型按行数回。
+  Future<String> generateFor(
+    WechatMember speaker, {
+    int burstCount = 1,
+  }) async {
     final target = _resolveModel(speaker);
-    final system = _systemPrompt(speaker);
+    final system = _systemPrompt(speaker, burstCount: burstCount);
     final user = _userPrompt(speaker);
     final result = await ChatApiService.generateMessage(
       config: target.config,
@@ -199,7 +218,7 @@ class WechatGenerator {
     );
   }
 
-  String _systemPrompt(WechatMember speaker) {
+  String _systemPrompt(WechatMember speaker, {required int burstCount}) {
     final buffer = StringBuffer();
     buffer.writeln(
       '你在替一个微信群里的几个人模拟日常聊天。'
@@ -247,7 +266,7 @@ class WechatGenerator {
     }
 
     buffer.writeln('【这次的规矩】');
-    _writeChatRules(buffer, speaker.name);
+    _writeChatRules(buffer, speaker.name, burstCount: burstCount);
     buffer.writeln('- 群里有好几个人，说话可以接着上面某个人，但不是每次都非得接。');
     buffer.writeln('- 消息里带 @名字 的是专门叫那个人，被 @ 的人优先接这句。');
     return buffer.toString().trim();
@@ -324,13 +343,14 @@ class WechatDmGenerator {
 
   final List<WechatMessage> history;
 
-  Future<String> generate() async {
+  /// [burstCount] 是这次抽到的连发条数（1~7），写进提示词让模型按行数回。
+  Future<String> generate({int burstCount = 1}) async {
     final target = wechatResolveModel(
       settings,
       providerKey: contact.providerKey,
       modelId: contact.modelId,
     );
-    final system = _systemPrompt();
+    final system = _systemPrompt(burstCount: burstCount);
     final user = _userPrompt();
     final result = await ChatApiService.generateMessage(
       config: target.config,
@@ -353,7 +373,7 @@ class WechatDmGenerator {
     return text;
   }
 
-  String _systemPrompt() {
+  String _systemPrompt({required int burstCount}) {
     final buffer = StringBuffer();
     buffer.writeln(
       '你在替一个人用微信私聊。'
@@ -399,7 +419,7 @@ class WechatDmGenerator {
     }
 
     buffer.writeln('【这次的规矩】');
-    _writeChatRules(buffer, contact.name);
+    _writeChatRules(buffer, contact.name, burstCount: burstCount);
     buffer.writeln('- 这是两个人的私聊，没有别人在场，说话可以更随意一点。');
     return buffer.toString().trim();
   }
@@ -434,7 +454,8 @@ class WechatDmGenerator {
 /// 模型偶尔会连发几条：按换行拆成多条消息。
 ///
 /// 最多 [maxParts] 条；多出来的并进最后一条，避免一次刷一屏。
-List<String> wechatSplitReply(String text, {int maxParts = 3}) {
+/// 默认 7 条（跟概率档的上限一致）；调用处知道这次抽到几条时传进来更准。
+List<String> wechatSplitReply(String text, {int maxParts = 7}) {
   final parts = <String>[];
   for (final line in text.split('\n')) {
     final trimmed = line.trim();

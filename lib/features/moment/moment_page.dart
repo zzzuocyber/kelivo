@@ -476,6 +476,7 @@ class _MomentPageState extends State<MomentPage> {
         pool: pool,
         avatars: _assets,
         favorites: _store.summonFavorites(),
+        favoritesOf: _store.summonFavorites,
         onToggleFavorite: _store.toggleSummonFavorite,
       ),
     );
@@ -1065,6 +1066,7 @@ class _SummonSheet extends StatefulWidget {
     required this.pool,
     required this.avatars,
     required this.favorites,
+    required this.favoritesOf,
     required this.onToggleFavorite,
   });
 
@@ -1074,6 +1076,9 @@ class _SummonSheet extends StatefulWidget {
 
   /// 收藏了谁。
   final List<String> favorites;
+
+  /// 现读收藏名单：store 写完会刷新缓存，重新读才拿得到刚存的值。
+  final List<String> Function() favoritesOf;
 
   /// 点星星时调它，返回更新后的收藏名单。
   final Future<List<String>> Function(String name) onToggleFavorite;
@@ -1091,6 +1096,8 @@ class _SummonSheetState extends State<_SummonSheet> {
   void initState() {
     super.initState();
     _favorites.addAll(widget.favorites);
+    // 面板是异步建的，建的时候再读一次，避免拿到过时的那份。
+    _favorites.addAll(widget.favoritesOf());
   }
 
   Future<void> _toggle(String name) async {
@@ -1101,9 +1108,11 @@ class _SummonSheetState extends State<_SummonSheet> {
       if (!_favorites.remove(name)) _favorites.add(name);
     });
     try {
-      final next = await widget.onToggleFavorite(name);
+      await widget.onToggleFavorite(name);
       if (!mounted) return;
-      setState(() => _favorites = <String>{...next});
+      // 从 store 现读：面板是挂在根 Overlay 上的，写完之后只有重新读
+      // 才能拿到最新名单，光信回调返回值容易读到写之前的旧缓存。
+      setState(() => _favorites = <String>{...widget.favoritesOf()});
     } catch (_) {
       if (!mounted) return;
       setState(() => _favorites = before);
@@ -1235,43 +1244,51 @@ class _SummonSheetState extends State<_SummonSheet> {
 
   Widget _row(MomentCharacter character, {required bool starred}) {
     final name = character.name.trim();
-    return InkWell(
-      onTap: () => Navigator.of(context).pop(name),
-      child: Container(
-        color: Colors.white,
-        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
-        child: Row(
-          children: <Widget>[
-            MomentAvatar(
-              name: name,
-              size: 34,
-              imagePath: widget.avatars[name]?.avatar,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: MomentColors.primaryText,
-                ),
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+      child: Row(
+        children: <Widget>[
+          // 只有「头像 + 名字」这一块点了才是召唤，星星在它外面，
+          // 免得点星星连面板一起关掉、看着像收藏没反应。
+          Expanded(
+            child: InkWell(
+              onTap: () => Navigator.of(context).pop(name),
+              child: Row(
+                children: <Widget>[
+                  MomentAvatar(
+                    name: name,
+                    size: 34,
+                    imagePath: widget.avatars[name]?.avatar,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: MomentColors.primaryText,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            IconButton(
-              onPressed: () => _toggle(name),
-              tooltip: starred ? '取消收藏' : '收藏',
-              icon: Icon(
-                Lucide.Bookmark,
-                size: 19,
-                color: starred
-                    ? const Color(0xFFE0A33E)
-                    : const Color(0xFFC8CCD4),
-              ),
+          ),
+          IconButton(
+            onPressed: () => _toggle(name),
+            tooltip: starred ? '取消收藏' : '收藏',
+            icon: Icon(
+              Lucide.Bookmark,
+              size: 19,
+              color: starred
+                  ? const Color(0xFFE0A33E)
+                  : const Color(0xFFC8CCD4),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

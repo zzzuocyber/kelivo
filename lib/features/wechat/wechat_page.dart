@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -165,6 +166,25 @@ class _WechatPageState extends State<WechatPage> {
               ),
               ListTile(
                 leading: const Icon(
+                  Lucide.Eraser,
+                  size: 20,
+                  color: wechatMenuInk,
+                ),
+                title: const Text(
+                  '清空聊天记录',
+                  style: TextStyle(fontSize: 15, color: wechatMenuInk),
+                ),
+                subtitle: const Text(
+                  '只清记录，群和人都在',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+                onTap: () => Navigator.of(sheetCtx).pop('clear'),
+              ),
+              ListTile(
+                leading: const Icon(
                   Lucide.Trash2,
                   size: 20,
                   color: wechatMenuInk,
@@ -187,7 +207,36 @@ class _WechatPageState extends State<WechatPage> {
         ),
       ),
     );
-    if (!mounted || action != 'delete') return;
+    if (!mounted) return;
+    if (action == 'clear') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            '清空聊天记录？',
+            style: TextStyle(fontSize: 16),
+          ),
+          content: Text('和「${session.title}」的聊天记录会全部清掉，群和人都留着，删了拿不回来。'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('算了'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('清空', style: TextStyle(color: WechatColors.red)),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || ok != true) return;
+      await _store.clearMessages(session.key);
+      if (!mounted) return;
+      _reload();
+      return;
+    }
+    if (action != 'delete') return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -719,6 +768,7 @@ class WechatChatPage extends StatefulWidget {
 class _WechatChatPageState extends State<WechatChatPage> {
   late WechatStore _store;
   final WechatScheduler _scheduler = WechatScheduler();
+  final Random _burstRandom = Random();
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _focus = FocusNode();
@@ -920,21 +970,29 @@ class _WechatChatPageState extends State<WechatChatPage> {
     if (speaker == null) return;
     final isForced = forced != null && speaker.name == forced;
     final speakerName = speaker.name;
-    setState(() => _typingName = speakerName);
+    // 等待和生成期间都静默：打字只在消息落地前短暂亮一下。
     try {
+      final wechatSettings = _store.wechatSettings();
+      final burst = wechatBurstCount(wechatSettings.burstPreset, _burstRandom);
       final generator = WechatGenerator(
         settings: context.read<SettingsProvider>(),
         worldBooks: context.read<WorldBookProvider>(),
         group: group,
         history: wechatRecentContext(_messages),
         contacts: _contactModels,
-        worldPrompt: _store.wechatSettings().worldPrompt,
+        worldPrompt: wechatSettings.worldPrompt,
       );
-      final text = await generator.generateFor(speaker);
+      final text = await generator.generateFor(speaker, burstCount: burst);
       if (!mounted) return;
-      // 他可能连着发几条（模型用换行分的），一条一个气泡。
+      // 抽到几条就按几条拆，一条一个气泡。
+      final parts = wechatSplitReply(text, maxParts: burst);
+      if (parts.isEmpty) return;
+      // 消息要出来了，才亮一下「正在输入」，到点再落气泡。
+      setState(() => _typingName = speakerName);
+      await Future<void>.delayed(wechatTypingCue);
+      if (!mounted) return;
       final added = <WechatMessage>[];
-      for (final part in wechatSplitReply(text)) {
+      for (final part in parts) {
         final parsed = wechatStripImageMark(part);
         if (parsed.text.isEmpty) continue;
         added.add(
@@ -1266,6 +1324,38 @@ class _WechatChatPageState extends State<WechatChatPage> {
                     ),
                   );
                   _reload();
+                } else if (value == 'clear') {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogCtx) => AlertDialog(
+                      backgroundColor: Colors.white,
+                      title: const Text(
+                        '清空聊天记录？',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      content: const Text(
+                        '这个群的记录会全部清掉，群和人都留着，删了拿不回来。',
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogCtx).pop(false),
+                          child: const Text('算了'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogCtx).pop(true),
+                          child: const Text(
+                            '清空',
+                            style: TextStyle(color: WechatColors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (!mounted || ok != true) return;
+                  await _store.clearMessages(group.id);
+                  if (!mounted) return;
+                  setState(() => _messages = const <WechatMessage>[]);
+                  _toast('聊天记录已清空');
                 } else if (value == 'toggle') {
                   setState(() => _autoLoop = !_autoLoop);
                   if (_autoLoop) {
@@ -1283,6 +1373,10 @@ class _WechatChatPageState extends State<WechatChatPage> {
                 PopupMenuItem<String>(
                   value: 'toggle',
                   child: Text(_autoLoop ? '暂停自动回复' : '继续自动回复'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'clear',
+                  child: Text('清空聊天记录'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'summon',
@@ -1663,8 +1757,9 @@ class _WechatChatPageState extends State<WechatChatPage> {
         contacts: _contactModels,
         worldPrompt: _store.wechatSettings().worldPrompt,
       );
-      final text = await generator.generateFor(speaker);
-      final parts = wechatSplitReply(text);
+      // 重新生成只替换这一条，所以明确要一条，别让它连发。
+      final text = await generator.generateFor(speaker, burstCount: 1);
+      final parts = wechatSplitReply(text, maxParts: 1);
       if (!mounted) return;
       if (parts.isEmpty) {
         setState(() => _regenId = null);

@@ -462,6 +462,26 @@ class WechatStore {
 
   // ---------------- 消息 ----------------
 
+  /// 只清一个会话的聊天记录，群/人/设置都留着。
+  /// 私聊也能用（键是 `dm:名字`），未读一起清掉。
+  Future<void> clearMessages(String key) async {
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final map = Map<String, dynamic>.from(extras);
+      final all = map[wechatMessagesKey];
+      if (all is Map) {
+        final copy = Map<String, dynamic>.from(all)..remove(key);
+        map[wechatMessagesKey] = copy;
+      }
+      final reads = map[wechatReadsKey];
+      if (reads is Map) {
+        final copy = Map<String, dynamic>.from(reads)..remove(key);
+        map[wechatReadsKey] = copy;
+      }
+      return map;
+    });
+  }
+
   List<WechatMessage> messages(String groupId) =>
       wechatMessagesFromExtras(_extras(), groupId);
 

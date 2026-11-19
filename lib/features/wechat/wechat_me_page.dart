@@ -325,6 +325,94 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
     _reload();
   }
 
+  /// 一次回几条的概率档：单条始终最多，档位只调连发的稀罕程度。
+  Future<void> _pickBurstPreset() async {
+    var preset = _settings.burstPreset;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
+                  child: Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Text(
+                          '一次回几条',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: WechatColors.primaryText,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('好'),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    '不管哪档，一条都是最多的；群聊和私聊都跟着这里。',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: WechatColors.secondaryText,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+                const Divider(height: 0.5, thickness: 0.5),
+                for (final item in WechatBurstPreset.values)
+                  ListTile(
+                    title: Text(
+                      item.label,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: wechatMenuInk,
+                      ),
+                    ),
+                    subtitle: Text(
+                      item.hint,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: WechatColors.secondaryText,
+                      ),
+                    ),
+                    trailing: preset == item
+                        ? const Icon(
+                            Lucide.Check,
+                            size: 18,
+                            color: WechatColors.green,
+                          )
+                        : null,
+                    onTap: () => setSheetState(() => preset = item),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    await _store.saveWechatSettings(
+      _settings.copyWith(burstPreset: preset),
+    );
+    if (!mounted) return;
+    _reload();
+  }
+
   void _toast(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -406,6 +494,12 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
               title: '群聊默认间隔',
               value: intervalText,
               onTap: _pickGlobalInterval,
+            ),
+            const SizedBox(height: 10),
+            _settingRow(
+              title: '连发条数概率',
+              value: _settings.burstPreset.label,
+              onTap: _pickBurstPreset,
             ),
             const SizedBox(height: 10),
             _settingRow(

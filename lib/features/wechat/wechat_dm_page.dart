@@ -8,6 +8,7 @@ import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
 import '../../icons/lucide_adapter.dart';
+import 'wechat_dm_runner.dart';
 import 'wechat_models.dart';
 import 'wechat_service.dart';
 import 'wechat_store.dart';
@@ -42,16 +43,11 @@ class _WechatDmPageState extends State<WechatDmPage> {
   Map<String, String> _avatars = const <String, String>{};
   List<WechatMessage> _messages = const <WechatMessage>[];
 
-  /// 他正在想词。
-  bool _typing = false;
-
-  /// 正在等他这一句回来，别让用户连发两次把他淹了。
-  bool _waiting = false;
+  /// 他马上要发出来：只在落地前短暂亮一下。
+  bool get _typing => WechatDmReplyRunner.instance.isCueing(_chatKey);
 
   /// 下一条我发的消息要不要带图（输入栏图片开关）。发完自动关掉。
   bool _attachImage = false;
-
-  Timer? _timer;
 
   /// 天意：用他的身份说话（夺舍）。私聊里也一样能用。
   bool _asDivine = false;
@@ -66,6 +62,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
   void initState() {
     super.initState();
     _store = WechatStore(context.read<ChatService>());
+    WechatDmReplyRunner.instance.addListener(_onReplyChanged);
     _reload();
     unawaited(_store.markRead(WechatStore.dmKey(widget.contactName)));
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -73,14 +70,14 @@ class _WechatDmPageState extends State<WechatDmPage> {
     });
     // 召唤进来的：他先说话。给一小段时间让页面站稳再开口。
     if (widget.summon) {
-      _typing = true;
-      _timer = Timer(const Duration(milliseconds: 500), _reply);
+      _scheduleReply(const Duration(milliseconds: 500));
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    // 不取消后台任务：退出了也要把这句生成完写进 store。
+    WechatDmReplyRunner.instance.removeListener(_onReplyChanged);
     _input.dispose();
     _scroll.dispose();
     _focus.dispose();
@@ -142,87 +139,49 @@ class _WechatDmPageState extends State<WechatDmPage> {
     _scheduleReply();
   }
 
-  /// 隔一会儿他再回，太秒回像机器人。
-  /// 磨多久由「这个人自己的回复间隔」决定（第三处间隔：单角色私聊）。
-  void _scheduleReply() {
-    if (_waiting) return;
-    _timer?.cancel();
-    // 等待这段时间也要有反馈，不然干等着像没反应。
-    if (!_typing && mounted) {
-      setState(() => _typing = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _jumpToBottom();
-      });
+  /// 后台执行器状态变了：把 typing 和消息刷新到界面。
+  void _onReplyChanged() {
+    if (!mounted) return;
+    setState(() => _messages = _store.dmMessages(widget.contactName));
+    _jumpToBottom();
+    // 人还在页上，回完就标已读；人不在页上时不走这里，红点留着。
+    if (!WechatDmReplyRunner.instance.isPending(_chatKey)) {
+      unawaited(_store.markRead(_chatKey));
     }
+    final error = WechatDmReplyRunner.instance.takeError(_chatKey);
+    if (error != null) _toast(error);
+  }
+
+  /// 隔一会儿他再回，太秒回像机器人。
+  /// 等待和生成都交给后台执行器，退出页面也不会停。
+  void _scheduleReply([Duration? summonDelay]) {
+    if (WechatDmReplyRunner.instance.isPending(_chatKey)) return;
+    final delay = summonDelay ?? _replyDelay();
+    WechatDmReplyRunner.instance.schedule(
+      key: _chatKey,
+      contactName: widget.contactName,
+      store: _store,
+      settings: context.read<SettingsProvider>(),
+      worldBooks: context.read<WorldBookProvider>(),
+      delay: delay,
+    );
+  }
+
+  /// 磨多久由「这个人自己的回复间隔」决定（第三处间隔：单角色私聊）。
+  Duration _replyDelay() {
     final contact = _contact;
-    final settings = _settings;
     final effective = wechatEffectiveInterval(
       contact?.intervalPreset ?? WechatIntervalPreset.follow,
       customMinSeconds: contact?.customMinSeconds ?? 2,
       customMaxSeconds: contact?.customMaxSeconds ?? 12,
-      settings: settings,
+      settings: _settings,
     );
-    final delay = wechatDelayOf(
+    return wechatDelayOf(
       effective.preset,
       customMinSeconds: effective.min,
       customMaxSeconds: effective.max,
       random: _random,
     );
-    _timer = Timer(delay, _reply);
-  }
-
-  Future<void> _reply() async {
-    final contact = _contact;
-    if (contact == null || !mounted) return;
-    setState(() {
-      _typing = true;
-      _waiting = true;
-    });
-    try {
-      final generator = WechatDmGenerator(
-        settings: context.read<SettingsProvider>(),
-        worldBooks: context.read<WorldBookProvider>(),
-        contact: contact,
-        bookIds: _settings.bookIds,
-        persona: _settings.effectivePersona,
-        worldPrompt: _settings.worldPrompt,
-        history: wechatRecentContext(_messages, limit: 40),
-      );
-      final text = await generator.generate();
-      if (!mounted) return;
-      // 他可能连着发几条（模型用换行分的），一条一个气泡。
-      for (final part in wechatSplitReply(text)) {
-        final parsed = wechatStripImageMark(part);
-        if (parsed.text.isEmpty) continue;
-        await _store.appendDmMessage(
-          widget.contactName,
-          text: parsed.text,
-          mine: false,
-          withImage: parsed.withImage,
-        );
-      }
-      if (!mounted) return;
-      setState(() => _messages = _store.dmMessages(widget.contactName));
-      _jumpToBottom();
-      unawaited(_store.markRead(WechatStore.dmKey(widget.contactName)));
-    } on WechatServiceException catch (error) {
-      if (!mounted) return;
-      _toast(
-        error.code == 'model_missing'
-            ? '这个人还没选模型，去「我 → 设置 → 角色管理」挑一个'
-            : '这次没生成出内容',
-      );
-    } catch (_) {
-      if (!mounted) return;
-      _toast('这次没接上，再发一句试试');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _typing = false;
-          _waiting = false;
-        });
-      }
-    }
   }
 
   /// 这个过程改了隔多久回你：第三处间隔（单角色私聊）就存在联系人身上。
@@ -611,8 +570,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
         worldPrompt: _settings.worldPrompt,
         history: wechatRecentContext(before),
       );
-      final text = await generator.generate();
-      final parts = wechatSplitReply(text);
+      // 重新生成只替换这一条，明确要一条。
+      final text = await generator.generate(burstCount: 1);
+      final parts = wechatSplitReply(text, maxParts: 1);
       if (!mounted) return;
       if (parts.isEmpty) {
         setState(() => _regenId = null);

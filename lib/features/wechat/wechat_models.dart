@@ -174,6 +174,7 @@ class WechatSettings {
     this.intervalPreset = WechatIntervalPreset.normal,
     this.customMinSeconds = 4,
     this.customMaxSeconds = 30,
+    this.burstPreset = WechatBurstPreset.natural,
   });
 
   /// 通讯录添加人、私聊生成都用这几本世界书（群聊各有自己的一份）。
@@ -191,6 +192,9 @@ class WechatSettings {
   final int customMinSeconds;
   final int customMaxSeconds;
 
+  /// 一次回几条的概率档。群聊和私聊共用。
+  final WechatBurstPreset burstPreset;
+
   String get effectivePersona {
     final value = persona.trim();
     return value.isEmpty ? '我' : value;
@@ -203,6 +207,7 @@ class WechatSettings {
     WechatIntervalPreset? intervalPreset,
     int? customMinSeconds,
     int? customMaxSeconds,
+    WechatBurstPreset? burstPreset,
   }) {
     return WechatSettings(
       bookIds: bookIds ?? this.bookIds,
@@ -211,6 +216,7 @@ class WechatSettings {
       intervalPreset: intervalPreset ?? this.intervalPreset,
       customMinSeconds: customMinSeconds ?? this.customMinSeconds,
       customMaxSeconds: customMaxSeconds ?? this.customMaxSeconds,
+      burstPreset: burstPreset ?? this.burstPreset,
     );
   }
 
@@ -221,6 +227,7 @@ class WechatSettings {
     'interval': intervalPreset.name,
     'min': customMinSeconds,
     'max': customMaxSeconds,
+    'burst': burstPreset.name,
   };
 
   static WechatSettings fromJson(Object? raw) {
@@ -240,6 +247,7 @@ class WechatSettings {
       intervalPreset: WechatIntervalPresetX.parse(raw['interval']),
       customMinSeconds: _intOr(raw['min'], 4),
       customMaxSeconds: _intOr(raw['max'], 30),
+      burstPreset: WechatBurstPresetX.parse(raw['burst']),
     );
   }
 }
@@ -314,6 +322,62 @@ class WechatMember {
       modelId: model is String && model.isNotEmpty ? model : null,
     );
   }
+}
+
+/// 消息落地前短暂亮一下「正在输入」的时长。
+///
+/// 等待间隔和模型生成期间都不亮，只在消息马上要出现时亮这一下，
+/// 免得气泡一直挂着三个点、看着像秒回或者一直在生成。
+const Duration wechatTypingCue = Duration(milliseconds: 1100);
+
+/// 一次回几条的概率档。
+///
+/// 不管哪档，一条都是最多的；档位只决定连发越往后的条数有多罕见。
+enum WechatBurstPreset { quiet, natural, lively }
+
+extension WechatBurstPresetX on WechatBurstPreset {
+  String get label => switch (this) {
+    WechatBurstPreset.quiet => '偏单条',
+    WechatBurstPreset.natural => '自然',
+    WechatBurstPreset.lively => '爱连发',
+  };
+
+  String get hint => switch (this) {
+    WechatBurstPreset.quiet => '一条为主，偶尔两条',
+    WechatBurstPreset.natural => '一条最多，两三条偶尔',
+    WechatBurstPreset.lively => '一条仍最多，能连到六七条',
+  };
+
+  /// 1~7 条的权重，按概率抽。
+  List<double> get weights => switch (this) {
+    WechatBurstPreset.quiet => <double>[82, 13, 3.5, 1, 0.5, 0, 0],
+    WechatBurstPreset.natural => <double>[58, 24, 11, 5, 1.5, 0.5, 0],
+    WechatBurstPreset.lively => <double>[40, 29, 17, 8, 3.5, 1.5, 1],
+  };
+
+  static WechatBurstPreset parse(Object? raw) {
+    final value = (raw ?? '').toString();
+    for (final item in WechatBurstPreset.values) {
+      if (item.name == value) return item;
+    }
+    return WechatBurstPreset.natural;
+  }
+}
+
+/// 从档位里抽这次要发几条，返回 1~7。
+int wechatBurstCount(WechatBurstPreset preset, Random random) {
+  final weights = preset.weights;
+  var total = 0.0;
+  for (final weight in weights) {
+    total += weight;
+  }
+  if (total <= 0) return 1;
+  var roll = random.nextDouble() * total;
+  for (var i = 0; i < weights.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return i + 1;
+  }
+  return weights.length;
 }
 
 /// 发言间隔的预设。
