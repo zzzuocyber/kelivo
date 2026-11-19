@@ -48,6 +48,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
   /// 正在等他这一句回来，别让用户连发两次把他淹了。
   bool _waiting = false;
 
+  /// 下一条我发的消息要不要带图（输入栏图片开关）。发完自动关掉。
+  bool _attachImage = false;
+
   Timer? _timer;
 
   /// 天意：用他的身份说话（夺舍）。私聊里也一样能用。
@@ -128,9 +131,13 @@ class _WechatDmPageState extends State<WechatDmPage> {
           ? (contact?.name ?? widget.contactName)
           : _settings.effectivePersona,
       divine: _asDivine,
+      withImage: _attachImage,
     );
     if (!mounted) return;
-    setState(() => _messages = _store.dmMessages(widget.contactName));
+    setState(() {
+      _attachImage = false;
+      _messages = _store.dmMessages(widget.contactName);
+    });
     _jumpToBottom();
     _scheduleReply();
   }
@@ -185,10 +192,13 @@ class _WechatDmPageState extends State<WechatDmPage> {
       if (!mounted) return;
       // 他可能连着发几条（模型用换行分的），一条一个气泡。
       for (final part in wechatSplitReply(text)) {
+        final parsed = wechatStripImageMark(part);
+        if (parsed.text.isEmpty) continue;
         await _store.appendDmMessage(
           widget.contactName,
-          text: part,
+          text: parsed.text,
           mine: false,
+          withImage: parsed.withImage,
         );
       }
       if (!mounted) return;
@@ -609,7 +619,18 @@ class _WechatDmPageState extends State<WechatDmPage> {
         _toast('这次没写出东西，再试一次');
         return;
       }
-      await _store.editMessage(_chatKey, message.id, parts.first);
+      final parsed = wechatStripImageMark(parts.first);
+      if (parsed.text.isEmpty) {
+        setState(() => _regenId = null);
+        _toast('这次没写出东西，再试一次');
+        return;
+      }
+      await _store.editMessage(
+        _chatKey,
+        message.id,
+        parsed.text,
+        withImage: parsed.withImage,
+      );
       if (!mounted) return;
       setState(() {
         _regenId = null;
@@ -640,13 +661,23 @@ class _WechatDmPageState extends State<WechatDmPage> {
         color: mine ? WechatColors.mineBubble : WechatColors.otherBubble,
         borderRadius: BorderRadius.circular(5),
       ),
-      child: Text(
-        message.text,
-        style: const TextStyle(
-          fontSize: 15,
-          height: 1.42,
-          color: WechatColors.primaryText,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            message.text,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.42,
+              color: WechatColors.primaryText,
+            ),
+          ),
+          if (message.withImage) ...<Widget>[
+            const SizedBox(height: 6),
+            WechatEmojiImage(text: message.text, seed: message.id),
+          ],
+        ],
       ),
     );
 
@@ -788,7 +819,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
                   ),
                   const SizedBox(width: 8),
                   // 占位：表情、加号。真功能以后再加，先把位置留着。
-                  _placeholderIcon(Lucide.Sparkles),
+                  _imageButton(),
                   const SizedBox(width: 6),
                   _placeholderIcon(Lucide.Plus),
                   const SizedBox(width: 6),
@@ -813,6 +844,25 @@ class _WechatDmPageState extends State<WechatDmPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 发图开关：点亮后这条消息带图，图按文字内容用 emoji 拼出来。
+  Widget _imageButton() {
+    return GestureDetector(
+      onTap: () => setState(() => _attachImage = !_attachImage),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: _attachImage ? const Color(0xFFE7F8EE) : Colors.transparent,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Icon(
+          Lucide.Image,
+          size: 22,
+          color: _attachImage ? WechatColors.green : const Color(0xFF8A8A8A),
         ),
       ),
     );

@@ -16,6 +16,29 @@ String wechatDmKey(String name) => 'dm:${name.trim()}';
 /// 隐藏对话的标题，只在备份/导出里看得见。
 const String wechatContainerTitle = '微信';
 
+/// 发图标记：想给这条消息配图，就在文字末尾带上这两个字。
+///
+/// 跟朋友圈一样**不接生图接口**——图是按这句话里的词挑 emoji 拼出来的。
+/// 标记在存进消息前会被剥掉，只在「模型 ↔ App」之间当作暗号。
+const String wechatImageMark = '[图]';
+
+/// 剥掉行尾的发图标记，返回正文 + 是否带图。
+///
+/// 模型可能在 `[图]` 前后留空格，也可能写全角括号，这里都认。
+({String text, bool withImage}) wechatStripImageMark(String raw) {
+  var text = raw.trim();
+  var marked = false;
+  final variants = <String>[wechatImageMark, '[图]', '［图］', '[图片]', '（图）'];
+  for (final mark in variants) {
+    if (text.endsWith(mark)) {
+      text = text.substring(0, text.length - mark.length).trimRight();
+      marked = true;
+      break;
+    }
+  }
+  return (text: text, withImage: marked);
+}
+
 /// 通讯录里的一个人。**手动添加**，不会自己从世界书灌进来。
 ///
 /// 人设正文还是去世界书取（entryId + bookId 定位）；
@@ -586,6 +609,7 @@ class WechatMessage {
     this.mine = false,
     this.divine = false,
     this.recalled = false,
+    this.withImage = false,
   });
 
   final String id;
@@ -608,11 +632,15 @@ class WechatMessage {
   /// 撤回过的。正文会一起清空（原文不留），只渲染成一句灰字。
   final bool recalled;
 
+  /// 这条带图。图按 [text] 里的词拼 emoji——跟朋友圈一套逻辑。
+  final bool withImage;
+
   WechatMessage copyWith({
     String? sender,
     String? text,
     int? at,
     bool? recalled,
+    bool? withImage,
   }) {
     return WechatMessage(
       id: id,
@@ -623,6 +651,7 @@ class WechatMessage {
       mine: mine,
       divine: divine,
       recalled: recalled ?? this.recalled,
+      withImage: withImage ?? this.withImage,
     );
   }
 
@@ -635,6 +664,7 @@ class WechatMessage {
     if (mine) 'mine': true,
     if (divine) 'divine': true,
     if (recalled) 'recalled': true,
+    if (withImage) 'img': true,
   };
 
   static WechatMessage? fromJson(Object? raw) {
@@ -650,6 +680,7 @@ class WechatMessage {
       mine: raw['mine'] == true,
       divine: raw['divine'] == true,
       recalled: raw['recalled'] == true,
+      withImage: raw['img'] == true,
     );
   }
 }

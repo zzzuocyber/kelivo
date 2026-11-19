@@ -120,7 +120,17 @@ void _writeChatRules(StringBuffer buffer, String speakerName) {
   buffer.writeln('- 不要每句都感慨，不要客套，不要总结。');
   buffer.writeln('- 真的没什么可说，就发很短的一句，别硬凑内容。');
   buffer.writeln('- 想连着发几条就用换行分开，一行就是一条消息，最多三条；不想连发就只写一行。');
+  buffer.writeln(
+    '- 偶尔可以发图：想给哪条配图，就在那一行末尾加 [图] 两个字符（例：今天吃的火锅[图]）。'
+    '不用描述图片内容，图会按你这句话自己画出来。不是每条都发，聊到具体的东西或场景时来一张就行。',
+  );
   buffer.writeln('- 只输出$speakerName 这次要发出去的那段文字，别的什么都不要。');
+}
+
+/// 把一条历史消息写成给模型看的那行字。带图的补一句，让模型知道那是图。
+String wechatHistoryLine(WechatMessage message, {required String who}) {
+  final tail = message.withImage ? '（配了一张图）' : '';
+  return '$who：${message.text}$tail';
 }
 
 // ============================================================
@@ -257,7 +267,7 @@ class WechatGenerator {
         final who = message.sender.trim().isEmpty
             ? group.effectivePersona
             : message.sender;
-        buffer.writeln('$who：${message.text}');
+        buffer.writeln(wechatHistoryLine(message, who: who));
       }
       buffer.writeln();
     }
@@ -408,7 +418,7 @@ class WechatDmGenerator {
         }
         // 天意替他说的话，是“他说的”，不是“我说的”。
         final who = message.mine && !message.divine ? persona : contact.name;
-        buffer.writeln('$who：${message.text}');
+        buffer.writeln(wechatHistoryLine(message, who: who));
       }
       buffer.writeln();
     }

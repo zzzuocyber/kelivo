@@ -428,7 +428,10 @@ class MomentGenerator {
         // 0 = 不限制；否则装到字数上限为止，更老的不再带。
         if (charLimit > 0 && used + chunkLength > charLimit) break;
         used += chunkLength;
-        buffer.writeln('$index. ${post.author}：$body');
+        // 带图的帖子里，图是按正文画的——明说一句，AI 才知道这条有配图。
+        buffer.writeln(
+          '$index. ${post.author}：$body${post.hasImage ? '（配了一张图）' : ''}',
+        );
         if (commentsText.isNotEmpty) {
           buffer.writeln('   评论区：$commentsText');
         }
@@ -458,7 +461,11 @@ class MomentGenerator {
         '不要替我发帖，也不要替我在评论区说话。',
       );
     }
-    buffer.writeln('大约每三条里有一条带图：带图的那条 withImage 写 true，其余写 false。');
+    buffer.writeln(
+      '大约每三条里有一条带图：带图的那条 withImage 写 true，其余写 false。'
+      '图不用你描述内容，会按你写的正文自动画出来；带图时正文里最好提到具体的东西或场景。'
+      '历史帖子里标了「（配了一张图）」的就是带图的。',
+    );
     buffer.writeln();
     buffer.writeln('【输出】');
     buffer.writeln('只输出一个 JSON 对象，不要代码块标记，不要任何多余文字，格式如下：');
@@ -611,7 +618,8 @@ class MomentReplyComposer {
       for (final other in recentPosts) {
         if (other.id == post.id) continue;
         buffer.writeln(
-          '${other.author}：${other.text.replaceAll(RegExp(r'\s+'), ' ')}',
+          '${other.author}：${other.text.replaceAll(RegExp(r'\s+'), ' ')}'
+          '${other.hasImage ? '（配了一张图）' : ''}',
         );
         count++;
         if (count >= 8) break;
@@ -803,7 +811,8 @@ class MomentMentionReplies {
       for (final other in recentPosts) {
         if (other.id == post.id) continue;
         buffer.writeln(
-          '${other.author}：${other.text.replaceAll(RegExp(r'\s+'), ' ')}',
+          '${other.author}：${other.text.replaceAll(RegExp(r'\s+'), ' ')}'
+          '${other.hasImage ? '（配了一张图）' : ''}',
         );
         count++;
         if (count >= 6) break;

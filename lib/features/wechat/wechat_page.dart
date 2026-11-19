@@ -739,6 +739,9 @@ class _WechatChatPageState extends State<WechatChatPage> {
   /// 被 @ 的人：下一次一定轮到他说话。发完就清掉。
   String? _pendingSpeaker;
 
+  /// 下一条我发的消息要不要带图（输入栏图片开关）。发完自动关掉。
+  bool _attachImage = false;
+
   /// 通讯录（名字 → 联系人），生成时用角色自己绑的模型。
   Map<String, WechatContact> _contactModels = const <String, WechatContact>{};
 
@@ -812,9 +815,13 @@ class _WechatChatPageState extends State<WechatChatPage> {
       text: text,
       mine: true,
       divine: asDivine,
+      withImage: _attachImage,
     );
     if (!mounted) return;
-    setState(() => _messages = <WechatMessage>[..._messages, message]);
+    setState(() {
+      _attachImage = false;
+      _messages = <WechatMessage>[..._messages, message];
+    });
     _jumpToBottom();
     _restartLoop();
   }
@@ -928,8 +935,15 @@ class _WechatChatPageState extends State<WechatChatPage> {
       // 他可能连着发几条（模型用换行分的），一条一个气泡。
       final added = <WechatMessage>[];
       for (final part in wechatSplitReply(text)) {
+        final parsed = wechatStripImageMark(part);
+        if (parsed.text.isEmpty) continue;
         added.add(
-          await _store.appendMessage(group.id, sender: speakerName, text: part),
+          await _store.appendMessage(
+            group.id,
+            sender: speakerName,
+            text: parsed.text,
+            withImage: parsed.withImage,
+          ),
         );
       }
       if (added.isEmpty || !mounted) return;
@@ -1416,7 +1430,17 @@ class _WechatChatPageState extends State<WechatChatPage> {
             ? Border.all(color: const Color(0xFF07C160), width: 1)
             : null,
       ),
-      child: _bubbleText(message.text),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _bubbleText(message.text),
+          if (message.withImage) ...<Widget>[
+            const SizedBox(height: 6),
+            WechatEmojiImage(text: message.text, seed: message.id),
+          ],
+        ],
+      ),
     );
     // 气泡上接长按菜单（以前是空手势，纯粹为了吞掉空白菜单）。
     final guardedBubble = GestureDetector(
@@ -1648,7 +1672,18 @@ class _WechatChatPageState extends State<WechatChatPage> {
         return;
       }
       // 只替换这一条；他要是想连发，剩下的丢掉，免得跑到列表最末尾去。
-      await _store.editMessage(group.id, message.id, parts.first);
+      final parsed = wechatStripImageMark(parts.first);
+      if (parsed.text.isEmpty) {
+        setState(() => _regenId = null);
+        _toast('这次没写出东西，再试一次');
+        return;
+      }
+      await _store.editMessage(
+        group.id,
+        message.id,
+        parsed.text,
+        withImage: parsed.withImage,
+      );
       if (!mounted) return;
       setState(() {
         _regenId = null;
@@ -1756,6 +1791,25 @@ class _WechatChatPageState extends State<WechatChatPage> {
     );
   }
 
+  /// 发图开关：点亮后这条消息带图，图按文字内容用 emoji 拼出来。
+  Widget _imageButton() {
+    return GestureDetector(
+      onTap: () => setState(() => _attachImage = !_attachImage),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: _attachImage ? const Color(0xFFE7F8EE) : Colors.transparent,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Icon(
+          Lucide.Image,
+          size: 22,
+          color: _attachImage ? WechatColors.green : const Color(0xFF8A8A8A),
+        ),
+      ),
+    );
+  }
+
   /// 还没做的按钮：点一下老实说没做，不做假功能。
   Widget _placeholderIcon(IconData icon) {
     return GestureDetector(
@@ -1845,7 +1899,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   const SizedBox(width: 6),
                   _mentionButton(group),
                   const SizedBox(width: 6),
-                  _placeholderIcon(Lucide.Sparkles),
+                  _imageButton(),
                   const SizedBox(width: 6),
                   _placeholderIcon(Lucide.Plus),
                   const SizedBox(width: 8),

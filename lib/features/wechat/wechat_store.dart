@@ -362,12 +362,14 @@ class WechatStore {
     required bool mine,
     String? sender,
     bool divine = false,
+    bool withImage = false,
   }) => appendMessage(
     wechatDmKey(name),
     sender: sender ?? name,
     text: text,
     mine: mine,
     divine: divine,
+    withImage: withImage,
   );
 
   /// 删掉跟某个人的私聊记录（通讯录里那人还在）。
@@ -488,6 +490,7 @@ class WechatStore {
     bool system = false,
     bool mine = false,
     bool divine = false,
+    bool withImage = false,
   }) async {
     final message = WechatMessage(
       id: _newMessageId(),
@@ -497,6 +500,7 @@ class WechatStore {
       system: system,
       mine: mine,
       divine: divine,
+      withImage: withImage,
     );
     final next = <WechatMessage>[...messages(groupId), message];
     await _writeMessages(groupId, next);
@@ -504,13 +508,18 @@ class WechatStore {
   }
 
   /// 改一条消息的正文。只有自己发的才允许改，判断放在界面层。
-  Future<void> editMessage(String key, String id, String text) async {
+  Future<void> editMessage(
+    String key,
+    String id,
+    String text, {
+    bool? withImage,
+  }) async {
     final list = messages(key);
     var changed = false;
     final next = <WechatMessage>[];
     for (final message in list) {
       if (message.id == id) {
-        next.add(message.copyWith(text: text));
+        next.add(message.copyWith(text: text, withImage: withImage));
         changed = true;
       } else {
         next.add(message);

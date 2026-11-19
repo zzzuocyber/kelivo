@@ -436,3 +436,258 @@ class _WechatEditMessageDialogState extends State<WechatEditMessageDialog> {
     );
   }
 }
+
+// ============================================================
+// 发图：跟朋友圈同一套 emoji 拼图逻辑
+// ============================================================
+//
+// 不接生图接口——按这句话里的词挑 emoji，摆成一张图。
+// 表是从 moment_emoji.dart 复制过来的（那边被 moment_phone_page 引用，
+// 反向 import 会成环），两边保持一致即可。
+
+const Map<String, String> wechatEmojiTable = <String, String>{
+  '烧烤': '🍢',
+  '烤串': '🍢',
+  '火锅': '🍲',
+  '面条': '🍜',
+  '拉面': '🍜',
+  '泡面': '🍜',
+  '加面': '🍜',
+  '米饭': '🍚',
+  '外卖': '🥡',
+  '便当': '🍱',
+  '早饭': '🥐',
+  '早餐': '🥐',
+  '饺子': '🥟',
+  '包子': '🥟',
+  '馒头': '🍞',
+  '面包': '🍞',
+  '鸡蛋': '🥚',
+  '土豆': '🥔',
+  '葱': '🌿',
+  '蔬菜': '🥬',
+  '水果': '🍎',
+  '苹果': '🍎',
+  '香蕉': '🍌',
+  '西瓜': '🍉',
+  '橘子': '🍊',
+  '蛋糕': '🍰',
+  '冰棍': '🍦',
+  '雪糕': '🍦',
+  '奶茶': '🧋',
+  '咖啡': '☕',
+  '啤酒': '🍺',
+  '酒': '🍶',
+  '茶': '🍵',
+  '牛奶': '🥛',
+  '糖': '🍬',
+  '辣': '🌶️',
+  '下雨': '🌧️',
+  '雨': '🌧️',
+  '雪': '❄️',
+  '晴': '☀️',
+  '太阳': '☀️',
+  '晒': '☀️',
+  '风': '🌬️',
+  '台风': '🌪️',
+  '云': '☁️',
+  '雷': '⛈️',
+  '热': '🥵',
+  '冷': '🥶',
+  '晚上': '🌙',
+  '夜': '🌙',
+  '早上': '🌅',
+  '月': '🌙',
+  '灯': '💡',
+  '风扇': '🌀',
+  '空调': '❄️',
+  '手机': '📱',
+  '耳机': '🎧',
+  '电视': '📺',
+  '书': '📖',
+  '鞋': '👞',
+  '皮鞋': '👞',
+  '伞': '☂️',
+  '包': '👜',
+  '钱包': '👛',
+  '钥匙': '🔑',
+  '快递': '📦',
+  '床': '🛏️',
+  '椅子': '🪑',
+  '衣服': '👕',
+  '帽子': '🧢',
+  '眼镜': '👓',
+  '相机': '📷',
+  '信': '✉️',
+  '笔': '✒️',
+  '纸': '📄',
+  '超市': '🛒',
+  '市场': '🏪',
+  '菜市场': '🏪',
+  '家': '🏠',
+  '回家': '🏠',
+  '街': '🛣️',
+  '路上': '🛣️',
+  '公司': '🏢',
+  '办公室': '🏢',
+  '上班': '🏢',
+  '下班': '🌆',
+  '学校': '🏫',
+  '医院': '🏥',
+  '公园': '🌳',
+  '车站': '🚉',
+  '地铁': '🚇',
+  '公交': '🚌',
+  '车': '🚗',
+  '自行车': '🚲',
+  '飞机': '✈️',
+  '猫': '🐱',
+  '狗': '🐶',
+  '鸟': '🐦',
+  '鱼': '🐟',
+  '蚊子': '🦟',
+  '孩子': '🧒',
+  '老板': '🧑',
+  '朋友': '🧑',
+  '钱': '💰',
+  '涨价': '📈',
+  '便宜': '🏷️',
+  '穷': '💸',
+  '累': '😩',
+  '困': '😴',
+  '笑': '😄',
+  '哭': '😢',
+  '生气': '😠',
+  '烦': '😑',
+  '无聊': '😑',
+  '音乐': '🎵',
+  '电影': '🎬',
+  '游戏': '🎮',
+  '照片': '🖼️',
+  '生日': '🎂',
+  '礼物': '🎁',
+};
+
+const List<String> _wechatEmojiPool = <String>[
+  '🌿',
+  '🍃',
+  '🌤️',
+  '🌙',
+  '✨',
+  '🎈',
+  '🧸',
+  '🪴',
+  '📷',
+  '🎧',
+  '🍀',
+  '🕯️',
+  '🧵',
+  '🪁',
+  '🍋',
+  '🌰',
+  '🐚',
+  '🪶',
+  '🌾',
+  '☕',
+];
+
+/// 按正文和消息 id 生成 1~3 个 emoji，同样的输入永远同样的图。
+List<String> wechatEmojisFor(String text, String seed) {
+  final picked = <String>[];
+  final body = text.replaceAll(RegExp(r'\s+'), '');
+  final keys = wechatEmojiTable.keys.toList()
+    ..sort((a, b) => b.length.compareTo(a.length));
+  for (final key in keys) {
+    if (!body.contains(key)) continue;
+    final emoji = wechatEmojiTable[key]!;
+    if (picked.contains(emoji)) continue;
+    picked.add(emoji);
+    if (picked.length >= 3) break;
+  }
+  if (picked.isEmpty) {
+    var hash = 0;
+    for (final unit in seed.codeUnits) {
+      hash = (hash * 31 + unit) % 99991;
+    }
+    for (var i = 0; i < 3; i++) {
+      final emoji = _wechatEmojiPool[(hash + i * 7) % _wechatEmojiPool.length];
+      if (!picked.contains(emoji)) picked.add(emoji);
+    }
+  }
+  return picked;
+}
+
+/// 微信消息配图：白底圆角，一个大 emoji + 最多两个小的，位置按消息 id 定死。
+class WechatEmojiImage extends StatelessWidget {
+  const WechatEmojiImage({
+    super.key,
+    required this.text,
+    required this.seed,
+    this.width = 168,
+  });
+
+  /// 拿正文里的词挑 emoji，所以图跟这句话是对得上的。
+  final String text;
+
+  /// 消息 id：保证同一条消息每次打开图都一样。
+  final String seed;
+
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final emojis = wechatEmojisFor(text, seed);
+    var hash = 0;
+    for (final unit in seed.codeUnits) {
+      hash = (hash * 31 + unit) % 99991;
+    }
+    final main = emojis.isEmpty ? '🌿' : emojis[0];
+    final second = emojis.length > 1 ? emojis[1] : null;
+    final third = emojis.length > 2 ? emojis[2] : null;
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: WechatColors.hairline),
+      ),
+      child: AspectRatio(
+        aspectRatio: 4 / 3,
+        child: Stack(
+          children: <Widget>[
+            Align(
+              alignment: const Alignment(0, 0.18),
+              child: Text(
+                main,
+                style: const TextStyle(fontSize: 62, height: 1.1),
+              ),
+            ),
+            if (second != null)
+              Align(
+                alignment: const Alignment(0.62, -0.62),
+                child: Transform.rotate(
+                  angle: (hash % 7 - 3) / 100.0,
+                  child: Text(
+                    second,
+                    style: const TextStyle(fontSize: 30, height: 1.1),
+                  ),
+                ),
+              ),
+            if (third != null)
+              Align(
+                alignment: const Alignment(-0.66, 0.72),
+                child: Transform.rotate(
+                  angle: (hash % 5 - 2) / 90.0,
+                  child: Text(
+                    third,
+                    style: const TextStyle(fontSize: 24, height: 1.1),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
