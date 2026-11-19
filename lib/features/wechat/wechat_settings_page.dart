@@ -43,6 +43,17 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     });
   }
 
+  void _toast(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   // ---------------- 改文字 ----------------
 
   Future<void> _editText({
