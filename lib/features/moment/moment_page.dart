@@ -170,23 +170,23 @@ class _MomentPageState extends State<MomentPage> {
       characters: _characters,
       assets: _assets,
       divineName: _divineName,
+      // 弹窗改完不关窗，所以天意得当场写进库，不能再等返回值。
+      onDivineChanged: _setDivine,
     );
     if (outcome == null || !mounted) return;
-    final openAuthor = outcome.openAuthor;
-    if (openAuthor != null) {
-      await _openAuthor(openAuthor);
-      return;
-    }
-    await _setDivine(outcome.closeDivine ? null : outcome.divineName);
+    await _openAuthor(outcome.openAuthor);
   }
 
-  Future<void> _setDivine(String? name) async {
+  /// 返回 true 才算存上了；弹窗那边只有拿到 true 才把灰底挪过去。
+  Future<bool> _setDivine(String? name) async {
     try {
       await _store.setDivine(name);
-      if (!mounted) return;
+      if (!mounted) return false;
       _reload();
+      return true;
     } catch (_) {
       _toast('天意没存上，再试一次');
+      return false;
     }
   }
 
