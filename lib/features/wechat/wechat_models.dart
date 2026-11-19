@@ -28,7 +28,7 @@ class WechatContact {
     this.bookId = '',
     this.providerKey,
     this.modelId,
-    this.intervalPreset = WechatIntervalPreset.normal,
+    this.intervalPreset = WechatIntervalPreset.follow,
     this.customMinSeconds = 2,
     this.customMaxSeconds = 12,
     this.addedAt = 0,
@@ -147,6 +147,7 @@ class WechatSettings {
     this.bookIds = const <String>[],
     this.persona = '',
     this.worldPrompt = '',
+    // 全局自己这份不能是 follow（会自己指自己），只能是具体档位。
     this.intervalPreset = WechatIntervalPreset.normal,
     this.customMinSeconds = 4,
     this.customMaxSeconds = 30,
@@ -293,10 +294,20 @@ class WechatMember {
 }
 
 /// 发言间隔的预设。
-enum WechatIntervalPreset { fast, normal, slow, random, custom }
+enum WechatIntervalPreset { follow, fast, normal, slow, random, custom }
 
 extension WechatIntervalPresetX on WechatIntervalPreset {
+  /// 只有群 / 私聊能选「跟随全局」；全局自己那份不列这个档。
+  static const List<WechatIntervalPreset> own = <WechatIntervalPreset>[
+    WechatIntervalPreset.fast,
+    WechatIntervalPreset.normal,
+    WechatIntervalPreset.slow,
+    WechatIntervalPreset.random,
+    WechatIntervalPreset.custom,
+  ];
+
   String get label => switch (this) {
+    WechatIntervalPreset.follow => '跟随全局',
     WechatIntervalPreset.fast => '秒回',
     WechatIntervalPreset.normal => '正常',
     WechatIntervalPreset.slow => '慢',
@@ -305,6 +316,7 @@ extension WechatIntervalPresetX on WechatIntervalPreset {
   };
 
   String get hint => switch (this) {
+    WechatIntervalPreset.follow => '用设置里那份',
     WechatIntervalPreset.fast => '0.5 ~ 3 秒',
     WechatIntervalPreset.normal => '4 ~ 30 秒',
     WechatIntervalPreset.slow => '40 秒 ~ 4 分钟',
@@ -313,7 +325,11 @@ extension WechatIntervalPresetX on WechatIntervalPreset {
   };
 
   /// 实际落到的秒数区间。
+  ///
+  /// `follow` 在这里没意义（真正算之前会被换掉），给 normal 兜底，
+  /// 万一哪处忘了换也不至于崩。
   ({int min, int max}) get range => switch (this) {
+    WechatIntervalPreset.follow => (min: 4, max: 30),
     WechatIntervalPreset.fast => (min: 0, max: 3),
     WechatIntervalPreset.normal => (min: 4, max: 30),
     WechatIntervalPreset.slow => (min: 40, max: 240),
@@ -328,6 +344,33 @@ extension WechatIntervalPresetX on WechatIntervalPreset {
     }
     return WechatIntervalPreset.normal;
   }
+}
+
+/// 真正拿来用的间隔：选了「跟随全局」就换成全局那份。
+///
+/// 群 / 私聊都可能选 follow，算延迟和显示文字之前都先过一遍这里，
+/// 免得两处各写一遍判断、改一处忘一处。
+({WechatIntervalPreset preset, int min, int max}) wechatEffectiveInterval(
+  WechatIntervalPreset preset, {
+  int customMinSeconds = 3,
+  int customMaxSeconds = 30,
+  WechatSettings? settings,
+}) {
+  if (preset == WechatIntervalPreset.follow) {
+    if (settings == null) {
+      return (
+        preset: WechatIntervalPreset.normal,
+        min: customMinSeconds,
+        max: customMaxSeconds,
+      );
+    }
+    return (
+      preset: settings.intervalPreset,
+      min: settings.customMinSeconds,
+      max: settings.customMaxSeconds,
+    );
+  }
+  return (preset: preset, min: customMinSeconds, max: customMaxSeconds);
 }
 
 /// 一个间隔预设算出来的等待时间。
@@ -359,7 +402,22 @@ String wechatIntervalLabel(
   WechatIntervalPreset preset, {
   int customMinSeconds = 3,
   int customMaxSeconds = 30,
+  WechatSettings? settings,
 }) {
+  if (preset == WechatIntervalPreset.follow) {
+    final effective = wechatEffectiveInterval(
+      preset,
+      customMinSeconds: customMinSeconds,
+      customMaxSeconds: customMaxSeconds,
+      settings: settings,
+    );
+    final inner = wechatIntervalLabel(
+      effective.preset,
+      customMinSeconds: effective.min,
+      customMaxSeconds: effective.max,
+    );
+    return '跟随全局 · $inner';
+  }
   if (preset != WechatIntervalPreset.custom) return preset.label;
   final lo = customMinSeconds.clamp(0, 3600);
   final hi = customMaxSeconds.clamp(lo, 3600);
@@ -375,7 +433,7 @@ class WechatGroup {
     this.bookIds = const <String>[],
     this.persona = '',
     this.divine = '',
-    this.intervalPreset = WechatIntervalPreset.normal,
+    this.intervalPreset = WechatIntervalPreset.follow,
     this.customMinSeconds = 3,
     this.customMaxSeconds = 30,
     this.providerKey,
@@ -407,12 +465,23 @@ class WechatGroup {
   final int createdAt;
 
   /// 这个间隔预设下，随机出来的一段时间。
-  Duration nextDelay(Random random) => wechatDelayOf(
-    intervalPreset,
-    customMinSeconds: customMinSeconds,
-    customMaxSeconds: customMaxSeconds,
-    random: random,
-  );
+  ///
+  /// 选了「跟随全局」时要传 [settings]（微信那份全局设置），
+  /// 不然拿不到全局的档位，只能按「正常」算。
+  Duration nextDelay(Random random, {WechatSettings? settings}) {
+    final effective = wechatEffectiveInterval(
+      intervalPreset,
+      customMinSeconds: customMinSeconds,
+      customMaxSeconds: customMaxSeconds,
+      settings: settings,
+    );
+    return wechatDelayOf(
+      effective.preset,
+      customMinSeconds: effective.min,
+      customMaxSeconds: effective.max,
+      random: random,
+    );
+  }
 
   /// 群里一共几个人。**含我自己**：界面上写「4 人」是三个人加我一个。
   int get memberCount => members.length + 1;
@@ -516,6 +585,7 @@ class WechatMessage {
     this.system = false,
     this.mine = false,
     this.divine = false,
+    this.recalled = false,
   });
 
   final String id;
@@ -535,6 +605,27 @@ class WechatMessage {
   /// 这条是我开了天意替别人说的。平时不显示，长按查看时才标记。
   final bool divine;
 
+  /// 撤回过的。正文会一起清空（原文不留），只渲染成一句灰字。
+  final bool recalled;
+
+  WechatMessage copyWith({
+    String? sender,
+    String? text,
+    int? at,
+    bool? recalled,
+  }) {
+    return WechatMessage(
+      id: id,
+      sender: sender ?? this.sender,
+      text: text ?? this.text,
+      at: at ?? this.at,
+      system: system,
+      mine: mine,
+      divine: divine,
+      recalled: recalled ?? this.recalled,
+    );
+  }
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
     'sender': sender,
@@ -543,6 +634,7 @@ class WechatMessage {
     if (system) 'sys': true,
     if (mine) 'mine': true,
     if (divine) 'divine': true,
+    if (recalled) 'recalled': true,
   };
 
   static WechatMessage? fromJson(Object? raw) {
@@ -557,6 +649,7 @@ class WechatMessage {
       system: raw['sys'] == true,
       mine: raw['mine'] == true,
       divine: raw['divine'] == true,
+      recalled: raw['recalled'] == true,
     );
   }
 }

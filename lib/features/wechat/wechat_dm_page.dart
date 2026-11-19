@@ -53,6 +53,12 @@ class _WechatDmPageState extends State<WechatDmPage> {
   /// 天意：用他的身份说话（夺舍）。私聊里也一样能用。
   bool _asDivine = false;
 
+  /// 正在重新生成的那条。非空时把它调淡，也挡住重复点。
+  String? _regenId;
+
+  /// 这个私聊在 extras 里的键（`dm:名字`）。
+  String get _chatKey => WechatStore.dmKey(widget.contactName);
+
   @override
   void initState() {
     super.initState();
@@ -142,10 +148,17 @@ class _WechatDmPageState extends State<WechatDmPage> {
       });
     }
     final contact = _contact;
-    final delay = wechatDelayOf(
-      contact?.intervalPreset ?? WechatIntervalPreset.normal,
+    final settings = _settings;
+    final effective = wechatEffectiveInterval(
+      contact?.intervalPreset ?? WechatIntervalPreset.follow,
       customMinSeconds: contact?.customMinSeconds ?? 2,
       customMaxSeconds: contact?.customMaxSeconds ?? 12,
+      settings: settings,
+    );
+    final delay = wechatDelayOf(
+      effective.preset,
+      customMinSeconds: effective.min,
+      customMaxSeconds: effective.max,
       random: _random,
     );
     _timer = Timer(delay, _reply);
@@ -166,9 +179,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
         bookIds: _settings.bookIds,
         persona: _settings.effectivePersona,
         worldPrompt: _settings.worldPrompt,
-        history: _messages.length > 40
-            ? _messages.sublist(_messages.length - 40)
-            : _messages,
+        history: wechatRecentContext(_messages, limit: 40),
       );
       final text = await generator.generate();
       if (!mounted) return;
@@ -249,7 +260,10 @@ class _WechatDmPageState extends State<WechatDmPage> {
                   preset: preset,
                   customMin: min,
                   customMax: max,
-                  note: '只管你们两个人的私聊，跟群里的间隔不通用。',
+                  allowFollow: true,
+                  note: preset == WechatIntervalPreset.follow
+                      ? '正在跟随全局：${wechatIntervalLabel(_settings.intervalPreset, customMinSeconds: _settings.customMinSeconds, customMaxSeconds: _settings.customMaxSeconds)}'
+                      : '只管你们两个人的私聊，跟群里的间隔不通用。',
                   onChanged: (nextPreset, nextMin, nextMax) {
                     setSheetState(() {
                       preset = nextPreset;
@@ -425,7 +439,19 @@ class _WechatDmPageState extends State<WechatDmPage> {
     }
     final items = <Widget>[];
     String? lastSender;
+    var lastAt = 0;
     for (final message in _messages) {
+      if (message.at > 0 &&
+          (lastAt == 0 ||
+              message.at - lastAt >= wechatTimeDividerGap.inMilliseconds)) {
+        items.add(WechatTimeDivider(millis: message.at));
+      }
+      if (message.at > 0) lastAt = message.at;
+      if (message.recalled) {
+        items.add(_recallRow(message));
+        lastSender = null;
+        continue;
+      }
       final mineHere = message.mine && !message.divine;
       final sameAsPrevious = lastSender == message.sender && !mineHere;
       items.add(_bubbleRow(message, showHead: !mineHere && !sameAsPrevious));
@@ -439,6 +465,169 @@ class _WechatDmPageState extends State<WechatDmPage> {
       padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
       children: items,
     );
+  }
+
+  /// 撤回后留的那句灰字。
+  Widget _recallRow(WechatMessage message) {
+    final mine = message.mine && !message.divine;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Center(
+        child: Text(
+          mine ? '你撤回了一条消息' : '${message.sender}撤回了一条消息',
+          style: const TextStyle(fontSize: 11.5, color: Color(0xFFA6A6A6)),
+        ),
+      ),
+    );
+  }
+
+  // ---------------- 单条消息：长按菜单 ----------------
+
+  Future<void> _showMessageMenu(WechatMessage message) async {
+    if (_regenId != null) {
+      _toast('等这条重写完再操作');
+      return;
+    }
+    final mine = message.mine && !message.divine;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (mine)
+                _menuItem(sheetCtx, Lucide.Pencil, '编辑', 'edit')
+              else
+                _menuItem(sheetCtx, Lucide.RefreshCw, '重新生成', 'regen'),
+              _menuItem(sheetCtx, Lucide.History, '撤回', 'recall'),
+              _menuItem(sheetCtx, Lucide.Trash2, '删除', 'delete', danger: true),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'edit':
+        await _editMessage(message);
+      case 'regen':
+        await _regenerateMessage(message);
+      case 'recall':
+        await _store.recallMessage(_chatKey, message.id);
+        if (!mounted) return;
+        setState(() => _messages = _store.dmMessages(widget.contactName));
+      case 'delete':
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            backgroundColor: Colors.white,
+            title: const Text('删掉这条？', style: TextStyle(fontSize: 16)),
+            content: const Text('删了就没了，不留记录。想留个痕迹用「撤回」。'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(false),
+                child: const Text('算了'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(true),
+                child: const Text(
+                  '删除',
+                  style: TextStyle(color: WechatColors.red),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (!mounted || ok != true) return;
+        await _store.deleteMessage(_chatKey, message.id);
+        if (!mounted) return;
+        setState(() => _messages = _store.dmMessages(widget.contactName));
+    }
+  }
+
+  Widget _menuItem(
+    BuildContext sheetCtx,
+    IconData icon,
+    String label,
+    String value, {
+    bool danger = false,
+  }) {
+    final color = danger ? WechatColors.red : wechatMenuInk;
+    return ListTile(
+      leading: Icon(icon, size: 20, color: color),
+      title: Text(label, style: TextStyle(fontSize: 15, color: color)),
+      onTap: () => Navigator.of(sheetCtx).pop(value),
+    );
+  }
+
+  Future<void> _editMessage(WechatMessage message) async {
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => WechatEditMessageDialog(initial: message.text),
+    );
+    final next = (text ?? '').trim();
+    if (!mounted || next.isEmpty || next == message.text) return;
+    await _store.editMessage(_chatKey, message.id, next);
+    if (!mounted) return;
+    setState(() => _messages = _store.dmMessages(widget.contactName));
+  }
+
+  /// 用**这条之前**的记录让他重说一遍。
+  Future<void> _regenerateMessage(WechatMessage message) async {
+    if (_regenId != null) return;
+    final contact = _contact;
+    if (contact == null) {
+      _toast('这个人不在通讯录里了');
+      return;
+    }
+    final index = _messages.indexWhere((m) => m.id == message.id);
+    if (index < 0) return;
+    final before = _messages.sublist(0, index);
+    setState(() => _regenId = message.id);
+    try {
+      final generator = WechatDmGenerator(
+        settings: context.read<SettingsProvider>(),
+        worldBooks: context.read<WorldBookProvider>(),
+        contact: contact,
+        bookIds: _settings.bookIds,
+        persona: _settings.effectivePersona,
+        worldPrompt: _settings.worldPrompt,
+        history: wechatRecentContext(before),
+      );
+      final text = await generator.generate();
+      final parts = wechatSplitReply(text);
+      if (!mounted) return;
+      if (parts.isEmpty) {
+        setState(() => _regenId = null);
+        _toast('这次没写出东西，再试一次');
+        return;
+      }
+      await _store.editMessage(_chatKey, message.id, parts.first);
+      if (!mounted) return;
+      setState(() {
+        _regenId = null;
+        _messages = _store.dmMessages(widget.contactName);
+      });
+    } on WechatServiceException catch (error) {
+      if (!mounted) return;
+      setState(() => _regenId = null);
+      _toast(
+        error.code == 'model_missing'
+            ? '这个人还没选模型，去「我 → 设置 → 角色管理」挑一个'
+            : '这次没生成出内容',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _regenId = null);
+      _toast('这次没重写成功，再点一次');
+    }
   }
 
   Widget _bubbleRow(WechatMessage message, {required bool showHead}) {
@@ -459,6 +648,13 @@ class _WechatDmPageState extends State<WechatDmPage> {
           color: WechatColors.primaryText,
         ),
       ),
+    );
+
+    // 长按出菜单：自己的能改，他的能重写。
+    final tappableBubble = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => _showMessageMenu(message),
+      child: Opacity(opacity: _regenId == message.id ? 0.45 : 1, child: bubble),
     );
 
     final avatar = mine
@@ -482,11 +678,11 @@ class _WechatDmPageState extends State<WechatDmPage> {
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
         children: mine
-            ? <Widget>[bubble, const SizedBox(width: 8), avatar]
+            ? <Widget>[tappableBubble, const SizedBox(width: 8), avatar]
             : <Widget>[
                 showHead ? avatar : const SizedBox(width: 38),
                 const SizedBox(width: 8),
-                bubble,
+                tappableBubble,
               ],
       ),
     );

@@ -298,7 +298,7 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
                   preset: preset,
                   customMin: min,
                   customMax: max,
-                  note: '只影响以后新建的群；已经建好的群在「群设置」里单独调。',
+                  note: '这是默认档；建群时选「跟随全局」的群会跟着这里变。',
                   onChanged: (nextPreset, nextMin, nextMax) {
                     setSheetState(() {
                       preset = nextPreset;

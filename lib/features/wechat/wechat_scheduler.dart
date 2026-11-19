@@ -44,7 +44,10 @@ class WechatScheduler {
   }
 
   /// 这次之后隔多久再让下一个人开口。
-  Duration nextDelay(WechatGroup group) => group.nextDelay(_random);
+  ///
+  /// 群设置里选了「跟随全局」时要传 [settings]，不然拿不到全局那一档。
+  Duration nextDelay(WechatGroup group, {WechatSettings? settings}) =>
+      group.nextDelay(_random, settings: settings);
 
   /// 最近谁说过话，最新的在前。
   List<String> _recentSpeakers(List<WechatMessage> history, {int keep = 8}) {

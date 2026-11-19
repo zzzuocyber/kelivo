@@ -32,6 +32,18 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
   WechatSettings _settings = const WechatSettings();
   Map<String, String> _avatars = const <String, String>{};
 
+  final ScrollController _scroll = ScrollController();
+
+  /// 两个字高固定，右侧字母条才能算准该滚到哪。
+  static const double _letterRowHeight = 24;
+  static const double _contactRowHeight = 64;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -273,24 +285,102 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
 
   Widget _list() {
     final rows = <Widget>[];
+    final letters = <String>[];
+    // 每个字母那行在整张列表里的纵向位置，点字母条要滚到这里。
+    final offsets = <String, double>{};
+    var y = 0.0;
     String? lastLetter;
     for (final contact in _contacts) {
       final letter = pinyinInitialOf(contact.name);
       if (letter != lastLetter) {
+        letters.add(letter);
+        offsets[letter] = y;
+        y += _letterRowHeight;
         rows.add(_letterRow(letter));
         lastLetter = letter;
       }
+      y += _contactRowHeight;
       rows.add(_contactRow(contact));
     }
     rows.add(_addRow());
-    return ListView(padding: EdgeInsets.zero, children: rows);
+    return Stack(
+      children: <Widget>[
+        // 右边留出一条给字母条，不然会盖住字。
+        ListView(
+          controller: _scroll,
+          padding: const EdgeInsets.only(right: 22),
+          children: rows,
+        ),
+        if (letters.length > 2)
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: _indexBar(letters, offsets),
+          ),
+      ],
+    );
   }
 
-  /// 首字母那行小灰条（A、B、C…），跟通讯录 App 一个意思。
+  /// 右侧那一竖排 A、B、C……，点一下滚到对应分组。
+  Widget _indexBar(List<String> letters, Map<String, double> offsets) {
+    return Center(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0x0D000000),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final letter in letters)
+                GestureDetector(
+                  onTap: () => _jumpTo(letter, offsets),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 3,
+                      vertical: 1.2,
+                    ),
+                    child: Text(
+                      letter,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                        color: WechatColors.secondaryText,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _jumpTo(String letter, Map<String, double> offsets) {
+    if (!_scroll.hasClients) return;
+    final target = offsets[letter];
+    if (target == null) return;
+    final max = _scroll.position.maxScrollExtent;
+    _scroll.animateTo(
+      // clamp 返回的是 num，animateTo 要 double，这里必须转一下。
+      target.clamp(0.0, max).toDouble(),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// 首字母那行小灰条（A、B、C…），高度固定，右侧字母条靠它算位置。
   Widget _letterRow(String letter) {
     return Container(
+      height: _letterRowHeight,
       color: const Color(0xFFF2F2F2),
-      padding: const EdgeInsets.fromLTRB(16, 5, 16, 5),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      alignment: Alignment.centerLeft,
       child: Text(
         letter,
         style: const TextStyle(
@@ -307,8 +397,9 @@ class _WechatContactsPageState extends State<WechatContactsPage> {
       onTap: () => _openDm(contact),
       onLongPress: () => _showContactMenu(contact),
       child: Container(
+        height: _contactRowHeight,
         color: Colors.white,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: <Widget>[
             WechatAvatarText(

@@ -456,20 +456,15 @@ class _MomentPageState extends State<MomentPage> {
   /// 名单分两段：**收藏**在上，**全部**在下按首字母排。
   /// 顺序固定下来，就不会每次点开看到的人不一样。
   Future<void> _pickSummon(MomentPost post, MomentComment comment) async {
-    final author = comment.author.trim();
+    // 作者本人也在名单里：他可以接着自己这条往下说（补充、改口都行）。
     final pool = sortedByPinyin(<MomentCharacter>[
       for (final character in _characters)
-        if (character.name.trim().isNotEmpty && character.name.trim() != author)
-          character,
+        if (character.name.trim().isNotEmpty) character,
     ], (character) => character.name);
     if (pool.isEmpty) {
       _toast('通讯录里没人可以召唤');
       return;
     }
-    // 作者本人被排掉了，说一句，不然看着像"人没了"。
-    final authorIsCharacter = _characters.any(
-      (c) => c.name.trim() == author && author.isNotEmpty,
-    );
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -482,7 +477,6 @@ class _MomentPageState extends State<MomentPage> {
         avatars: _assets,
         favorites: _store.summonFavorites(),
         onToggleFavorite: _store.toggleSummonFavorite,
-        hiddenAuthor: authorIsCharacter ? author : '',
       ),
     );
     if (!mounted || picked == null) return;
@@ -1072,7 +1066,6 @@ class _SummonSheet extends StatefulWidget {
     required this.avatars,
     required this.favorites,
     required this.onToggleFavorite,
-    required this.hiddenAuthor,
   });
 
   /// 候选角色，进来之前已经按首字母排好序。
@@ -1084,9 +1077,6 @@ class _SummonSheet extends StatefulWidget {
 
   /// 点星星时调它，返回更新后的收藏名单。
   final Future<List<String>> Function(String name) onToggleFavorite;
-
-  /// 被排掉的评论作者（空 = 没排掉谁），界面上要说一句。
-  final String hiddenAuthor;
 
   @override
   State<_SummonSheet> createState() => _SummonSheetState();
@@ -1184,30 +1174,6 @@ class _SummonSheetState extends State<_SummonSheet> {
                 ],
               ),
             ),
-            if (widget.hiddenAuthor.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-                child: Row(
-                  children: <Widget>[
-                    const Icon(
-                      Lucide.BadgeInfo,
-                      size: 13,
-                      color: MomentColors.secondaryText,
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        '「${widget.hiddenAuthor}」就是这条回复的作者，不在这里',
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: MomentColors.secondaryText,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             const Divider(
               height: 0.5,
               thickness: 0.5,

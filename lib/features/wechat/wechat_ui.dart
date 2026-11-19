@@ -122,6 +122,7 @@ class WechatIntervalPicker extends StatelessWidget {
     required this.customMax,
     required this.onChanged,
     this.note,
+    this.allowFollow = false,
   });
 
   final WechatIntervalPreset preset;
@@ -134,6 +135,9 @@ class WechatIntervalPicker extends StatelessWidget {
   /// 底下那行灰字说明，不同场景写的不一样。
   final String? note;
 
+  /// 是否多给一档「跟随全局」。群设置和私聊开，全局自己那处不开。
+  final bool allowFollow;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -145,7 +149,11 @@ class WechatIntervalPicker extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
-              for (final item in WechatIntervalPreset.values) _chip(item),
+              for (final item
+                  in allowFollow
+                      ? WechatIntervalPreset.values
+                      : WechatIntervalPresetX.own)
+                _chip(item),
             ],
           ),
         ),
@@ -319,6 +327,112 @@ class _NumberFieldState extends State<_NumberField> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 相邻两条消息隔了这么久，中间就插一条时间（跟微信差不多）。
+const Duration wechatTimeDividerGap = Duration(minutes: 5);
+
+/// 时间分隔上写什么。
+///
+/// 今天只写 `21:03`；昨天写 `昨天 21:03`；今年写 `11月18日 21:03`；
+/// 更早带上年份。跨年那几条一眼能分出来。
+String wechatTimeDividerLabel(int millis, {DateTime? now}) {
+  if (millis <= 0) return '';
+  final time = DateTime.fromMillisecondsSinceEpoch(millis);
+  final base = now ?? DateTime.now();
+  String two(int value) => value < 10 ? '0$value' : '$value';
+  final clock = '${two(time.hour)}:${two(time.minute)}';
+  final day = DateTime(time.year, time.month, time.day);
+  final today = DateTime(base.year, base.month, base.day);
+  final diff = today.difference(day).inDays;
+  if (diff == 0) return clock;
+  if (diff == 1) return '昨天 $clock';
+  if (time.year == base.year) return '${time.month}月${time.day}日 $clock';
+  return '${time.year}年${time.month}月${time.day}日 $clock';
+}
+
+/// 居中的那条时间（灰字，没有底色）。
+class WechatTimeDivider extends StatelessWidget {
+  const WechatTimeDivider({super.key, required this.millis});
+
+  final int millis;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = wechatTimeDividerLabel(millis);
+    if (label.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 11.5, color: Color(0xFFA6A6A6)),
+        ),
+      ),
+    );
+  }
+}
+
+/// 编辑一条消息的小弹窗（群聊、私聊共用）。
+///
+/// 做成有状态组件是为了自己管 controller 并在卸载时 dispose：
+/// 直接在 dialog 闭包里建 controller 再 dispose，会撞上退场动画还在读它。
+class WechatEditMessageDialog extends StatefulWidget {
+  const WechatEditMessageDialog({super.key, required this.initial});
+
+  final String initial;
+
+  @override
+  State<WechatEditMessageDialog> createState() =>
+      _WechatEditMessageDialogState();
+}
+
+class _WechatEditMessageDialogState extends State<WechatEditMessageDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text(
+        '编辑这条消息',
+        style: TextStyle(fontSize: 16, color: wechatMenuInk),
+      ),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        minLines: 1,
+        maxLines: 6,
+        style: const TextStyle(fontSize: 15, color: WechatColors.primaryText),
+        decoration: const InputDecoration(
+          hintText: '改点什么',
+          hintStyle: TextStyle(color: WechatColors.secondaryText),
+        ),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text(
+            '取消',
+            style: TextStyle(color: WechatColors.secondaryText),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('保存', style: TextStyle(color: WechatColors.green)),
+        ),
+      ],
     );
   }
 }

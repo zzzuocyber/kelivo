@@ -121,17 +121,14 @@ class WechatStore {
     String persona = '',
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    // 新群继承「微信设置 → 群聊默认间隔」，建好之后还能在群设置里单独改。
-    final defaults = wechatSettings();
+    // 新群默认「跟随全局」：以后在设置里改全局间隔，没单独设过的群会跟着变。
     final group = WechatGroup(
       id: '${now}_${_random.nextInt(99999)}',
       name: name.trim().isEmpty ? '新群聊' : name.trim(),
       members: members,
       bookIds: bookIds,
       persona: persona,
-      intervalPreset: defaults.intervalPreset,
-      customMinSeconds: defaults.customMinSeconds,
-      customMaxSeconds: defaults.customMaxSeconds,
+      intervalPreset: WechatIntervalPreset.follow,
       createdAt: now,
     );
     final next = <WechatGroup>[...groups(), group];
@@ -506,11 +503,55 @@ class WechatStore {
     return message;
   }
 
+  /// 改一条消息的正文。只有自己发的才允许改，判断放在界面层。
+  Future<void> editMessage(String key, String id, String text) async {
+    final list = messages(key);
+    var changed = false;
+    final next = <WechatMessage>[];
+    for (final message in list) {
+      if (message.id == id) {
+        next.add(message.copyWith(text: text));
+        changed = true;
+      } else {
+        next.add(message);
+      }
+    }
+    if (!changed) return;
+    await _writeMessages(key, next);
+  }
+
+  /// 撤回：正文**清空**（原文一个字都不留），只留个标记，界面渲染成一句灰字。
+  ///
+  /// 清空是有意的——撤回的话不该再被喂进上下文，也不该能被翻出来。
+  Future<void> recallMessage(String key, String id) async {
+    final list = messages(key);
+    var changed = false;
+    final next = <WechatMessage>[];
+    for (final message in list) {
+      if (message.id == id && !message.recalled) {
+        next.add(message.copyWith(text: '', recalled: true));
+        changed = true;
+      } else {
+        next.add(message);
+      }
+    }
+    if (!changed) return;
+    await _writeMessages(key, next);
+  }
+
+  /// 彻底删掉一条，不留灰字。
+  Future<void> deleteMessage(String key, String id) async {
+    final list = messages(key);
+    final next = <WechatMessage>[
+      for (final message in list)
+        if (message.id != id) message,
+    ];
+    if (next.length == list.length) return;
+    await _writeMessages(key, next);
+  }
+
   /// 拉人进群，同时留一条系统消息——角色看得见，能顺着这事聊。
-  Future<WechatGroup> addMembers(
-    WechatGroup group,
-    List<WechatMember> added,
-  ) async {
+  Future<WechatGroup> addMembers(List<WechatMember> added) async {
     if (added.isEmpty) return group;
     final existing = <String>{for (final m in group.members) m.name};
     final fresh = <WechatMember>[
@@ -570,6 +611,22 @@ List<WechatMessage> wechatRecentContext(
   List<WechatMessage> all, {
   int limit = 60,
 }) {
-  if (all.length <= limit) return all;
-  return all.sublist(all.length - limit);
+  // 撤回的那条正文已经清空了：原文绝不进上下文，
+  // 只换成一句系统提示，让角色知道"刚才有句话被收回了"，别当他没说过。
+  final usable = <WechatMessage>[
+    for (final message in all)
+      if (message.recalled)
+        WechatMessage(
+          id: message.id,
+          sender: '',
+          text:
+              '${message.mine && !message.divine ? '我' : message.sender}撤回了一条消息',
+          at: message.at,
+          system: true,
+        )
+      else
+        message,
+  ];
+  if (usable.length <= limit) return usable;
+  return usable.sublist(usable.length - limit);
 }

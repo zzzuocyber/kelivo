@@ -308,7 +308,10 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                 preset: group.intervalPreset,
                 customMin: group.customMinSeconds,
                 customMax: group.customMaxSeconds,
-                note: '群里两个人说话的间隔。人越多建议越慢，不然像在抢话。',
+                allowFollow: true,
+                note: group.intervalPreset == WechatIntervalPreset.follow
+                    ? '正在跟随全局：${wechatIntervalLabel(_store.wechatSettings().intervalPreset, customMinSeconds: _store.wechatSettings().customMinSeconds, customMaxSeconds: _store.wechatSettings().customMaxSeconds)}'
+                    : '群里两个人说话的间隔。人越多建议越慢，不然像在抢话。',
                 onChanged: (preset, min, max) async {
                   await _apply(
                     group.copyWith(

@@ -401,6 +401,11 @@ class WechatDmGenerator {
     } else {
       buffer.writeln('【最近的聊天】');
       for (final message in history) {
+        // 撤回留下的那句系统提示（原文不会传进来）。
+        if (message.system) {
+          buffer.writeln('（系统）${message.text}');
+          continue;
+        }
         // 天意替他说的话，是“他说的”，不是“我说的”。
         final who = message.mine && !message.divine ? persona : contact.name;
         buffer.writeln('$who：${message.text}');
