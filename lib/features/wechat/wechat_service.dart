@@ -119,6 +119,7 @@ void _writeChatRules(StringBuffer buffer, String speakerName) {
   buffer.writeln('- 不用 markdown、不用括号写动作神态、不要给自己加引号。');
   buffer.writeln('- 不要每句都感慨，不要客套，不要总结。');
   buffer.writeln('- 真的没什么可说，就发很短的一句，别硬凑内容。');
+  buffer.writeln('- 想连着发几条就用换行分开，一行就是一条消息，最多三条；不想连发就只写一行。');
   buffer.writeln('- 只输出$speakerName 这次要发出去的那段文字，别的什么都不要。');
 }
 
@@ -414,6 +415,25 @@ class WechatDmGenerator {
 // ============================================================
 // 洗一遍模型吐出来的东西
 // ============================================================
+
+/// 模型偶尔会连发几条：按换行拆成多条消息。
+///
+/// 最多 [maxParts] 条；多出来的并进最后一条，避免一次刷一屏。
+List<String> wechatSplitReply(String text, {int maxParts = 3}) {
+  final parts = <String>[];
+  for (final line in text.split('\n')) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) continue;
+    parts.add(trimmed);
+  }
+  if (parts.length <= 1) return parts;
+  if (parts.length > maxParts) {
+    final head = parts.take(maxParts - 1).toList();
+    head.add(parts.skip(maxParts - 1).join(' '));
+    return head;
+  }
+  return parts;
+}
 
 /// 把模型吐出来的东西收拾成一条能直接发的微信消息。
 String cleanReply(String raw, String speaker) {

@@ -64,6 +64,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
     });
     // 召唤进来的：他先说话。给一小段时间让页面站稳再开口。
     if (widget.summon) {
+      _typing = true;
       _timer = Timer(const Duration(milliseconds: 500), _reply);
     }
   }
@@ -133,6 +134,13 @@ class _WechatDmPageState extends State<WechatDmPage> {
   void _scheduleReply() {
     if (_waiting) return;
     _timer?.cancel();
+    // 等待这段时间也要有反馈，不然干等着像没反应。
+    if (!_typing && mounted) {
+      setState(() => _typing = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _jumpToBottom();
+      });
+    }
     final contact = _contact;
     final delay = wechatDelayOf(
       contact?.intervalPreset ?? WechatIntervalPreset.normal,
@@ -164,7 +172,14 @@ class _WechatDmPageState extends State<WechatDmPage> {
       );
       final text = await generator.generate();
       if (!mounted) return;
-      await _store.appendDmMessage(widget.contactName, text: text, mine: false);
+      // 他可能连着发几条（模型用换行分的），一条一个气泡。
+      for (final part in wechatSplitReply(text)) {
+        await _store.appendDmMessage(
+          widget.contactName,
+          text: part,
+          mine: false,
+        );
+      }
       if (!mounted) return;
       setState(() => _messages = _store.dmMessages(widget.contactName));
       _jumpToBottom();
@@ -261,6 +276,32 @@ class _WechatDmPageState extends State<WechatDmPage> {
     _reload();
   }
 
+  /// 删掉跟这个人的聊天记录。人还留在通讯录里，随时能再聊。
+  Future<void> _deleteChat() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('删除聊天记录？', style: TextStyle(fontSize: 16)),
+        content: Text('和「${widget.contactName}」的聊天记录会全部删掉，人还留在通讯录里。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('算了'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('删除', style: TextStyle(color: WechatColors.red)),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || ok != true) return;
+    await _store.deleteDm(widget.contactName);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   void _toast(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -284,7 +325,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
       data: wechatLightTheme(),
       child: Scaffold(
         backgroundColor: WechatColors.chatBg,
-        resizeToAvoidBottomInset: true,
+        // 这里不用 Scaffold 自己顶：小手机里这页是套在嵌套路由里的，
+        // 靠它顶不起来，改成按 viewInsets 自己算。
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           backgroundColor: WechatColors.navBg,
           elevation: 0,
@@ -298,13 +341,26 @@ class _WechatDmPageState extends State<WechatDmPage> {
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(Lucide.ChevronLeft, size: 22, color: Colors.black),
           ),
-          title: Text(
-            contact.name,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: Colors.black,
-            ),
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                contact.name,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+              if (_typing)
+                const Text(
+                  '对方正在输入…',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+            ],
           ),
           actions: <Widget>[
             PopupMenuButton<String>(
@@ -314,6 +370,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
                 if (value == 'divine') {
                   setState(() => _asDivine = !_asDivine);
                 }
+                if (value == 'delete') await _deleteChat();
               },
               itemBuilder: (_) => <PopupMenuEntry<String>>[
                 PopupMenuItem<String>(
@@ -324,15 +381,26 @@ class _WechatDmPageState extends State<WechatDmPage> {
                   value: 'interval',
                   child: Text('回复间隔'),
                 ),
+                const PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Text('删除聊天记录'),
+                ),
               ],
             ),
           ],
         ),
-        body: Column(
-          children: <Widget>[
-            Expanded(child: _messageList()),
-            _inputBar(),
-          ],
+        body: AnimatedPadding(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: Column(
+            children: <Widget>[
+              Expanded(child: _messageList()),
+              _inputBar(),
+            ],
+          ),
         ),
       ),
     );

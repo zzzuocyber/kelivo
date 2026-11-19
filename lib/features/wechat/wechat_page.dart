@@ -135,6 +135,94 @@ class _WechatPageState extends State<WechatPage> {
     return out;
   }
 
+  /// 长按会话：删掉这次聊天（群连群一起删，私聊只删记录）。
+  Future<void> _showSessionMenu(_WechatSession session) async {
+    final isGroup = session.isGroup;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    session.title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: WechatColors.secondaryText,
+                    ),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(
+                  Lucide.Trash2,
+                  size: 20,
+                  color: wechatMenuInk,
+                ),
+                title: Text(
+                  isGroup ? '删除群聊' : '删除聊天记录',
+                  style: const TextStyle(fontSize: 15, color: wechatMenuInk),
+                ),
+                subtitle: Text(
+                  isGroup ? '连群带记录一起删，删了拿不回来' : '只删你们的聊天，人还留在通讯录',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+                onTap: () => Navigator.of(sheetCtx).pop('delete'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action != 'delete') return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          isGroup ? '删除这个群？' : '删除聊天记录？',
+          style: const TextStyle(fontSize: 16),
+        ),
+        content: Text(
+          isGroup
+              ? '「${session.title}」和里面的聊天记录都会删掉，删了拿不回来。'
+              : '和「${session.title}」的聊天记录会全部删掉，人还留在通讯录里。',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('算了'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('删除', style: TextStyle(color: WechatColors.red)),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || ok != true) return;
+    if (isGroup) {
+      await _store.deleteGroup(session.key);
+    } else {
+      await _store.deleteDm(session.title);
+    }
+    if (!mounted) return;
+    _reload();
+  }
+
   Future<void> _openSession(_WechatSession session) async {
     if (session.isGroup) {
       await _openChat(session.key);
@@ -444,6 +532,7 @@ class _WechatPageState extends State<WechatPage> {
         final session = sessions[index];
         return InkWell(
           onTap: () => _openSession(session),
+          onLongPress: () => _showSessionMenu(session),
           child: Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
@@ -830,16 +919,18 @@ class _WechatChatPageState extends State<WechatChatPage> {
       );
       final text = await generator.generateFor(speaker);
       if (!mounted) return;
-      final message = await _store.appendMessage(
-        group.id,
-        sender: speakerName,
-        text: text,
-      );
-      if (!mounted) return;
+      // 他可能连着发几条（模型用换行分的），一条一个气泡。
+      final added = <WechatMessage>[];
+      for (final part in wechatSplitReply(text)) {
+        added.add(
+          await _store.appendMessage(group.id, sender: speakerName, text: part),
+        );
+      }
+      if (added.isEmpty || !mounted) return;
       setState(() {
         _typingName = null;
         if (isForced) _pendingSpeaker = null;
-        _messages = <WechatMessage>[..._messages, message];
+        _messages = <WechatMessage>[..._messages, ...added];
       });
       _jumpToBottom();
       _restartLoop();

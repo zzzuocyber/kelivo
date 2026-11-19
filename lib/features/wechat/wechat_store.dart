@@ -373,6 +373,24 @@ class WechatStore {
     divine: divine,
   );
 
+  /// 删掉跟某个人的私聊记录（通讯录里那人还在）。
+  Future<void> deleteDm(String name) async {
+    final key = wechatDmKey(name);
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final map = Map<String, dynamic>.from(extras);
+      final all = map[wechatMessagesKey];
+      if (all is Map) {
+        map[wechatMessagesKey] = Map<String, dynamic>.from(all)..remove(key);
+      }
+      final reads = map[wechatReadsKey];
+      if (reads is Map) {
+        map[wechatReadsKey] = Map<String, dynamic>.from(reads)..remove(key);
+      }
+      return map;
+    });
+  }
+
   // ---------------- 未读 ----------------
 
   /// 每个会话读到哪了（毫秒）。键跟消息键一致：群 id 或 `dm:名字`。
