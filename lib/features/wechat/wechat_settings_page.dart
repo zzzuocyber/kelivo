@@ -101,7 +101,7 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     String? model,
     SettingsProvider settings,
   ) {
-    if (provider == null || model == null) return '跟随全局';
+    if (provider == null || model == null) return '跟群默认';
     final config = settings.getProviderConfig(provider);
     final name = config.name.trim().isEmpty ? provider : config.name;
     return '$name · $model';
@@ -112,22 +112,35 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
   Future<void> _invite() async {
     final group = _group;
     if (group == null) return;
-    final books = context.read<WorldBookProvider>().books;
-    final picked = await showModalBottomSheet<List<WechatMember>>(
+    // 拉人只从通讯录里挑：世界书里有人但没加进通讯录的，这里看不到。
+    final contacts = _store.contacts();
+    if (contacts.isEmpty) {
+      _toast('通讯录里还没人，先去通讯录取加几个');
+      return;
+    }
+    final existing = <String>{for (final m in group.members) m.name};
+    final pool = <WechatContact>[
+      for (final contact in contacts)
+        if (!existing.contains(contact.name)) contact,
+    ];
+    if (pool.isEmpty) {
+      _toast('通讯录里的人都已经在群里了');
+      return;
+    }
+    final picked = await showModalBottomSheet<List<WechatContact>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
-      builder: (sheetCtx) => _InviteSheet(
-        books: books,
-        selectedBookIds: group.bookIds,
-        existingNames: <String>{for (final m in group.members) m.name},
-      ),
+      builder: (sheetCtx) =>
+          _InviteSheet(contacts: pool, avatars: _store.avatarPaths()),
     );
     if (picked == null || picked.isEmpty) return;
-    final next = await _store.addMembers(group, picked);
+    final next = await _store.addMembers(group, <WechatMember>[
+      for (final contact in picked) contact.toMember(),
+    ]);
     if (!mounted) return;
     setState(() {
       _group = next;
@@ -267,8 +280,7 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
 
               _header('成员（${group.members.length}）'),
               _section(<Widget>[
-                for (final member in group.members)
-                  _memberRow(member, settings),
+                for (final member in group.members) _memberRow(member),
                 _addRow(),
               ]),
 
@@ -385,7 +397,7 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     );
   }
 
-  Widget _memberRow(WechatMember member, SettingsProvider settings) {
+  Widget _memberRow(WechatMember member) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
       decoration: const BoxDecoration(
@@ -398,52 +410,17 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
           WechatAvatarText(name: member.name, size: 36),
           const SizedBox(width: 11),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  member.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: WechatColors.primaryText,
-                  ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                member.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: WechatColors.primaryText,
                 ),
-                const SizedBox(height: 2),
-                GestureDetector(
-                  onTap: () => _pickModel(
-                    initialProvider: member.providerKey,
-                    initialModel: member.modelId,
-                    onDone: (provider, model) async {
-                      final group = _group;
-                      if (group == null) return;
-                      await _apply(
-                        group.copyWith(
-                          members: <WechatMember>[
-                            for (final item in group.members)
-                              if (item.name == member.name)
-                                item.copyWith(
-                                  providerKey: provider,
-                                  modelId: model,
-                                  clearModel: provider == null,
-                                )
-                              else
-                                item,
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  child: Text(
-                    _modelLabel(member.providerKey, member.modelId, settings),
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: WechatColors.secondaryText,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           IconButton(
@@ -661,15 +638,11 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
 // ============================================================
 
 class _InviteSheet extends StatefulWidget {
-  const _InviteSheet({
-    required this.books,
-    required this.selectedBookIds,
-    required this.existingNames,
-  });
+  const _InviteSheet({required this.contacts, required this.avatars});
 
-  final List<WorldBook> books;
-  final List<String> selectedBookIds;
-  final Set<String> existingNames;
+  /// 通讯录里还没进这个群的人。
+  final List<WechatContact> contacts;
+  final Map<String, String> avatars;
 
   @override
   State<_InviteSheet> createState() => _InviteSheetState();
@@ -686,39 +659,20 @@ class _InviteSheetState extends State<_InviteSheet> {
     super.dispose();
   }
 
-  List<({String name, String entryId, String bookId})> _candidates() {
-    final out = <({String name, String entryId, String bookId})>[];
-    final seen = <String>{};
-    // 选中的世界书优先，没选就全给，反正选的时候能看见来自哪本。
-    final books = widget.selectedBookIds.isEmpty
-        ? widget.books
-        : <WorldBook>[
-            for (final book in widget.books)
-              if (widget.selectedBookIds.contains(book.id)) book,
-          ];
-    for (final book in books) {
-      for (final entry in book.entries) {
-        if (!entry.enabled) continue;
-        final name = entry.name.trim();
-        if (name.isEmpty) continue;
-        if (!seen.add(name)) continue;
-        out.add((name: name, entryId: entry.id, bookId: book.id));
-      }
-    }
+  List<WechatContact> _candidates() {
     final keyword = _keyword.trim();
-    if (keyword.isEmpty) return out;
-    return <({String name, String entryId, String bookId})>[
-      for (final item in out)
-        if (item.name.contains(keyword)) item,
+    if (keyword.isEmpty) return widget.contacts;
+    return <WechatContact>[
+      for (final contact in widget.contacts)
+        if (contact.name.contains(keyword)) contact,
     ];
   }
 
   @override
   Widget build(BuildContext context) {
     final list = _candidates();
-    final height = MediaQuery.sizeOf(context).height * 0.72;
     return SizedBox(
-      height: height,
+      height: MediaQuery.sizeOf(context).height * 0.72,
       child: Column(
         children: <Widget>[
           Padding(
@@ -736,14 +690,9 @@ class _InviteSheetState extends State<_InviteSheet> {
                 const Spacer(),
                 TextButton(
                   onPressed: () {
-                    final picked = <WechatMember>[
-                      for (final item in list)
-                        if (_picked.contains(item.name))
-                          WechatMember(
-                            name: item.name,
-                            entryId: item.entryId,
-                            bookId: item.bookId,
-                          ),
+                    final picked = <WechatContact>[
+                      for (final contact in list)
+                        if (_picked.contains(contact.name)) contact,
                     ];
                     Navigator.of(context).pop(picked);
                   },
@@ -767,7 +716,7 @@ class _InviteSheetState extends State<_InviteSheet> {
                 decoration: const InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  hintText: '搜角色名',
+                  hintText: '搜名字',
                   hintStyle: TextStyle(fontSize: 14, color: Color(0xFFB2B2B2)),
                   contentPadding: EdgeInsets.symmetric(vertical: 8),
                 ),
@@ -780,7 +729,7 @@ class _InviteSheetState extends State<_InviteSheet> {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Text(
-                '没找到。先去群设置里选一本世界书，条目里的人才会出现在这儿。',
+                '没找到。人得先去通讯录里加进来，这里才有。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12.5,
@@ -794,58 +743,38 @@ class _InviteSheetState extends State<_InviteSheet> {
               child: ListView.builder(
                 itemCount: list.length,
                 itemBuilder: (_, index) {
-                  final item = list[index];
-                  final already = widget.existingNames.contains(item.name);
-                  final picked = _picked.contains(item.name);
+                  final contact = list[index];
+                  final picked = _picked.contains(contact.name);
                   return InkWell(
-                    onTap: already
-                        ? null
-                        : () {
-                            setState(() {
-                              if (picked) {
-                                _picked.remove(item.name);
-                              } else {
-                                _picked.add(item.name);
-                              }
-                            });
-                          },
+                    onTap: () => setState(() {
+                      if (!_picked.remove(contact.name)) {
+                        _picked.add(contact.name);
+                      }
+                    }),
                     child: Container(
+                      color: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 11,
-                      ),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Color(0xFFF0F0F0),
-                            width: 0.5,
-                          ),
-                        ),
+                        vertical: 10,
                       ),
                       child: Row(
                         children: <Widget>[
-                          WechatAvatarText(name: item.name, size: 34),
+                          WechatAvatarText(
+                            name: contact.name,
+                            size: 36,
+                            imagePath: widget.avatars[contact.name],
+                          ),
                           const SizedBox(width: 11),
                           Expanded(
                             child: Text(
-                              item.name,
-                              style: TextStyle(
+                              contact.name,
+                              style: const TextStyle(
                                 fontSize: 15,
-                                color: already
-                                    ? const Color(0xFFB9B9B9)
-                                    : WechatColors.primaryText,
+                                color: WechatColors.primaryText,
                               ),
                             ),
                           ),
-                          if (already)
-                            const Text(
-                              '已在群里',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFFB9B9B9),
-                              ),
-                            )
-                          else if (picked)
+                          if (picked)
                             const Icon(
                               Lucide.Check,
                               size: 20,
@@ -858,7 +787,7 @@ class _InviteSheetState extends State<_InviteSheet> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: Color(0xFFCFCFCF),
+                                  color: const Color(0xFFCFCFCF),
                                   width: 1.4,
                                 ),
                               ),
@@ -876,8 +805,6 @@ class _InviteSheetState extends State<_InviteSheet> {
   }
 }
 
-/// 两个秒数输入框。单独做成有状态组件，免得外面 setState 一次
-/// 就把 controller 换掉、光标跳走。
 class _WechatNumberField extends StatefulWidget {
   const _WechatNumberField({
     required this.label,

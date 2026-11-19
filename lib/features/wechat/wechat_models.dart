@@ -5,9 +5,167 @@ import 'dart:math';
 const String wechatHiddenKey = 'wechat.hidden';
 const String wechatGroupsKey = 'wechat.groups';
 const String wechatMessagesKey = 'wechat.messages';
+const String wechatContactsKey = 'wechat.contacts';
+
+/// 每个会话读到哪了（毫秒时间戳），键跟 [wechatMessagesKey] 一致。
+const String wechatReadsKey = 'wechat.reads';
+
+/// 私聊记录在 [wechatMessagesKey] 里的键：群用群 id，私聊用 dm:名字。
+String wechatDmKey(String name) => 'dm:${name.trim()}';
 
 /// 隐藏对话的标题，只在备份/导出里看得见。
 const String wechatContainerTitle = '微信';
+
+/// 通讯录里的一个人。**手动添加**，不会自己从世界书灌进来。
+///
+/// 人设正文还是去世界书取（entryId + bookId 定位）；
+/// 头像不在这里存，直接读朋友圈那份（`moment.assets`，键是同名），
+/// 所以两边改头像天然同步，不用额外对账。
+class WechatContact {
+  const WechatContact({
+    required this.name,
+    this.entryId = '',
+    this.bookId = '',
+    this.providerKey,
+    this.modelId,
+    this.addedAt = 0,
+  });
+
+  /// 唯一键，也是消息里的“谁说的”。
+  final String name;
+
+  /// 世界书条目的 id + 来源书，用来取人设正文。
+  final String entryId;
+  final String bookId;
+
+  /// 这个角色自己的模型；空 = 跟随当前场景（群的默认 / 全局）。
+  final String? providerKey;
+  final String? modelId;
+
+  final int addedAt;
+
+  WechatContact copyWith({
+    String? name,
+    String? entryId,
+    String? bookId,
+    String? providerKey,
+    String? modelId,
+    bool clearModel = false,
+  }) {
+    return WechatContact(
+      name: name ?? this.name,
+      entryId: entryId ?? this.entryId,
+      bookId: bookId ?? this.bookId,
+      providerKey: clearModel ? null : (providerKey ?? this.providerKey),
+      modelId: clearModel ? null : (modelId ?? this.modelId),
+      addedAt: addedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'name': name,
+    if (entryId.isNotEmpty) 'entry': entryId,
+    if (bookId.isNotEmpty) 'book': bookId,
+    if (providerKey != null) 'provider': providerKey,
+    if (modelId != null) 'model': modelId,
+    'at': addedAt,
+  };
+
+  static WechatContact? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final name = (raw['name'] ?? '').toString().trim();
+    if (name.isEmpty) return null;
+    final provider = raw['provider'];
+    final model = raw['model'];
+    return WechatContact(
+      name: name,
+      entryId: (raw['entry'] ?? '').toString(),
+      bookId: (raw['book'] ?? '').toString(),
+      providerKey: provider is String && provider.isNotEmpty ? provider : null,
+      modelId: model is String && model.isNotEmpty ? model : null,
+      addedAt: _intOr(raw['at'], 0),
+    );
+  }
+
+  /// 群成员也能当联系人用（迁移和查模型时省一次转换）。
+  WechatMember toMember() => WechatMember(
+    name: name,
+    entryId: entryId,
+    bookId: bookId,
+    providerKey: providerKey,
+    modelId: modelId,
+  );
+
+  static WechatContact ofMember(WechatMember member) => WechatContact(
+    name: member.name,
+    entryId: member.entryId,
+    bookId: member.bookId,
+    providerKey: member.providerKey,
+    modelId: member.modelId,
+  );
+}
+
+List<WechatContact> wechatContactsFromExtras(Map<String, dynamic>? extras) {
+  final raw = extras?[wechatContactsKey];
+  if (raw is! List) return const <WechatContact>[];
+  final out = <WechatContact>[];
+  for (final item in raw) {
+    final contact = WechatContact.fromJson(item);
+    if (contact != null) out.add(contact);
+  }
+  return out;
+}
+
+const String wechatSettingsKey = 'wechat.settings';
+
+/// 微信自己的全局设置（跟「设置 → 默认模型」那套无关）。
+///
+/// 现在只放两样：通讯录/私聊用哪几本世界书，以及我的马甲名。
+class WechatSettings {
+  const WechatSettings({this.bookIds = const <String>[], this.persona = ''});
+
+  /// 通讯录添加人、私聊生成都用这几本世界书（群聊各有自己的一份）。
+  final List<String> bookIds;
+
+  /// 我在微信里的名字。空 = 叫「我」。
+  final String persona;
+
+  String get effectivePersona {
+    final value = persona.trim();
+    return value.isEmpty ? '我' : value;
+  }
+
+  WechatSettings copyWith({List<String>? bookIds, String? persona}) {
+    return WechatSettings(
+      bookIds: bookIds ?? this.bookIds,
+      persona: persona ?? this.persona,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'books': bookIds,
+    'persona': persona,
+  };
+
+  static WechatSettings fromJson(Object? raw) {
+    if (raw is! Map) return const WechatSettings();
+    final booksRaw = raw['books'];
+    final books = <String>[];
+    if (booksRaw is List) {
+      for (final item in booksRaw) {
+        final value = item.toString().trim();
+        if (value.isNotEmpty) books.add(value);
+      }
+    }
+    return WechatSettings(
+      bookIds: books,
+      persona: (raw['persona'] ?? '').toString(),
+    );
+  }
+}
+
+WechatSettings wechatSettingsFromExtras(Map<String, dynamic>? extras) =>
+    WechatSettings.fromJson(extras?[wechatSettingsKey]);
 
 /// 微信模块的数据模型。
 ///
