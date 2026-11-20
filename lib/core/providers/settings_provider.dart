@@ -3210,8 +3210,7 @@ class SettingsProvider extends ChangeNotifier {
   ({bool enabled, ChatBubbleStyleOverrides overrides})? _thinkingToolCardStyle;
 
   bool get canCustomizeThinkingToolCards =>
-      _chatMessageBackgroundStyle != ChatMessageBackgroundStyle.defaultStyle &&
-      assistantBubbleSplitParagraphs;
+      _chatMessageBackgroundStyle != ChatMessageBackgroundStyle.defaultStyle;
   bool get customizeThinkingToolCards =>
       _thinkingToolCardStyle?.enabled ?? false;
 
