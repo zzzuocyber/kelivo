@@ -10,7 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:Kelivo/core/models/message_part.dart';
 import 'package:Kelivo/core/providers/settings_provider.dart';
-import 'package:Kelivo/core/services/mcp/mcp_icon_cache.dart';
+import 'package:Kelivo/core/services/chat/chat_service.dart';
+import 'package:Kelivo/utils/icon_cache.dart';
+import 'package:Kelivo/core/services/storage/attachment_file_lock.dart';
 import 'package:Kelivo/features/settings/pages/storage_space_page.dart';
 import 'package:Kelivo/l10n/app_localizations.dart';
 import 'package:Kelivo/shared/widgets/ios_checkbox.dart';
@@ -124,7 +126,7 @@ void main() {
         'incoming',
         img.encodePng(img.Image(width: 2, height: 2)),
       );
-      final name = await McpIconCache.importFile(source.path);
+      final name = await IconCache.importFile(source.path);
       await fixture.preferences.setString(
         'mcp_presentation_v1',
         jsonEncode({

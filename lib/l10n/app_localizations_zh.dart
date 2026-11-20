@@ -4993,6 +4993,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchServiceEditorConfigurationTitle => '服务配置';
 
   @override
+  String get searchServiceEditorChangeIcon => '更换图标';
+
+  @override
+  String get searchServiceEditorIconFailed => '无法使用此图标，请另选图片或图标。';
+
+  @override
   String get searchServiceEditorNoConfiguration => '此提供商无需额外配置。';
 
   @override
@@ -21532,6 +21538,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get searchServiceEditorConfigurationTitle => '服务配置';
+
+  @override
+  String get searchServiceEditorChangeIcon => '更换图标';
+
+  @override
+  String get searchServiceEditorIconFailed => '无法使用此图标，请另选图片或图标。';
 
   @override
   String get searchServiceEditorNoConfiguration => '此提供商无需额外配置。';
@@ -38077,6 +38089,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get searchServiceEditorConfigurationTitle => '服務設定';
+
+  @override
+  String get searchServiceEditorChangeIcon => '更換圖示';
+
+  @override
+  String get searchServiceEditorIconFailed => '無法使用此圖示，請另選圖片或圖示。';
 
   @override
   String get searchServiceEditorNoConfiguration => '此提供商無需額外設定。';

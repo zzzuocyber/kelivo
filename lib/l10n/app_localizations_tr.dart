@@ -5221,6 +5221,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get searchServiceEditorConfigurationTitle => 'Yapılandırma';
 
   @override
+  String get searchServiceEditorChangeIcon => 'Simgeyi değiştir';
+
+  @override
+  String get searchServiceEditorIconFailed =>
+      'Bu simge kullanılamadı. Başka bir görsel veya simge seçin.';
+
+  @override
   String get searchServiceEditorNoConfiguration =>
       'Bu sağlayıcı ek yapılandırma gerektirmez.';
 
