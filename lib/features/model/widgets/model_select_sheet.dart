@@ -1181,6 +1181,11 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
         }
       });
       _providerTabKeys.removeWhere((key, _) => !_orderedKeys.contains(key));
+      // Favorites tab sits first, ahead of the provider categories — but only
+      // while it actually has something in it (mirrors the section above).
+      if (_hasDisplayableFavorites(context)) {
+        providerTabs.add(_favoritesTab(context));
+      }
       for (final k in _orderedKeys) {
         final g = _groups[k];
         if (g != null) {
@@ -1530,6 +1535,43 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
             ),
           );
           if (mounted) setState(() {});
+        },
+      ),
+    );
+  }
+
+  /// True when the favorites section would actually render: at least one
+  /// pinned model whose provider is still around and whose model isn't
+  /// disabled. Same rule the section itself uses, so the tab never points at
+  /// a section that isn't there.
+  bool _hasDisplayableFavorites(BuildContext context) {
+    if (widget.limitProviderKey != null) return false;
+    final settings = context.watch<SettingsProvider>();
+    for (final k in settings.pinnedModels) {
+      final parts = k.split('::');
+      if (parts.length < 2) continue;
+      final pk = parts[0];
+      final mid = parts.sublist(1).join('::');
+      if (!_groups.containsKey(pk)) continue;
+      if (settings.getProviderConfig(pk).disabledModels.contains(mid)) continue;
+      return true;
+    }
+    return false;
+  }
+
+  /// Favorites tab: a solid heart in a single colour (no provider avatar), so
+  /// it reads as its own category rather than one of the providers.
+  Widget _favoritesTab(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: _ProviderChip(
+        key: const ValueKey('model-selector-favorites-tab'),
+        avatar: Icon(Icons.favorite, size: 18, color: cs.primary),
+        label: AppLocalizations.of(context)!.modelSelectSheetFavoritesSection,
+        borderColor: cs.outlineVariant.withValues(alpha: 0.25),
+        onTap: () async {
+          await _jumpToFavorites();
         },
       ),
     );
