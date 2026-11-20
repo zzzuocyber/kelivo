@@ -15044,7 +15044,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get compressOverSnack =>
-      'The summary is still too long and would exceed the limit, so it wasn’t used. Compress again, or switch to a model with a larger context.';
+      'The result may exceed the chat model’s window. You can review and apply the summary.';
 
   @override
   String get contextSummaryHint =>
@@ -16363,13 +16363,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get compressionTrigger => 'Start at';
 
   @override
-  String get compressionTarget => 'Compress to';
+  String get compressionTarget => 'Aim for';
 
   @override
-  String get compressionWindow => 'Summary model capacity';
-
-  @override
-  String get compressionRequests => 'Maximum requests';
+  String get compressionWindow => 'Auto compression planning window';
 
   @override
   String get compressionReference => 'Use background references';
@@ -16442,16 +16439,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get compressionBudgetError =>
-      'This would take more model requests than the current limit allows, so the context is unchanged. Raise Maximum requests, or switch to a model with a larger context.';
-
-  @override
   String get compressionIncomplete =>
       'The summary was cut off or refused, and the context is unchanged. Raise the output limit, or try a different model.';
 
   @override
-  String get compressionReferenceTooLarge =>
-      'Reference material already fills this model’s capacity, leaving no room for the summary. Use fewer references, or switch to a model with a larger context.';
+  String get compressionProviderContextRejected =>
+      'The provider reported that the request was too large. Try a model with a larger context.';
 
   @override
   String get compressionReferenceChanged =>
@@ -16459,7 +16452,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get compressionTargetNotReached =>
-      'Even after compression, usage would still be above the automatic starting point, so the original context was kept. Shorten the summary, or raise Start at.';
+      'The result is estimated to use at least as much context as the original. You can review and shorten the summary.';
 
   @override
   String get compressionTemplateMissing =>
@@ -16548,8 +16541,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Compress once, then retry the reply that failed';
 
   @override
-  String compressionPlannedCalls(int count, int limit) {
-    return 'Estimated $count request(s) · limit $limit, including retries';
+  String compressionPlannedCalls(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'About $count requests',
+      one: 'About 1 request',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -16643,9 +16642,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get compressionTurnUnit => 'turns';
 
   @override
-  String get compressionCallUnit => 'calls';
-
-  @override
   String get compressionRequestTimeout => 'Compression request timeout';
 
   @override
@@ -16668,10 +16664,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get compressionAdvancedHint =>
-      'References, whether to look back at originals, and the request limit';
+      'Background references, original history, and planning estimates';
 
   @override
   String get compressionAutomaticWindow => 'Auto';
+
+  @override
+  String compressionSummaryWindowEstimate(String tokens, String source) {
+    return 'Summary model window · $tokens tokens · $source';
+  }
 
   @override
   String get compressionAutoOffHint => 'Compress manually whenever you need.';
@@ -16715,7 +16716,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get compressionAutoKeepHint =>
-      'Automatic compression always keeps recent originals, regardless of the range you pick for a manual run. The turn count is shared with manual compression.';
+      'Automatic compression keeps recent turns when there is room. It can summarize additional older turns and always protects the current request.';
 
   @override
   String get requestBudgetTitle => 'Image & request budgets';

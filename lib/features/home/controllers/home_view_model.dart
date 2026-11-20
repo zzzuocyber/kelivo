@@ -1628,18 +1628,12 @@ class HomeViewModel extends ChangeNotifier {
       }
       final user = snapshot.messages.where(isCompressionUserMessage).lastOrNull;
       if (user == null) throw StateError('no_messages');
-      final settings = _contextProvider.read<SettingsProvider>();
-      final config = await _chatService.compressionConfig(
-        id,
-        settings.compressionDefaults,
-      );
       final request = await buildCompressionRequest(
         id,
-        options: CompressContextOptions(
+        options: const CompressContextOptions(
           mode: CompressContextLimitMode.keepRecent,
-          keepUserMessages: config.keepRecentUserTurns < 1
-              ? 1
-              : config.keepRecentUserTurns,
+          keepUserMessages: 1,
+          regenerateExisting: true,
         ),
         beforeMessageId: user.id,
         ownsContinuation: true,
@@ -1701,7 +1695,6 @@ class HomeViewModel extends ChangeNotifier {
     final planner = CompressionPlanner(
       request: request,
       materials: [],
-      previousSummary: '',
       background: background,
     );
     return _previewCompressionMaterials(
@@ -2228,15 +2221,7 @@ Future<CompressionRequestPreview> _previewCompressionMaterials(
   String Function(int) quoteMarker,
 ) => Isolate.run(() {
   planner.materials.addAll(
-    buildCompressRequestContents(
-      messages.where((m) => !ContextOperation.isSummary(m)).toList(),
-      options,
-      quoteMarker: quoteMarker,
-    ),
+    buildCompressRequestContents(messages, options, quoteMarker: quoteMarker),
   );
-  planner.previousSummary = messages
-      .where(ContextOperation.isSummary)
-      .map((m) => m.content)
-      .join('\n\n');
   return planner.preview();
 });
