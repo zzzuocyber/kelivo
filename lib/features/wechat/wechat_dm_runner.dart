@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import 'wechat_models.dart';
