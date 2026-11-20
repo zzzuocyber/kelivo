@@ -77,6 +77,7 @@ import '../../../core/utils/multimodal_input_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../theme/chat_bubble_style.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 import '../../../core/services/model_spec/model_spec_resolver.dart';
 import '../../../core/models/assistant_regex.dart';
@@ -2873,7 +2874,9 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                 : cs.primary.withValues(alpha: 0.08))
           : null,
       bare: !showBubble,
-      isUser: isUser,
+      target: isUser
+          ? ChatBubbleStyleTarget.user
+          : ChatBubbleStyleTarget.assistant,
       child: child,
     );
   }
@@ -4388,19 +4391,23 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isUser = widget.message.role == 'user';
+    final target = switch (widget.message.role) {
+      'user' => ChatBubbleStyleTarget.user,
+      'tool' => ChatBubbleStyleTarget.thinkingToolCard,
+      _ => ChatBubbleStyleTarget.assistant,
+    };
     final palette = computeChatSurfaceForegroundPalette(
       context,
-      isUser: isUser,
+      target: target,
     );
-    final child = isUser
-        ? _buildUserMessage()
-        : widget.message.role == 'tool'
-        ? _buildToolMessage()
-        : PageStorage(
-            bucket: widget.timelineStorage ?? _localTimelineStorage,
-            child: _buildAssistantMessage(),
-          );
+    final child = switch (target) {
+      ChatBubbleStyleTarget.user => _buildUserMessage(),
+      ChatBubbleStyleTarget.thinkingToolCard => _buildToolMessage(),
+      ChatBubbleStyleTarget.assistant => PageStorage(
+        bucket: widget.timelineStorage ?? _localTimelineStorage,
+        child: _buildAssistantMessage(),
+      ),
+    };
     return ChatSurfaceTheme(palette: palette, child: child);
   }
 }
@@ -5184,7 +5191,10 @@ class _ChainOfThoughtCardState extends State<_ChainOfThoughtCard>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final fg = chatSurfaceForegroundPalette(context);
+    final fg = computeChatSurfaceForegroundPalette(
+      context,
+      target: ChatBubbleStyleTarget.thinkingToolCard,
+    );
     final collapseThinkingSteps = context.select<SettingsProvider, bool>(
       (s) => s.collapseThinkingSteps,
     );
@@ -5261,6 +5271,7 @@ class _ChainOfThoughtCardState extends State<_ChainOfThoughtCard>
 
     final card = buildSharedChatSurface(
       context,
+      target: ChatBubbleStyleTarget.thinkingToolCard,
       borderRadius: BorderRadius.circular(16),
       padding: const EdgeInsets.symmetric(
         horizontal: timelineCardHorizontalPadding,
@@ -5475,7 +5486,7 @@ class _ChainOfThoughtCardState extends State<_ChainOfThoughtCard>
     return Align(
       alignment: Alignment.centerLeft,
       widthFactor: fillWidth ? null : 1,
-      child: card,
+      child: ChatSurfaceTheme(palette: fg, child: card),
     );
   }
 }
@@ -7228,6 +7239,7 @@ class _ToolCallItemState extends State<_ToolCallItem> {
       padding: EdgeInsets.zero,
       child: buildSharedChatSurface(
         context,
+        target: ChatBubbleStyleTarget.thinkingToolCard,
         borderRadius: BorderRadius.circular(16),
         padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         defaultColor: cs.primaryContainer.withValues(
@@ -7555,6 +7567,7 @@ class _AskUserToolCardState extends State<_AskUserToolCard> {
     final expanded = _expanded ?? true;
     return buildSharedChatSurface(
       context,
+      target: ChatBubbleStyleTarget.thinkingToolCard,
       borderRadius: BorderRadius.circular(16),
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       defaultColor: cs.primaryContainer.withValues(alpha: isDark ? 0.25 : 0.30),

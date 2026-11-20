@@ -9200,6 +9200,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '助手回复遇到空行时拆分，每段单独一个气泡';
 
   @override
+  String get messageStyleSettingsPageCustomizeThinkingToolCards => '自定义思考与工具卡片';
+
+  @override
+  String get messageStyleSettingsPageCustomizeThinkingToolCardsSubtitle =>
+      '为思考与工具调用单独设置卡片外观';
+
+  @override
   String get messageStyleSettingsPageStyleFrostedSubtitle => '半透明毛玻璃';
 
   @override
@@ -9248,8 +9255,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageStyleSettingsPageRoleAssistant => '助手';
 
   @override
+  String get messageStyleSettingsPageRoleThinkingTool => '思考与工具';
+
+  @override
   String get messageStyleSettingsPageRoleAssistantHint =>
-      '助手设定同时作用于思考、工具调用和翻译卡片。';
+      '翻译卡片跟随助手样式，思考与工具卡片默认也跟随助手样式。';
 
   @override
   String get localSnapshotSectionTitle => '本地副本';
@@ -25747,6 +25757,13 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
       '助手回复遇到空行时拆分，每段单独一个气泡';
 
   @override
+  String get messageStyleSettingsPageCustomizeThinkingToolCards => '自定义思考与工具卡片';
+
+  @override
+  String get messageStyleSettingsPageCustomizeThinkingToolCardsSubtitle =>
+      '为思考与工具调用单独设置卡片外观';
+
+  @override
   String get messageStyleSettingsPageStyleFrostedSubtitle => '半透明毛玻璃';
 
   @override
@@ -25795,8 +25812,11 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get messageStyleSettingsPageRoleAssistant => '助手';
 
   @override
+  String get messageStyleSettingsPageRoleThinkingTool => '思考与工具';
+
+  @override
   String get messageStyleSettingsPageRoleAssistantHint =>
-      '助手设定同时作用于思考、工具调用和翻译卡片。';
+      '翻译卡片跟随助手样式，思考与工具卡片默认也跟随助手样式。';
 
   @override
   String get localSnapshotSectionTitle => '本地副本';
@@ -42300,6 +42320,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
       '助手回覆遇到空行時拆分，每段單獨一個氣泡';
 
   @override
+  String get messageStyleSettingsPageCustomizeThinkingToolCards => '自訂思考與工具卡片';
+
+  @override
+  String get messageStyleSettingsPageCustomizeThinkingToolCardsSubtitle =>
+      '為思考與工具呼叫設定獨立外觀';
+
+  @override
   String get messageStyleSettingsPageStyleFrostedSubtitle => '半透明毛玻璃';
 
   @override
@@ -42348,8 +42375,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get messageStyleSettingsPageRoleAssistant => '助手';
 
   @override
+  String get messageStyleSettingsPageRoleThinkingTool => '思考與工具';
+
+  @override
   String get messageStyleSettingsPageRoleAssistantHint =>
-      '助手設定同時作用於思考、工具呼叫和翻譯卡片。';
+      '翻譯卡片跟隨助手樣式，思考與工具卡片預設也跟隨助手樣式。';
 
   @override
   String get localSnapshotSectionTitle => '本機副本';
