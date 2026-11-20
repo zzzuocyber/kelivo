@@ -3159,6 +3159,19 @@ class HomePageController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces the selection set without entering selection mode.
+  ///
+  /// The mini map keeps its own selection UI inside its sheet and only borrows
+  /// the delete pipeline, which reads [_selectedItems] to count and confirm.
+  void replaceSelection(Iterable<String> messageIds) {
+    _selectionEpoch++;
+    _selectedItems
+      ..clear()
+      ..addAll(messageIds);
+    _selectableProjectionIds = null;
+    notifyListeners();
+  }
+
   // ============================================================================
   // Public Methods - Version Management
   // ============================================================================

@@ -1306,6 +1306,8 @@ class _HomePageState extends State<HomePage>
         id,
         !_controller.selectedItems.contains(id),
       ),
+      conversationId: _controller.currentConversation?.id,
+      onDeleteMessages: _deleteMessagesFromMiniMap,
     );
   }
 
@@ -1943,6 +1945,8 @@ class _HomePageState extends State<HomePage>
         context,
         collapsed,
         onOpenConversationFind: openFind,
+        conversationId: conversation,
+        onDeleteMessages: _deleteMessagesFromMiniMap,
       );
     }
     if (!mounted || _controller.currentConversation?.id != conversation) return;
@@ -2539,6 +2543,20 @@ class _HomePageState extends State<HomePage>
     await _controller.deleteSelectedMessages(
       deleteAllVersions: deleteAllVersions,
     );
+  }
+
+  /// Deletes the messages picked inside the mini map.
+  ///
+  /// The sheet owns its selection UI, so its ids are handed to the existing
+  /// pipeline (same confirm dialog + context-state checks) and the result tells
+  /// the sheet whether rows should disappear.
+  Future<bool> _deleteMessagesFromMiniMap(Set<String> ids) async {
+    if (ids.isEmpty || !mounted) return false;
+    _controller.replaceSelection(ids);
+    await _handleDeleteSelectedMessages(context, deleteAllVersions: false);
+    final deleted = _controller.selectedItems.isEmpty;
+    _controller.cancelSelection();
+    return deleted;
   }
 
   Map<String, TranslationUiState> _buildTranslationUiStates() {

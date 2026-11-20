@@ -1130,6 +1130,51 @@ Future<void> exportChatMessagesTxt(
   }
 }
 
+/// Clipboard payload for a set of messages: the same per-message header and body
+/// rules as the `.txt` export (`时间 · 名字`, blank line, body, `---` between
+/// messages), minus the conversation title. Kept here so the two never drift.
+Future<String> buildMessagesClipboardText(
+  BuildContext context, {
+  required List<ChatMessage> messages,
+}) async {
+  final l10n = AppLocalizations.of(context)!;
+  final settings = context.read<SettingsProvider>();
+  final userProvider = context.read<UserProvider>();
+  final assistant = context.read<AssistantProvider>().currentAssistant;
+  final timeFormatter = DateFormat(
+    l10n.messageExportSheetDateTimeWithSecondsPattern,
+  );
+  final buf = StringBuffer();
+  for (var i = 0; i < messages.length; i++) {
+    final msg = messages[i];
+    if (i > 0) buf.writeln('\n---\n');
+    final time = timeFormatter.format(msg.timestamp);
+    final roleName = _getRoleNameFromDependencies(
+      l10n: l10n,
+      settings: settings,
+      userProvider: userProvider,
+      assistant: assistant,
+      msg: msg,
+    );
+    buf.writeln('$time · $roleName');
+    buf.writeln('');
+    await _writeExportBlocks(
+      buf,
+      msg,
+      includeThinking: false,
+      includeTools: false,
+      thinkingLabel: l10n.messageExportThinkingContentLabel,
+      quoteMarker: l10n.selectionQuoteMarker,
+      markdown: false,
+      writeImage: (imageUri) async {
+        buf.writeln(imageUri);
+        buf.writeln('');
+      },
+    );
+  }
+  return buf.toString().trimRight();
+}
+
 Future<void> exportChatMessagesImage(
   BuildContext context, {
   required Conversation conversation,
