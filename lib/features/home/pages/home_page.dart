@@ -776,12 +776,12 @@ class _HomePageState extends State<HomePage>
     return l10n.chatInputBarQueuedPausedHold;
   }
 
-  Future<void> _clearContextWithNotice() async {
+  Future<void> _clearContextWithNotice({ChatMessage? atMessage}) async {
     final id = _controller.currentConversation?.id;
     if (id == null) return;
     final task = context.read<ChatService>().contextCompression.taskFor(id);
     final discarded = task?.active ?? false;
-    await _controller.clearContext();
+    await _controller.clearContext(beforeMessageId: atMessage?.id);
     if (mounted && discarded) {
       final l10n = AppLocalizations.of(context)!;
       showAppSnackBar(
@@ -1606,6 +1606,8 @@ class _HomePageState extends State<HomePage>
           _controller.regenerateAtMessage(message),
       onRetryWithoutImages: (message) =>
           _controller.regenerateAtMessage(message, omitImages: true),
+      onClearContextAt: (message) =>
+          _clearContextWithNotice(atMessage: message),
       onSetContextStart: (message) async {
         try {
           await chat.setConversationContextStart(
@@ -2349,6 +2351,11 @@ class _HomePageState extends State<HomePage>
         reviewPending: false,
       ),
       onOpenConversation: _controller.switchConversationAnimated,
+      onViewOriginal: (messageId) async {
+        if (_controller.currentConversation?.id == id) {
+          await _controller.scrollToMessageId(messageId);
+        }
+      },
     );
   }
 

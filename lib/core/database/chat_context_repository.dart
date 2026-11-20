@@ -21,46 +21,56 @@ extension ChatContextRepository on ChatDatabaseRepository {
   }
 
   /// Select and bound list data on SQLite's worker before crossing to the UI.
+  ///
+  /// [kinds] narrows the page to the record kinds a caller shows in one tab.
+  /// Status columns still read the unfiltered metadata, so a record stays
+  /// marked hidden/superseded by operations of another kind.
   Future<ContextOperationPage> readContextOperationPage(
     String id, {
     required int offset,
     required int limit,
+    Set<ContextOperationKind>? kinds,
   }) => _db.transaction(() async {
     RangeError.checkNotNegative(offset, 'offset');
     RangeError.checkValueInInterval(limit, 1, 0x7fffffff, 'limit');
     await _convertContextBoundary(id);
     await _contextIndex.ensure(id);
+    final kindFilter = kinds == null || kinds.isEmpty
+        ? '1'
+        : "json_extract(value,'\$.kind') IN (${kinds.map((k) => "'${k.name}'").join(',')})";
     final rows = await _db
         .customSelect(
-          r'''
+          '''
 WITH state AS MATERIALIZED (
   SELECT revision,metadata FROM context_operation_state WHERE conversation_id=?
 ), metadata AS MATERIALIZED (
   SELECT CAST(j.key AS INTEGER) AS ordinal, j.value
   FROM state, json_each(state.metadata) j
+), filtered AS MATERIALIZED (
+  SELECT ordinal, value FROM metadata WHERE $kindFilter
 ), page AS MATERIALIZED (
   SELECT ordinal, value,
-    kelivo_timestamp_micros(json_extract(value,'$.createdAt')) AS timestamp
-  FROM metadata ORDER BY timestamp DESC, ordinal DESC LIMIT ? OFFSET ?
+    kelivo_timestamp_micros(json_extract(value,'\$.createdAt')) AS timestamp
+  FROM filtered ORDER BY timestamp DESC, ordinal DESC LIMIT ? OFFSET ?
 )
-SELECT s.revision, json_extract(p.value,'$.id') AS id,
-  json_extract(p.value,'$.kind') AS kind,
-  json_extract(p.value,'$.createdAt') AS created_at,
-  json_extract(p.value,'$.revoked') AS revoked,
-  COALESCE(json_type(e.payload,'$['||p.ordinal||'].compressionDetails.nativeCompaction')='object',0) AS native,
-  COALESCE(json_extract(e.payload,'$['||p.ordinal||'].compressionDetails.nativeContextImported'),0) AS imported,
-  substr(COALESCE(json_extract(e.payload,'$['||p.ordinal||'].summary'),''),1,240) AS preview,
-  (SELECT json_array_length(metadata) FROM state) AS total,
+SELECT s.revision, json_extract(p.value,'\$.id') AS id,
+  json_extract(p.value,'\$.kind') AS kind,
+  json_extract(p.value,'\$.createdAt') AS created_at,
+  json_extract(p.value,'\$.revoked') AS revoked,
+  COALESCE(json_type(e.payload,'\$['||p.ordinal||'].compressionDetails.nativeCompaction')='object',0) AS native,
+  COALESCE(json_extract(e.payload,'\$['||p.ordinal||'].compressionDetails.nativeContextImported'),0) AS imported,
+  substr(COALESCE(json_extract(e.payload,'\$['||p.ordinal||'].summary'),''),1,240) AS preview,
+  (SELECT COUNT(*) FROM filtered) AS total,
   EXISTS(SELECT 1 FROM metadata n
-    WHERE n.ordinal>p.ordinal AND NOT json_extract(n.value,'$.revoked')
-    AND (json_extract(n.value,'$.kind')='start'
-      OR (json_extract(n.value,'$.kind')='clear' AND EXISTS(
-        SELECT 1 FROM json_each(n.value,'$.groups') g
-        WHERE g.value=json_extract(p.value,'$.anchor'))))) AS hidden,
-  EXISTS(SELECT 1 FROM metadata n, json_each(n.value,'$.dependencies') d
-    WHERE NOT json_extract(n.value,'$.revoked')
-    AND json_extract(p.value,'$.kind')='compress'
-    AND d.value=json_extract(p.value,'$.id')) AS superseded
+    WHERE n.ordinal>p.ordinal AND NOT json_extract(n.value,'\$.revoked')
+    AND (json_extract(n.value,'\$.kind')='start'
+      OR (json_extract(n.value,'\$.kind')='clear' AND EXISTS(
+        SELECT 1 FROM json_each(n.value,'\$.groups') g
+        WHERE g.value=json_extract(p.value,'\$.anchor'))))) AS hidden,
+  EXISTS(SELECT 1 FROM metadata n, json_each(n.value,'\$.dependencies') d
+    WHERE NOT json_extract(n.value,'\$.revoked')
+    AND json_extract(p.value,'\$.kind')='compress'
+    AND d.value=json_extract(p.value,'\$.id')) AS superseded
 FROM state s LEFT JOIN page p ON 1
 LEFT JOIN extension_entity_rows e ON e.kind=? AND e.id=?
 ORDER BY p.timestamp DESC, p.ordinal DESC

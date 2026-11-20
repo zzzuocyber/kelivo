@@ -117,6 +117,7 @@ extension ChatContextOperations on ChatService {
     String id, {
     required int offset,
     required int limit,
+    Set<ContextOperationKind>? kinds,
   }) async {
     RangeError.checkNotNegative(offset, 'offset');
     RangeError.checkValueInInterval(limit, 1, 0x7fffffff, 'limit');
@@ -125,15 +126,24 @@ extension ChatContextOperations on ChatService {
     }
     if (!_temporaryConversationIds.contains(id) &&
         !_draftConversations.containsKey(id)) {
-      return _repo.readContextOperationPage(id, offset: offset, limit: limit);
+      return _repo.readContextOperationPage(
+        id,
+        offset: offset,
+        limit: limit,
+        kinds: kinds,
+      );
     }
     final operations = contextOperationsFor(id);
     final statuses = ContextHistory.operationStatuses(operations);
-    final ordered = operations.indexed.toList()
-      ..sort((a, b) {
-        final time = b.$2.createdAt.compareTo(a.$2.createdAt);
-        return time != 0 ? time : b.$1.compareTo(a.$1);
-      });
+    final ordered =
+        [
+          for (final op in operations.indexed)
+            if (kinds == null || kinds.isEmpty || kinds.contains(op.$2.kind))
+              op,
+        ]..sort((a, b) {
+          final time = b.$2.createdAt.compareTo(a.$2.createdAt);
+          return time != 0 ? time : b.$1.compareTo(a.$1);
+        });
     final selected = ordered.skip(offset).take(limit).toList();
     return (
       items: [
@@ -706,6 +716,36 @@ extension ChatContextOperations on ChatService {
             anchorGroupId: tail,
             appliedAfterGroupId: tail,
             sourceGroups: snapshot.messages.map(ContextHistory.group).toList(),
+            dependencies: const [],
+            createdAt: DateTime.now(),
+          ),
+          expectedFingerprint: snapshot.fingerprint,
+        );
+      });
+
+  /// Clears everything up to and including [messageId]'s group. The tail clear
+  /// above can only start from the last message; this one starts wherever the
+  /// user long-presses, so the boundary is the message itself.
+  Future<void> clearConversationContextAt(String id, String messageId) =>
+      contextCompression.runContextChange(id, () async {
+        final snapshot = await loadContextSnapshot(id);
+        final index = snapshot.messages.indexWhere((m) => m.id == messageId);
+        if (index < 0) throw StateError('message_not_found');
+        final anchor = ContextHistory.group(snapshot.messages[index]);
+        final groups = <String>[];
+        for (final message in snapshot.messages) {
+          final group = ContextHistory.group(message);
+          if (!groups.contains(group)) groups.add(group);
+          if (group == anchor) break;
+        }
+        await appendContextOperation(
+          id,
+          ContextOperation(
+            id: const Uuid().v4(),
+            kind: ContextOperationKind.clear,
+            anchorGroupId: anchor,
+            appliedAfterGroupId: anchor,
+            sourceGroups: groups,
             dependencies: const [],
             createdAt: DateTime.now(),
           ),

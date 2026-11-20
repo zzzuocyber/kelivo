@@ -720,9 +720,59 @@ Future<void> showContextOperations(
   required ValueChanged<ContextCompressionTask> onRetry,
   required ValueChanged<ContextCompressionTask> onAdjust,
   required ValueChanged<String> onOpenConversation,
+  Future<void> Function(String messageId)? onViewOriginal,
 }) async {
   final service = chat.contextCompression;
   final viewedTask = service.taskFor(conversationId);
+
+  /// One-tap jump from a list row: the same targets the detail sheet offers,
+  /// without opening it first.
+  Future<void> jumpToTarget(
+    String operationId, {
+    required bool originals,
+  }) async {
+    try {
+      final operation = await chat.loadContextOperation(
+        conversationId,
+        operationId,
+      );
+      if (operation == null) return;
+      if (operation.isImportedNative) {
+        final sourceConversation = operation.nativeSourceConversationId;
+        if (sourceConversation != null &&
+            chat.getConversation(sourceConversation) != null) {
+          await onOpenConversation(sourceConversation);
+        }
+        return;
+      }
+      final snapshot = await chat.loadContextHistory(conversationId);
+      final String? targetId;
+      if (originals) {
+        final groups = operation.sourceGroups.toSet();
+        targetId = snapshot.messages
+            .where((m) => groups.contains(ContextHistory.group(m)))
+            .firstOrNull
+            ?.id;
+      } else {
+        targetId = snapshot.messages
+            .where((m) => ContextHistory.group(m) == operation.anchorGroupId)
+            .firstOrNull
+            ?.id;
+      }
+      if (targetId != null) await onViewOriginal?.call(targetId);
+    } catch (error) {
+      if (!context.mounted) return;
+      showAppSnackBar(
+        context,
+        message: compressionErrorLabel(
+          AppLocalizations.of(context)!,
+          error.toString(),
+        ),
+        type: NotificationType.error,
+      );
+    }
+  }
+
   await _showContextContent(
     context,
     title: AppLocalizations.of(context)!.contextOperationsTitle,
@@ -748,6 +798,10 @@ Future<void> showContextOperations(
           ),
         ),
         onOpenConversation: (id) => leave(() => onOpenConversation(id)),
+        onJumpToTarget: onViewOriginal == null
+            ? null
+            : (operationId, {required originals}) =>
+                  leave(() => jumpToTarget(operationId, originals: originals)),
       );
     },
   );

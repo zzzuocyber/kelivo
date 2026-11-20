@@ -2061,8 +2061,8 @@ class HomePageController extends ChangeNotifier {
     _selectableProjectionIds = null;
   }
 
-  Future<void> clearContext() async {
-    await _viewModel.clearContext();
+  Future<void> clearContext({String? beforeMessageId}) async {
+    await _viewModel.clearContext(beforeMessageId: beforeMessageId);
     notifyListeners();
   }
 

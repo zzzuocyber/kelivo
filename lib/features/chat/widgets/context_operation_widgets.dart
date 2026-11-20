@@ -179,22 +179,6 @@ class _ContextOperationContentState extends State<ContextOperationContent> {
             label: l10n.compressRegenerate,
             onTap: widget.onRecompress!,
           ),
-        if (widget.onViewOriginal != null)
-          ActionSheetItem(
-            icon: LucideIcons.info,
-            label: widget.operation.isImportedNative
-                ? l10n.compressionNativeOpenSource
-                : l10n.contextDetailViewOriginals,
-            onTap: widget.onViewOriginal!,
-          ),
-        if (widget.onViewBoundary != null)
-          ActionSheetItem(
-            icon: LucideIcons.locate,
-            label: widget.operation.isClear
-                ? l10n.contextViewBoundary
-                : l10n.quoteJumpToSource,
-            onTap: widget.onViewBoundary!,
-          ),
         if (widget.onContinueNewChat != null)
           ActionSheetItem(
             icon: LucideIcons.gitBranch,
@@ -219,10 +203,7 @@ class _ContextOperationContentState extends State<ContextOperationContent> {
         ? l10n.contextDetailInUse
         : widget.statusLabel;
     final hasMore =
-        widget.onViewOriginal != null ||
-        widget.onViewBoundary != null ||
-        widget.onRecompress != null ||
-        widget.onContinueNewChat != null;
+        widget.onRecompress != null || widget.onContinueNewChat != null;
     final empty = _editor.text.trim().isEmpty;
     final mode = switch (operation.inputMode) {
       'start' => l10n.compressContextKeepStart,
@@ -648,6 +629,37 @@ class _ContextOperationContentState extends State<ContextOperationContent> {
           const SizedBox(height: 6),
           Flexible(child: SingleChildScrollView(child: body)),
           const SizedBox(height: 14),
+          if (!_editing &&
+              (widget.onViewOriginal != null || widget.onViewBoundary != null))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 2,
+                children: [
+                  if (widget.onViewOriginal != null)
+                    IosTextButton(
+                      label: widget.operation.isImportedNative
+                          ? l10n.compressionNativeOpenSource
+                          : l10n.contextDetailViewOriginals,
+                      icon: LucideIcons.fileText,
+                      fontSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      onPressed: _saving ? null : widget.onViewOriginal,
+                    ),
+                  if (widget.onViewBoundary != null)
+                    IosTextButton(
+                      label: widget.operation.isClear
+                          ? l10n.contextViewBoundary
+                          : l10n.quoteJumpToSource,
+                      icon: LucideIcons.locate,
+                      fontSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      onPressed: _saving ? null : widget.onViewBoundary,
+                    ),
+                ],
+              ),
+            ),
           Row(
             children: [
               if (!_editing && widget.onUndo != null && operation.canUndo)

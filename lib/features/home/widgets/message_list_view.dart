@@ -135,6 +135,7 @@ class MessageListView extends StatefulWidget {
     this.onVersionChange,
     this.onRegenerateMessage,
     this.onRetryWithoutImages,
+    this.onClearContextAt,
     this.onSetContextStart,
     this.onResendMessage,
     this.onTranslateMessage,
@@ -238,6 +239,7 @@ class MessageListView extends StatefulWidget {
   final OnVersionChange? onVersionChange;
   final OnRegenerateMessage? onRegenerateMessage;
   final OnRegenerateMessage? onRetryWithoutImages;
+  final ValueChanged<ChatMessage>? onClearContextAt;
   final ValueChanged<ChatMessage>? onSetContextStart;
   final OnResendMessage? onResendMessage;
   final OnTranslateMessage? onTranslateMessage;
@@ -2639,11 +2641,15 @@ class _MessageListViewState extends State<MessageListView> {
           message,
           hasMultipleVersions: hasMultipleVersions,
           canCreateBranch: widget.onForkConversation != null,
+          canClearContext:
+              widget.onClearContextAt != null && !message.isStreaming,
           canSetContextStart:
               widget.onSetContextStart != null && !message.isStreaming,
           isContextStart: start?.anchorGroupId == ContextHistory.group(message),
         );
-        if (action == MessageMoreAction.setContextStart) {
+        if (action == MessageMoreAction.clearContext) {
+          widget.onClearContextAt?.call(message);
+        } else if (action == MessageMoreAction.setContextStart) {
           widget.onSetContextStart?.call(message);
         } else if (action == MessageMoreAction.cancelContextStart) {
           if (start != null) widget.onUndoContextOperation?.call(start);

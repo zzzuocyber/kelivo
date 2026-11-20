@@ -34,6 +34,7 @@ enum MessageMoreAction {
   deleteOtherVersions(MessageVersionDeleteScope.others),
   deleteAllVersions(MessageVersionDeleteScope.all),
   selectMessages,
+  clearContext,
   setContextStart,
   cancelContextStart;
 
@@ -107,6 +108,7 @@ Future<MessageMoreAction?> showMessageMoreSheet(
   ChatMessage message, {
   required bool hasMultipleVersions,
   required bool canCreateBranch,
+  bool canClearContext = false,
   bool canSetContextStart = false,
   bool isContextStart = false,
 }) async {
@@ -128,6 +130,7 @@ Future<MessageMoreAction?> showMessageMoreSheet(
         parentContext: context,
         hasMultipleVersions: hasMultipleVersions,
         canCreateBranch: canCreateBranch,
+        canClearContext: canClearContext,
         canSetContextStart: canSetContextStart,
         isContextStart: isContextStart,
       ),
@@ -206,9 +209,18 @@ Future<MessageMoreAction?> showMessageMoreSheet(
           selected = MessageMoreAction.selectMessages;
         },
       ),
-      if (canSetContextStart)
+      if (canClearContext)
         DesktopContextMenuItem(
           startsGroup: true,
+          icon: Lucide.Eraser,
+          label: l10n.bottomToolsSheetClearContext,
+          onTap: () {
+            selected = MessageMoreAction.clearContext;
+          },
+        ),
+      if (canSetContextStart)
+        DesktopContextMenuItem(
+          startsGroup: !canClearContext,
           icon: LucideIcons.flag,
           label: isContextStart
               ? l10n.contextCancelFixedStart
@@ -269,6 +281,7 @@ class _MessageMoreSheet extends StatefulWidget {
     required this.parentContext,
     required this.hasMultipleVersions,
     required this.canCreateBranch,
+    required this.canClearContext,
     required this.canSetContextStart,
     required this.isContextStart,
   });
@@ -276,6 +289,7 @@ class _MessageMoreSheet extends StatefulWidget {
   final BuildContext parentContext;
   final bool hasMultipleVersions;
   final bool canCreateBranch;
+  final bool canClearContext;
   final bool canSetContextStart;
   final bool isContextStart;
 
@@ -472,10 +486,19 @@ class _MessageMoreSheetState extends State<_MessageMoreSheet> {
                         },
                       ),
                     ]),
-                    if (widget.canSetContextStart ||
+                    if (widget.canClearContext ||
+                        widget.canSetContextStart ||
                         widget.canCreateBranch) ...[
                       const SizedBox(height: 12),
                       _actionGroup([
+                        if (widget.canClearContext)
+                          _actionItem(
+                            icon: Lucide.Eraser,
+                            label: l10n.bottomToolsSheetClearContext,
+                            onTap: () => Navigator.of(
+                              context,
+                            ).pop(MessageMoreAction.clearContext),
+                          ),
                         if (widget.canSetContextStart)
                           _actionItem(
                             icon: LucideIcons.flag,

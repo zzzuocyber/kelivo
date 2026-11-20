@@ -1360,7 +1360,7 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> clearContext() async {
+  Future<void> clearContext({String? beforeMessageId}) async {
     final convo = currentConversation;
     if (convo == null) return;
     await _chatService.contextCompression.cancel(
@@ -1368,7 +1368,11 @@ class HomeViewModel extends ChangeNotifier {
       reason: 'context_cleared',
     );
     await _clearSuggestionsFor(convo.id);
-    await _chatService.clearConversationContext(convo.id);
+    if (beforeMessageId == null) {
+      await _chatService.clearConversationContext(convo.id);
+    } else {
+      await _chatService.clearConversationContextAt(convo.id, beforeMessageId);
+    }
     notifyListeners();
   }
 

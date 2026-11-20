@@ -12,6 +12,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/ios_text_button.dart';
 import '../../../shared/widgets/section_card.dart';
+import '../../../shared/widgets/segmented_tabs.dart';
 import '../../../shared/widgets/thinking_sheen.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../utils/platform_utils.dart';
@@ -127,6 +128,7 @@ class ContextOperationsPanel extends StatefulWidget {
     required this.onAdjust,
     required this.onReview,
     required this.onOpenConversation,
+    this.onJumpToTarget,
   });
   final ChatService chat;
   final String conversationId;
@@ -137,15 +139,27 @@ class ContextOperationsPanel extends StatefulWidget {
   final ValueChanged<ContextCompressionTask> onReview;
   final ValueChanged<String> onOpenConversation;
 
+  /// Jumps straight to a record's messages from the list: [originals] picks
+  /// the first replaced message, otherwise the operation's anchor/boundary.
+  final void Function(String operationId, {required bool originals})?
+  onJumpToTarget;
+
   @override
   State<ContextOperationsPanel> createState() => _ContextOperationsPanelState();
 }
 
 class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
+  static const _compressKinds = {ContextOperationKind.compress};
+  static const _boundaryKinds = {
+    ContextOperationKind.clear,
+    ContextOperationKind.start,
+  };
+
   late Future<ContextMessageCounts> _counts;
   late int _revision;
   List<ContextOperationSummary> _operations = const [];
   int _visibleLimit = 3;
+  int _tabIndex = 0;
   int _loadGeneration = 0;
   String? _operationsRevision;
   bool _loadingOperations = false;
@@ -200,6 +214,7 @@ class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
 
   Future<void> _loadOperations({bool append = false}) async {
     final generation = ++_loadGeneration;
+    final kinds = _tabIndex == 0 ? _compressKinds : _boundaryKinds;
     _loadingOperations = true;
     _operationsFailed = false;
     try {
@@ -209,6 +224,7 @@ class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
         widget.conversationId,
         offset: append ? _operations.length : 0,
         limit: append ? 10 : _visibleLimit,
+        kinds: kinds,
       );
       if (!mounted || generation != _loadGeneration) return;
       var replace = !append;
@@ -219,6 +235,7 @@ class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
           widget.conversationId,
           offset: 0,
           limit: _operations.length + 10,
+          kinds: kinds,
         );
         if (!mounted || generation != _loadGeneration) return;
         replace = true;
@@ -240,6 +257,21 @@ class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
         _retryAppend = append;
       });
     }
+  }
+
+  void _switchTab(int index) {
+    if (index == _tabIndex) return;
+    setState(() {
+      _tabIndex = index;
+      _operations = const [];
+      _operationsRevision = null;
+      _visibleLimit = 3;
+      _hasMore = false;
+      _loadingOperations = false;
+      _operationsFailed = false;
+      _error = null;
+    });
+    _loadOperations();
   }
 
   Future<void> _openOperation(String id) async {
@@ -292,6 +324,7 @@ class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
       _operations = const [];
       _operationsRevision = null;
       _visibleLimit = 3;
+      _tabIndex = 0;
       _hasMore = false;
       _openingOperation = false;
       _error = null;
@@ -459,6 +492,17 @@ class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          SegmentedTabs(
+                            tabs: [
+                              SegmentedTab(label: l10n.compressContext),
+                              SegmentedTab(
+                                label: l10n.bottomToolsSheetClearContext,
+                              ),
+                            ],
+                            index: _tabIndex,
+                            onChanged: _switchTab,
+                          ),
+                          const SizedBox(height: 12),
                           if (snapshot.connectionState ==
                                   ConnectionState.done &&
                               snapshot.hasData) ...[
@@ -583,6 +627,59 @@ class _ContextOperationsPanelState extends State<ContextOperationsPanel> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
+                          if (widget.onJumpToTarget != null &&
+                              !operation.isImportedNative &&
+                              !operation.revoked &&
+                              !operation.hidden &&
+                              !operation.superseded)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Wrap(
+                                spacing: 4,
+                                children: [
+                                  if (operation.isCompression)
+                                    IosTextButton(
+                                      label: l10n.contextDetailViewOriginals,
+                                      icon: LucideIcons.fileText,
+                                      fontSize: 12,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                      ),
+                                      onPressed: () => widget.onJumpToTarget!(
+                                        operation.id,
+                                        originals: true,
+                                      ),
+                                    ),
+                                  if (operation.isCompression ||
+                                      operation.isFixedStart)
+                                    IosTextButton(
+                                      label: l10n.quoteJumpToSource,
+                                      icon: LucideIcons.locate,
+                                      fontSize: 12,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                      ),
+                                      onPressed: () => widget.onJumpToTarget!(
+                                        operation.id,
+                                        originals: false,
+                                      ),
+                                    )
+                                  else
+                                    IosTextButton(
+                                      label: l10n.contextViewBoundary,
+                                      icon: LucideIcons.locate,
+                                      fontSize: 12,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                      ),
+                                      onPressed: () => widget.onJumpToTarget!(
+                                        operation.id,
+                                        originals: false,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                     ),

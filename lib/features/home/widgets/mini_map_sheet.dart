@@ -693,15 +693,21 @@ class _MiniMapRow extends StatelessWidget {
     final selected = selectedIds.contains(message.id);
     final favorite = favoriteIds.contains(message.id);
     final flash = flashId == message.id;
+    // Bookmarks read as inverted bubbles so they stand out at a glance.
+    final inverted = favorite && !selected;
     final label = _bubbleLabel(
       message: message,
-      style: style,
+      style: inverted ? style.copyWith(color: cs.surface) : style,
       textAlign: TextAlign.left,
     );
     final box = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: selected ? selectedBg : bg,
+        color: selected
+            ? selectedBg
+            : inverted
+            ? cs.onSurface
+            : bg,
         borderRadius: BorderRadius.circular(16),
         border: (selected || flash)
             ? Border.all(
@@ -719,7 +725,9 @@ class _MiniMapRow extends StatelessWidget {
             Icon(
               Lucide.Bookmark,
               size: 13,
-              color: cs.primary.withValues(alpha: 0.75),
+              color: (inverted ? cs.surface : cs.primary).withValues(
+                alpha: 0.75,
+              ),
             ),
           ],
         ],
