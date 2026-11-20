@@ -1628,6 +1628,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hotkeysResetAll => 'Reset all to defaults';
 
   @override
+  String hotkeysShortcutInUse(String action) {
+    return 'This shortcut is already assigned to $action.';
+  }
+
+  @override
+  String get hotkeysTextEditing => 'Text editing and focus navigation';
+
+  @override
   String get assistantEditTemperatureTitle => 'Temperature';
 
   @override

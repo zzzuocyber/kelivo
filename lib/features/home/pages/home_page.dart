@@ -29,7 +29,7 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, mapEquals, ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
-    show MissingPluginException, Clipboard, ClipboardData, LogicalKeyboardKey;
+    show MissingPluginException, Clipboard, ClipboardData;
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:provider/provider.dart';
 import '../../../l10n/app_localizations.dart';
@@ -42,7 +42,6 @@ import '../../../shared/widgets/snackbar.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/design_tokens.dart';
 import '../../../core/providers/settings_provider.dart';
-import '../../../core/providers/hotkey_provider.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/quick_phrase_provider.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
@@ -398,26 +397,9 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  Widget _findKeyBinding(Widget child) {
-    final apple = PlatformUtils.isMacOS || PlatformUtils.isIOS;
-    final shortcut = SingleActivator(
-      LogicalKeyboardKey.keyF,
-      meta: apple,
-      control: !apple,
-    );
-    final claimed =
-        PlatformUtils.isDesktop &&
-        context.select<HotkeyProvider?, bool>(
-          (provider) => provider?.handlesShortcut(shortcut) ?? false,
-        );
-    return CallbackShortcuts(
-      bindings: {if (!claimed) shortcut: _openConversationFind},
-      child: child,
-    );
-  }
-
-  Widget _chatFindShortcuts(Widget body) => _findKeyBinding(
-    Focus(
+  Widget _chatFindShortcuts(Widget body) => ConversationFindShortcut(
+    onOpen: _openConversationFind,
+    child: Focus(
       focusNode: _chatFocus,
       autofocus: true,
       skipTraversal: true,
@@ -427,8 +409,9 @@ class _HomePageState extends State<HomePage>
 
   PreferredSizeWidget _mobileFindHeader() => PreferredSize(
     preferredSize: const Size.fromHeight(kToolbarHeight),
-    child: _findKeyBinding(
-      SafeArea(
+    child: ConversationFindShortcut(
+      onOpen: _openConversationFind,
+      child: SafeArea(
         bottom: false,
         child: SizedBox(
           height: kToolbarHeight,

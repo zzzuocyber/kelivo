@@ -1634,6 +1634,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get hotkeysResetAll => 'Tümünü varsayılana sıfırla';
 
   @override
+  String hotkeysShortcutInUse(String action) {
+    return 'Bu kısayol zaten “$action” eylemine atanmış.';
+  }
+
+  @override
+  String get hotkeysTextEditing =>
+      'Metin düzenleme ve odaklar arasında gezinme';
+
+  @override
   String get assistantEditTemperatureTitle => 'Sıcaklık';
 
   @override

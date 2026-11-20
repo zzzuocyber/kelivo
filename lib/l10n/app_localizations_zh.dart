@@ -1556,6 +1556,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hotkeysResetAll => '重置所有快捷键为默认';
 
   @override
+  String hotkeysShortcutInUse(String action) {
+    return '此快捷键已分配给「$action」。';
+  }
+
+  @override
+  String get hotkeysTextEditing => '文本编辑与焦点导航';
+
+  @override
   String get assistantEditTemperatureTitle => '温度';
 
   @override
@@ -18103,6 +18111,14 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get hotkeysResetAll => '重置所有快捷键为默认';
+
+  @override
+  String hotkeysShortcutInUse(String action) {
+    return '此快捷键已分配给「$action」。';
+  }
+
+  @override
+  String get hotkeysTextEditing => '文本编辑与焦点导航';
 
   @override
   String get assistantEditTemperatureTitle => '温度';
@@ -34657,6 +34673,14 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get hotkeysResetAll => '重置所有快捷鍵為預設';
+
+  @override
+  String hotkeysShortcutInUse(String action) {
+    return '此快捷鍵已指派給「$action」。';
+  }
+
+  @override
+  String get hotkeysTextEditing => '文字編輯與焦點導覽';
 
   @override
   String get assistantEditTemperatureTitle => '溫度';
