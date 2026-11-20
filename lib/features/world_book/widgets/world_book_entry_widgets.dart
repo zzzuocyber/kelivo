@@ -92,10 +92,15 @@ class WorldBookEntryTitle extends StatelessWidget {
     super.key,
     required this.entry,
     this.fontSize = 15,
+    this.color,
   });
 
   final WorldBookEntry entry;
   final double fontSize;
+
+  /// Optional override so a caller can tone the title down (e.g. the settings
+  /// list dims entries to keep the book's header band the loudest thing).
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -112,9 +117,11 @@ class WorldBookEntryTitle extends StatelessWidget {
             style: TextStyle(
               fontSize: fontSize,
               fontWeight: AppFontWeights.medium,
-              color: Theme.of(context).colorScheme.onSurface.withValues(
-                alpha: entry.enabled ? 0.9 : 0.5,
-              ),
+              color:
+                  color ??
+                  Theme.of(context).colorScheme.onSurface.withValues(
+                    alpha: entry.enabled ? 0.9 : 0.5,
+                  ),
             ),
           ),
         ),

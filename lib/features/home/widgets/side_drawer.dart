@@ -3952,7 +3952,9 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
   }) {
     final ap2 = context.watch<AssistantProvider>();
     final tp = context.watch<TagProvider>();
-    final textBase2 = Theme.of(context).colorScheme.onSurface;
+    final textBase2 = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.88);
 
     List<Assistant> assistants = ap2.assistants;
     // Apply search filter when:
@@ -4650,33 +4652,42 @@ class _GroupHeader extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onToggle,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          children: [
-            AnimatedRotation(
-              turns: collapsed ? 0.0 : 0.25, // right -> down
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              child: Icon(
-                Lucide.ChevronRight,
-                size: 16,
-                color: textBase.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: AppFontWeights.emphasis,
-                  color: textBase,
+        // Extra air above each group: the band plus this gap is what separates
+        // one group from the next — no divider line needed.
+        padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          decoration: BoxDecoration(
+            color: textBase.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              AnimatedRotation(
+                turns: collapsed ? 0.0 : 0.25, // right -> down
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: Icon(
+                  Lucide.ChevronRight,
+                  size: 14,
+                  color: textBase.withValues(alpha: 0.6),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: AppFontWeights.semibold,
+                    color: textBase,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -5058,7 +5069,8 @@ class _AssistantInlineTileState extends State<_AssistantInlineTile> {
               IosIconButton(
                 icon: Lucide.Pencil,
                 size: 18,
-                color: cs.onSurface.withValues(alpha: 0.7),
+                // Secondary action: visible, but never louder than the name.
+                color: cs.onSurface.withValues(alpha: 0.35),
                 padding: const EdgeInsets.all(8),
                 minSize: 36,
                 onTap: widget.onEditTap,

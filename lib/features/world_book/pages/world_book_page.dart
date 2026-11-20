@@ -442,7 +442,7 @@ class _WorldBookPageState extends State<WorldBookPage> {
     return KeyedSubtree(
       key: ValueKey('world-book-${book.id}'),
       child: Padding(
-        padding: EdgeInsets.only(bottom: index == groupCount - 1 ? 0 : 14),
+        padding: EdgeInsets.only(bottom: index == groupCount - 1 ? 0 : 10),
         child: _WorldBookSection(
           book: book,
           bookIndex: index,
@@ -543,12 +543,14 @@ class _WorldBookGroupHeader extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onToggle,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+        // A section label, not a row: small, muted, and given more air so the
+        // cards below it read as one group.
+        padding: const EdgeInsets.fromLTRB(10, 20, 10, 8),
         child: Row(
           children: [
             SizedBox(
-              width: 20,
-              height: 20,
+              width: 18,
+              height: 18,
               child: Center(
                 child: AnimatedRotation(
                   turns: collapsed ? 0.0 : 0.25, // right -> down
@@ -556,22 +558,23 @@ class _WorldBookGroupHeader extends StatelessWidget {
                   curve: Curves.easeOutCubic,
                   child: Icon(
                     Lucide.ChevronRight,
-                    size: 16,
-                    color: cs.onSurface.withValues(alpha: 0.7),
+                    size: 14,
+                    color: cs.onSurface.withValues(alpha: 0.45),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: AppFontWeights.emphasis,
-                  color: cs.onSurface,
+                  fontSize: 12,
+                  letterSpacing: 0.4,
+                  fontWeight: AppFontWeights.semibold,
+                  color: cs.onSurface.withValues(alpha: 0.5),
                 ),
               ),
             ),
@@ -839,125 +842,130 @@ class _WorldBookSectionState extends State<_WorldBookSection> {
           : wrapped;
     }
 
-    final header = Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: wrapBookReorder(
-              IosCardPress(
-                baseColor: Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                pressedBlendStrength: 0.04,
-                pressedScale: 1.0,
-                haptics: false,
-                onTap: onToggleCollapsed,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    children: [
-                      AnimatedRotation(
-                        turns: collapsed ? 0.0 : 0.25,
-                        duration: const Duration(milliseconds: 240),
-                        curve: Curves.easeOutCubic,
-                        child: Icon(
-                          Lucide.ChevronRight,
-                          size: 16,
-                          color: cs.onSurface.withValues(alpha: 0.62),
+    // Card header band: the book's own row sits on a faint tint so it reads as
+    // a title bar above the entry rows, not one more row in the same pile.
+    final header = ColoredBox(
+      color: cs.onSurface.withValues(alpha: 0.045),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 2, 6, 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: wrapBookReorder(
+                IosCardPress(
+                  baseColor: Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  pressedBlendStrength: 0.04,
+                  pressedScale: 1.0,
+                  haptics: false,
+                  onTap: onToggleCollapsed,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        AnimatedRotation(
+                          turns: collapsed ? 0.0 : 0.25,
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          child: Icon(
+                            Lucide.ChevronRight,
+                            size: 16,
+                            color: cs.onSurface.withValues(alpha: 0.62),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: AppFontWeights.emphasis,
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: AppFontWeights.semibold,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                if (!book.enabled) ...[
-                                  const SizedBox(width: 8),
-                                  _TagPill(
-                                    text: l10n.worldBookDisabledTag,
-                                    color: cs.error,
-                                  ),
+                                  if (!book.enabled) ...[
+                                    const SizedBox(width: 8),
+                                    _TagPill(
+                                      text: l10n.worldBookDisabledTag,
+                                      color: cs.error,
+                                    ),
+                                  ],
                                 ],
-                              ],
-                            ),
-                            if (subtitle.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: cs.onSurface.withValues(alpha: 0.65),
-                                ),
                               ),
+                              if (subtitle.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: cs.onSurface.withValues(alpha: 0.65),
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '${book.enabledEntryCount}/${book.entries.length}',
-            style: TextStyle(
-              fontSize: 12,
-              color: cs.onSurface.withValues(alpha: 0.6),
+            const SizedBox(width: 6),
+            Text(
+              '${book.enabledEntryCount}/${book.entries.length}',
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurface.withValues(alpha: 0.6),
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          if (entries.isNotEmpty && !_selecting)
+            const SizedBox(width: 4),
+            if (entries.isNotEmpty && !_selecting)
+              _HeaderIconButton(
+                icon: Lucide.ListChecks,
+                tooltip: l10n.worldBookSelectEntries,
+                onTap: () {
+                  if (_busy) return;
+                  setState(() => _selecting = true);
+                  if (collapsed) onToggleCollapsed();
+                },
+              ),
             _HeaderIconButton(
-              icon: Lucide.ListChecks,
-              tooltip: l10n.worldBookSelectEntries,
-              onTap: () {
-                if (_busy) return;
-                setState(() => _selecting = true);
-                if (collapsed) onToggleCollapsed();
-              },
+              icon: Lucide.Plus,
+              tooltip: l10n.worldBookAddEntry,
+              onTap: onAddEntry,
             ),
-          _HeaderIconButton(
-            icon: Lucide.Plus,
-            tooltip: l10n.worldBookAddEntry,
-            onTap: onAddEntry,
-          ),
-          _HeaderIconButton(
-            icon: Lucide.Share2,
-            tooltip: l10n.worldBookExport,
-            onTap: onExport,
-          ),
-          _HeaderIconButton(
-            icon: Lucide.Settings2,
-            tooltip: l10n.worldBookConfig,
-            onTap: onConfig,
-          ),
-          _HeaderIconButton(
-            icon: Lucide.Trash2,
-            tooltip: l10n.worldBookDelete,
-            onTap: onDelete,
-            color: cs.error,
-          ),
-        ],
+            _HeaderIconButton(
+              icon: Lucide.Share2,
+              tooltip: l10n.worldBookExport,
+              onTap: onExport,
+            ),
+            _HeaderIconButton(
+              icon: Lucide.Settings2,
+              tooltip: l10n.worldBookConfig,
+              onTap: onConfig,
+            ),
+            _HeaderIconButton(
+              icon: Lucide.Trash2,
+              tooltip: l10n.worldBookDelete,
+              onTap: onDelete,
+              color: cs.error,
+            ),
+          ],
+        ),
       ),
     );
 
@@ -1024,7 +1032,13 @@ class _WorldBookSectionState extends State<_WorldBookSection> {
               detailText: detail,
               enabled: entry.enabled,
               icon: Lucide.GripVertical,
-              title: WorldBookEntryTitle(entry: entry),
+              title: WorldBookEntryTitle(
+                entry: entry,
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurface.withValues(
+                  alpha: entry.enabled ? 0.75 : 0.45,
+                ),
+              ),
               trailing: _selecting
                   ? const SizedBox.shrink()
                   : IosSwitch(
@@ -1091,22 +1105,27 @@ class _WorldBookSectionState extends State<_WorldBookSection> {
       );
     }
 
-    final section = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        header,
-        AnimatedSize(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeInOutCubic,
-          alignment: Alignment.topCenter,
-          child: collapsed
-              ? const SizedBox(width: double.infinity, height: 0)
-              : SizedBox(
-                  width: double.infinity,
-                  child: _IosSectionCard(children: children),
-                ),
-        ),
-      ],
+    // One card per book: header band plus its entries. Keeping them in the same
+    // container is what makes the hierarchy readable — group label (outside),
+    // book (card), entries (rows inside the card).
+    final section = SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: collapsed || children.isEmpty
+                ? const SizedBox(width: double.infinity, height: 0)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [_iosDivider(context), ...children],
+                  ),
+          ),
+        ],
+      ),
     );
     return SelectionBackScope(
       selecting: _selecting,
@@ -1151,7 +1170,8 @@ class _IosEntryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final opacity = enabled ? 1.0 : 0.55;
-    final baseColor = cs.onSurface.withValues(alpha: 0.9 * opacity);
+    // Entries sit one step below the book's title band in weight and tone.
+    final baseColor = cs.onSurface.withValues(alpha: 0.72 * opacity);
     final interactive = onTap != null || onLongPress != null;
     final leading = leadingBuilder == null
         ? Icon(icon, size: 20, color: baseColor)
@@ -1166,7 +1186,7 @@ class _IosEntryRow extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         child: Row(
           children: [
             SizedBox(width: 28, child: leading),
@@ -1177,7 +1197,7 @@ class _IosEntryRow extends StatelessWidget {
                   Text(
                     label,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       color: baseColor,
                       fontWeight: AppFontWeights.medium,
                     ),
@@ -1229,7 +1249,7 @@ Widget _iosDivider(BuildContext context) {
   return Divider(
     height: 1,
     thickness: 0.6,
-    indent: 46,
+    indent: 48,
     endIndent: 12,
     color: cs.outlineVariant.withValues(alpha: 0.18),
   );
@@ -1255,9 +1275,10 @@ class _HeaderIconButton extends StatelessWidget {
       message: tooltip,
       child: IosIconButton(
         icon: icon,
-        size: 18,
+        size: 17,
         padding: const EdgeInsets.all(8),
-        color: color ?? cs.onSurface.withValues(alpha: 0.9),
+        // Secondary by design: the row is the title, these are just actions.
+        color: color ?? cs.onSurface.withValues(alpha: 0.5),
         onTap: onTap,
       ),
     );
