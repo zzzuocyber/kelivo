@@ -1513,6 +1513,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.6"
+  profile_image_cropper:
+    dependency: "direct main"
+    description:
+      name: profile_image_cropper
+      sha256: "4a9c3cb59784733e567604a16665db98169305b851060680bce5b4f7b3c692b9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
   provider:
     dependency: "direct main"
     description:

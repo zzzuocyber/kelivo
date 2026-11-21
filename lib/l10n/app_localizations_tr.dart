@@ -1115,6 +1115,27 @@ class AppLocalizationsTr extends AppLocalizations {
   String get assistantEditAvatarReset => 'Sıfırla';
 
   @override
+  String get assistantEditAvatarCropChoiceTitle => '裁剪为正方形';
+
+  @override
+  String get assistantEditAvatarCropChoiceSubtitle => '拖动调整，圆形仅预览，保存 1:1 方形';
+
+  @override
+  String get assistantEditAvatarNoCropChoiceTitle => '使用原图';
+
+  @override
+  String get assistantEditAvatarNoCropChoiceSubtitle => '不裁剪，直接使用整张图片';
+
+  @override
+  String get assistantEditAvatarCropPageTitle => '裁剪头像';
+
+  @override
+  String get assistantEditAvatarCropConfirm => '完成';
+
+  @override
+  String get assistantEditAvatarCropHint => '圆形区域仅作预览，实际保存为 1:1 正方形图片';
+
+  @override
   String get displaySettingsPageChatMessageBackgroundTitle =>
       'Sohbet Mesajı Arka Planı';
 

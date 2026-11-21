@@ -23076,5 +23076,34 @@
   },
   "@settingsPageGroupEnvironmentTools": {
     "description": "Group title for environment and system tool settings."
+  },
+  "assistantEditAvatarCropChoiceTitle": "Crop to square",
+  "assistantEditAvatarCropChoiceSubtitle": "Drag to adjust; circle is preview only, saved as 1:1 square",
+  "assistantEditAvatarNoCropChoiceTitle": "Use original image",
+  "assistantEditAvatarNoCropChoiceSubtitle": "No crop, use the whole image as-is",
+  "assistantEditAvatarCropPageTitle": "Crop Avatar",
+  "assistantEditAvatarCropConfirm": "Done",
+  "assistantEditAvatarCropHint": "The circle is preview only; a 1:1 square image is saved",
+
+  "@assistantEditAvatarCropChoiceTitle": {
+    "description": "Option title: crop the avatar image to a square."
+  },
+  "@assistantEditAvatarCropChoiceSubtitle": {
+    "description": "Subtitle for the crop option."
+  },
+  "@assistantEditAvatarNoCropChoiceTitle": {
+    "description": "Option title: use the original image without cropping."
+  },
+  "@assistantEditAvatarNoCropChoiceSubtitle": {
+    "description": "Subtitle for the no-crop option."
+  },
+  "@assistantEditAvatarCropPageTitle": {
+    "description": "Title of the avatar crop page."
+  },
+  "@assistantEditAvatarCropConfirm": {
+    "description": "Button to confirm the crop."
+  },
+  "@assistantEditAvatarCropHint": {
+    "description": "Hint on the crop page that output is square, not circular."
   }
 }

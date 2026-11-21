@@ -6412,5 +6412,12 @@
   "displaySettingsGroupSystem": "系统",
   "settingsPageGroupModelInterfaces": "模型与接口",
   "settingsPageGroupAssistantCapabilities": "助手能力",
-  "settingsPageGroupEnvironmentTools": "环境与工具"
+  "settingsPageGroupEnvironmentTools": "环境与工具",
+  "assistantEditAvatarCropChoiceTitle": "裁剪为正方形",
+  "assistantEditAvatarCropChoiceSubtitle": "拖动调整，圆形仅预览，保存 1:1 方形",
+  "assistantEditAvatarNoCropChoiceTitle": "使用原图",
+  "assistantEditAvatarNoCropChoiceSubtitle": "不裁剪，直接使用整张图片",
+  "assistantEditAvatarCropPageTitle": "裁剪头像",
+  "assistantEditAvatarCropConfirm": "完成",
+  "assistantEditAvatarCropHint": "圆形区域仅作预览，实际保存为 1:1 正方形图片"
 }

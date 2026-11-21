@@ -671,7 +671,7 @@ class _BasicSettingsTabState extends State<_BasicSettingsTab> {
                     const SizedBox(height: 10),
                     row(
                       l10n.assistantEditAvatarChooseImage,
-                      () async => _pickLocalImage(context, a),
+                      () async => _pickLocalImageWithCropChoice(context, a),
                     ),
                     row(l10n.assistantEditAvatarChooseEmoji, () async {
                       final assistantProvider = context
@@ -2035,7 +2035,121 @@ extension _AssistantAvatarActions on _BasicSettingsTabState {
     }
   }
 
-  Future<void> _pickLocalImage(BuildContext context, Assistant a) async {
+  /// 选图前先二选一：裁剪为正方形 / 使用原图。
+  Future<void> _pickLocalImageWithCropChoice(
+    BuildContext context,
+    Assistant a,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final crop = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: context.overlaySurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        Widget choice({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required bool value,
+        }) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: SizedBox(
+              height: 66,
+              child: IosCardPress(
+                borderRadius: BorderRadius.circular(14),
+                baseColor: sheetTileColor(ctx),
+                duration: const Duration(milliseconds: 260),
+                onTap: () {
+                  Haptics.light();
+                  Navigator.of(ctx).pop<bool>(value);
+                },
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: AppFontWeights.medium,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                ctx,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        ctx,
+                      ).colorScheme.onSurface.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                choice(
+                  icon: Icons.crop_square,
+                  title: l10n.assistantEditAvatarCropChoiceTitle,
+                  subtitle: l10n.assistantEditAvatarCropChoiceSubtitle,
+                  value: true,
+                ),
+                choice(
+                  icon: Icons.image_outlined,
+                  title: l10n.assistantEditAvatarNoCropChoiceTitle,
+                  subtitle: l10n.assistantEditAvatarNoCropChoiceSubtitle,
+                  value: false,
+                ),
+                const SizedBox(height: 4),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (crop == null || !context.mounted) return;
+    await _pickLocalImage(context, a, withCrop: crop);
+  }
+
+  Future<void> _pickLocalImage(
+    BuildContext context,
+    Assistant a, {
+    bool withCrop = false,
+  }) async {
     if (kIsWeb) {
       await _inputAvatarUrl(context, a);
       return;
@@ -2049,7 +2163,20 @@ extension _AssistantAvatarActions on _BasicSettingsTabState {
         imageQuality: 90,
       );
       if (!context.mounted || file == null) return;
-      await assistantProvider.updateAssistant(a.copyWith(avatar: file.path));
+
+      var avatarPath = file.path;
+      if (withCrop) {
+        final cropped = await Navigator.of(context).push<String>(
+          MaterialPageRoute<void>(
+            builder: (_) => AvatarCropPage(imagePath: file.path),
+          ),
+        );
+        if (!context.mounted || cropped == null) return;
+        avatarPath = cropped;
+      }
+      await assistantProvider.updateAssistant(
+        a.copyWith(avatar: avatarPath),
+      );
       return;
     } on PlatformException {
       if (!context.mounted) return;

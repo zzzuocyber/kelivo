@@ -69,6 +69,7 @@ import '../../../utils/platform_utils.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 import '../utils/assistant_edit_tab_layout.dart';
 import 'assistant_regex_tab.dart';
+import 'avatar_crop_page.dart';
 import 'assistant_settings_edit_skills_tab.dart';
 import '../widgets/assistant_default_workspace_row.dart';
 import 'health_data_settings_page.dart';

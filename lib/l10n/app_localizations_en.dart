@@ -1110,6 +1110,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get assistantEditAvatarReset => 'Reset';
 
   @override
+  String get assistantEditAvatarCropChoiceTitle => 'Crop to square';
+
+  @override
+  String get assistantEditAvatarCropChoiceSubtitle => 'Drag to adjust; circle is preview only, saved as 1:1 square';
+
+  @override
+  String get assistantEditAvatarNoCropChoiceTitle => 'Use original image';
+
+  @override
+  String get assistantEditAvatarNoCropChoiceSubtitle => 'No crop, use the whole image as-is';
+
+  @override
+  String get assistantEditAvatarCropPageTitle => 'Crop Avatar';
+
+  @override
+  String get assistantEditAvatarCropConfirm => 'Done';
+
+  @override
+  String get assistantEditAvatarCropHint => 'The circle is preview only; a 1:1 square image is saved';
+
+  @override
   String get displaySettingsPageChatMessageBackgroundTitle =>
       'Chat Message Background';
 

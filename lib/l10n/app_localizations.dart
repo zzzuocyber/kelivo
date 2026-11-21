@@ -2110,6 +2110,41 @@ abstract class AppLocalizations {
   /// **'Reset'**
   String get assistantEditAvatarReset;
 
+  /// Option title: crop the avatar image to a square.
+  ///
+  /// In en, this message translates to:/n  /// **'Crop to square'**
+  String get assistantEditAvatarCropChoiceTitle;
+
+  /// Subtitle for the crop option.
+  ///
+  /// In en, this message translates to:/n  /// **'Drag to adjust; circle is preview only, saved as 1:1 square'**
+  String get assistantEditAvatarCropChoiceSubtitle;
+
+  /// Option title: use the original image without cropping.
+  ///
+  /// In en, this message translates to:/n  /// **'Use original image'**
+  String get assistantEditAvatarNoCropChoiceTitle;
+
+  /// Subtitle for the no-crop option.
+  ///
+  /// In en, this message translates to:/n  /// **'No crop, use the whole image as-is'**
+  String get assistantEditAvatarNoCropChoiceSubtitle;
+
+  /// Title of the avatar crop page.
+  ///
+  /// In en, this message translates to:/n  /// **'Crop Avatar'**
+  String get assistantEditAvatarCropPageTitle;
+
+  /// Button to confirm the crop.
+  ///
+  /// In en, this message translates to:/n  /// **'Done'**
+  String get assistantEditAvatarCropConfirm;
+
+  /// Hint on the crop page that output is square, not circular.
+  ///
+  /// In en, this message translates to:/n  /// **'The circle is preview only; a 1:1 square image is saved'**
+  String get assistantEditAvatarCropHint;
+
   /// Label for the setting controlling the background style of chat message bubbles.
   ///
   /// In en, this message translates to:
