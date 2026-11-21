@@ -64,6 +64,13 @@ const List<_MdSnippet> _markdownSnippets = <_MdSnippet>[
   ),
   _MdSnippet('斜体', _SnippetKind.plain, template: '*文字*', placeholder: '文字'),
   _MdSnippet('分割线', _SnippetKind.plain, template: '---', block: true),
+  _MdSnippet(
+    '图层叠加',
+    _SnippetKind.plain,
+    template: '```layers\n![L](/storage/emulated/0/左侧立绘.png)\n![C](/workspace/素材库/中间立绘.png)\n![240](/workspace/素材库/场景.webp)\n```',
+    placeholder: '240',
+    block: true,
+  ),
 ];
 
 const List<(String, String)> _fontColorChoices = <(String, String)>[

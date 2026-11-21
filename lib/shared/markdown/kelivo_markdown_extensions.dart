@@ -5,6 +5,7 @@ import 'package:Kelivo/core/providers/settings_provider.dart';
 import 'package:Kelivo/l10n/app_localizations.dart';
 import 'package:Kelivo/utils/svg_preview_html.dart';
 import 'package:Kelivo/shared/widgets/plantuml_block.dart';
+import 'package:Kelivo/shared/widgets/layered_image_block.dart';
 import 'package:Kelivo/shared/widgets/export_capture_scope.dart';
 
 import 'package:Kelivo/features/intelligent_ui/host/ui_markdown_builder.dart';
@@ -54,6 +55,7 @@ MarkstreamExtensions _extensions({LiteralSpanBuilder? literalSpanBuilder}) =>
         'rawhtml': _diagram,
         'raw_html': _diagram,
         'plantuml': _plantUml,
+        'layers': _layers,
       },
       actionButtonBuilder: markdownActionButton,
       codeExtraActions: markdownCodeActions,
@@ -188,6 +190,32 @@ Widget _plantUml(
       wrap: false,
       literalSpanBuilder: markdownExtensionsFor(context).literalSpanBuilder,
     ),
+  );
+}
+
+Widget _layers(
+  BuildContext context,
+  CodeBlockNode node,
+  MarkstreamRenderContext rendering,
+) {
+  final fallback = MarkstreamCodeBlock(
+    node: node,
+    theme: rendering.theme,
+    extensions: markdownExtensionsFor(context),
+    options: markdownCodeOptions(context.watch<SettingsProvider>()),
+    labels: markdownLabels(context),
+    highlighter: KelivoCodeHighlighter.forTheme(rendering.theme),
+    streaming: rendering.streaming,
+    exporting: ExportCaptureScope.of(context),
+  );
+  final maxWait = node.closed;
+  if (!maxWait) return fallback;
+  final lines = parseLayeredImageBody(node.code);
+  if (lines == null) return fallback;
+  return LayeredImageBlock(
+    code: node.code,
+    lines: lines,
+    theme: rendering.theme,
   );
 }
 
