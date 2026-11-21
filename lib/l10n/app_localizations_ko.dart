@@ -13614,6 +13614,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get browserOpenFullPage => '전체 페이지로 열기';
 
   @override
+  String get browserMaximize => '브라우저 최대화';
+
+  @override
+  String get browserRestoreChrome => '브라우저 컨트롤 복원';
+
+  @override
   String get browserClosePanel => '브라우저 패널 닫기';
 
   @override

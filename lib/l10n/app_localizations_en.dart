@@ -14041,6 +14041,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browserOpenFullPage => 'Open in full page';
 
   @override
+  String get browserMaximize => 'Maximize browser';
+
+  @override
+  String get browserRestoreChrome => 'Restore browser controls';
+
+  @override
   String get browserClosePanel => 'Close browser panel';
 
   @override

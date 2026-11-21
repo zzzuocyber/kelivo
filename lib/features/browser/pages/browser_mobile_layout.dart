@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 
-import '../widgets/browser_progressive_edge.dart';
-
 /// The toolbar and its reserved area share the same collapse animation. Native
 /// viewport insets provide that reservation without resizing the WebView.
 class BrowserMobileLayout extends StatelessWidget {
@@ -24,6 +22,8 @@ class BrowserMobileLayout extends StatelessWidget {
     this.bottomContentInset = 0,
     this.underlapToolbar = false,
     this.fadeBehindToolbar = false,
+    this.topBar,
+    this.immersive = false,
   });
   final Widget content;
   final Widget toolbar;
@@ -44,6 +44,14 @@ class BrowserMobileLayout extends StatelessWidget {
   final double bottomContentInset;
   final bool underlapToolbar;
   final bool fadeBehindToolbar;
+
+  /// Edge 风格顶部地址栏。给定时，网页内容从它下方开始。
+  final Widget? topBar;
+
+  /// 最大化：藏起顶栏与底栏，网页铺满整个浏览器页面。
+  final bool immersive;
+  static const double topBarHeight = 56;
+  static const double bottomBarHeight = 72;
   static const double expandedChromeHeight = 54;
 
   static double collapseDropFor(double bottomSafeInset) =>
@@ -83,20 +91,29 @@ class BrowserMobileLayout extends StatelessWidget {
     final dockInset =
         math.max(padding.bottom, keyboardInset) -
         (viewportResizesForKeyboard ? keyboardInset : 0);
-    final viewportBottom = underlapToolbar ? 0.0 : bottomContentInset;
+    // Edge 风格底栏不透明，网页底部要让出它的高度（最大化时不用让）。
+    final viewportBottom = immersive
+        ? 0.0
+        : (underlapToolbar
+            ? bottomContentInset
+            : (bottomContentInset > 0 ? bottomContentInset : bottomBarHeight));
+    // Edge 风格：有顶栏时网页从它下方开始；最大化时顶栏底栏都藏起，网页铺满。
+    final topInset = immersive
+        ? 0.0
+        : topBar != null
+        ? padding.top + topBarHeight
+        : (underlapStatusBar ? 0 : padding.top);
     return LayoutBuilder(
       builder: (context, constraints) {
         onViewportHeight?.call(
-          constraints.maxHeight -
-              (underlapStatusBar ? 0 : padding.top) -
-              viewportBottom,
+          constraints.maxHeight - topInset - viewportBottom,
         );
         return Stack(
           fit: StackFit.expand,
           children: [
             Positioned.fill(
               key: const ValueKey('browserMobileViewportSlot'),
-              top: underlapStatusBar ? 0 : padding.top,
+              top: topInset,
               bottom: viewportBottom,
               child: content,
             ),
@@ -105,32 +122,15 @@ class BrowserMobileLayout extends StatelessWidget {
                 key: const ValueKey('browserTabReturnCoverSlot'),
                 child: transitionOverlay!,
               ),
-            if (underlapStatusBar && padding.top > 0)
+            // 顶栏：Edge 风格常驻地址栏。最大化时隐藏；输入地址时也要显示。
+            if (topBar != null && !immersive)
               Positioned(
-                key: const ValueKey('browserMobileTopEdge'),
+                key: const ValueKey('browserEdgeTopBarSlot'),
                 top: 0,
                 left: 0,
                 right: 0,
-                height: padding.top + 24,
-                child: const BrowserProgressiveEdge(
-                  top: true,
-                  filterBackdrop: false,
-                ),
-              ),
-            if (keyboardInset == 0)
-              Positioned(
-                key: const ValueKey('browserMobileBottomEdge'),
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: bottomContentInset > 0
-                    ? bottomContentInset
-                    : padding.bottom + expandedChromeHeight + 20,
-                child: BrowserProgressiveEdge(
-                  top: false,
-                  filterBackdrop: false,
-                  fadeBehindToolbar: fadeBehindToolbar,
-                ),
+                height: padding.top + topBarHeight,
+                child: topBar!,
               ),
             if (agentStatus != null)
               Positioned(
@@ -140,26 +140,23 @@ class BrowserMobileLayout extends StatelessWidget {
                 right: 12,
                 child: agentStatus!,
               ),
-            AnimatedPositioned(
-              key: const ValueKey('browserMobileToolbarSlot'),
-              duration: Duration(
-                milliseconds:
-                    defaultTargetPlatform == TargetPlatform.android &&
-                        !MediaQuery.disableAnimationsOf(context)
-                    ? 240
-                    : 0,
+            // 底栏 Edge 风格：最大化时藏起。
+            if (!immersive)
+              AnimatedPositioned(
+                key: const ValueKey('browserMobileToolbarSlot'),
+                duration: Duration(
+                  milliseconds:
+                      defaultTargetPlatform == TargetPlatform.android &&
+                          !MediaQuery.disableAnimationsOf(context)
+                      ? 240
+                      : 0,
+                ),
+                curve: Curves.easeOutCubic,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: toolbar,
               ),
-              curve: Curves.easeOutCubic,
-              left: 16,
-              right: 16,
-              // Reserve the whole travel inside the hit-test area, including the
-              // lower position of the collapsed capsule above the home indicator.
-              bottom:
-                  dockInset +
-                  toolbarBottomGap -
-                  collapseDropFor(padding.bottom),
-              child: toolbar,
-            ),
             if (findBar != null)
               Positioned(
                 key: const ValueKey('browserMobileFindSlot'),

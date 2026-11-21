@@ -59,6 +59,7 @@ enum _BrowserMenu {
   external,
   agent,
   askAi,
+  maximize,
   settings,
   close,
 }
@@ -163,6 +164,8 @@ class BrowserPageViewState extends State<BrowserPage>
   _tabReturnCover;
   bool _tabReturnCoverFading = false;
   bool _tabChromeHidden = false;
+  // Edge 风格最大化：藏起浏览器顶栏底栏，网页铺满。
+  bool _immersive = false;
   int _tabReturnCoverEpoch = 0;
   bool _editingAddress = false;
   bool _addressKeyboardSession = false;
@@ -731,7 +734,10 @@ class BrowserPageViewState extends State<BrowserPage>
   }
 
   void _handleSystemBack() {
-    if (_showFind) {
+    if (_immersive) {
+      // 最大化时按返回先恢复浏览器界面，而不是直接退出。
+      setState(() => _immersive = false);
+    } else if (_showFind) {
       _toggleFind();
     } else if (_addressFocus.hasFocus) {
       _addressFocus.unfocus();
@@ -746,9 +752,8 @@ class BrowserPageViewState extends State<BrowserPage>
     builder: (context, _) {
       return BrowserScrollConfiguration(
         child: BrowserGlassScope(
-          style: widget.sidePanel != null
-              ? BrowserSurfaceStyle.solid
-              : _service.settings.surfaceStyle,
+          // Edge 风格：浏览器外观锁纯色浅色，不再跟随「表面样式」设置。
+          style: BrowserSurfaceStyle.solid,
           child: Theme(
             data: Theme.of(context).copyWith(
               splashFactory: NoSplash.splashFactory,
@@ -999,7 +1004,8 @@ class BrowserPageViewState extends State<BrowserPage>
                     return PopScope(
                       canPop:
                           _menuOpen ||
-                          (!_showFind &&
+                          (!_immersive &&
+                              !_showFind &&
                               !_addressFocus.hasFocus &&
                               _service.activeTab?.canGoBack != true),
                       onPopInvokedWithResult: (didPop, _) {
@@ -1021,75 +1027,51 @@ class BrowserPageViewState extends State<BrowserPage>
     required bool retainKeyboardBackdrop,
   }) {
     final editing = _editingAddress || _addressFocus.hasFocus;
-    return ValueListenableBuilder<({double progress, bool animate})>(
-      valueListenable: _chromeMotion,
-      builder: (context, motion, _) => BrowserChromeTransition(
-        progress: editing ? 0 : motion.progress,
-        animate: !editing && motion.animate,
-        reducedMotion: MediaQuery.disableAnimationsOf(context),
-        onProgress: (value) => _visibleCollapseProgress = value,
-        builder: (context, progress) {
-          final bottomContentInset =
-              !_blank && defaultTargetPlatform == TargetPlatform.iOS
-              ? BrowserMobileLayout.contentBottomInsetFor(
-                  bottomSafeInset: viewPadding.bottom,
-                  keyboardInset: keyboardInset,
-                  viewportResizesForKeyboard: !retainKeyboardBackdrop,
-                  collapseProgress: progress,
-                )
-              : 0.0;
-          return BrowserViewportInsets(
-            tabId: _blank ? null : _service.activeTabId,
-            viewIdentity: _service.activeTab?.runtimeVersion,
-            top: MediaQuery.viewPaddingOf(context).top,
-            bottom: bottomContentInset,
-            builder: (context, underlap) => ValueListenableBuilder<bool>(
-              valueListenable: BrowserViewportInsets.reduceTransparency,
-              builder: (context, reduceTransparency, _) => BrowserMobileLayout(
-                key: _mobileLayoutKey,
-                underlapStatusBar: _blank || underlap,
-                bottomContentInset: bottomContentInset,
-                underlapToolbar: underlap,
-                fadeBehindToolbar: !_blank && underlap && !reduceTransparency,
-                viewPadding: viewPadding,
-                keyboardInset: keyboardInset,
-                viewportResizesForKeyboard: !retainKeyboardBackdrop,
-                onViewportHeight: (height) => _viewportHeight = height,
-                toolbar: _mobileToolbar(
-                  context,
-                  collapseProgress: progress,
-                  bottomSafeInset: viewPadding.bottom,
-                  foregroundShadows:
-                      defaultTargetPlatform == TargetPlatform.iOS &&
-                          !_blank &&
-                          underlap &&
-                          !reduceTransparency &&
-                          !MediaQuery.highContrastOf(context) &&
-                          Theme.of(context).brightness == Brightness.dark &&
-                          _service.settings.surfaceStyle ==
-                              BrowserSurfaceStyle.liquid
-                      ? const [
-                          Shadow(
-                            color: Color(0x66000000),
-                            offset: Offset(0, .5),
-                            blurRadius: 0,
-                          ),
-                        ]
-                      : null,
-                ),
-                agentStatus: _agentStatus(context),
-                findBar: _showFind ? _findBar(context) : null,
-                content: _content(
-                  context,
-                  previewTopInset: underlap ? viewPadding.top : 0,
-                ),
-                transitionOverlay: _tabReturnOverlay(context),
-              ),
+    // Edge 风格：取消滚动收起，chrome 固定显示；最大化时由 _immersive 隐藏。
+    const progress = 0.0;
+    final topWithBar = MediaQuery.viewPaddingOf(context).top +
+        (_immersive ? 0.0 : BrowserMobileLayout.topBarHeight);
+    {
+      final bottomContentInset =
+          !_blank && defaultTargetPlatform == TargetPlatform.iOS
+          ? BrowserMobileLayout.contentBottomInsetFor(
+              bottomSafeInset: viewPadding.bottom,
+              keyboardInset: keyboardInset,
+              viewportResizesForKeyboard: !retainKeyboardBackdrop,
+              collapseProgress: progress,
+            )
+          : 0.0;
+      return BrowserViewportInsets(
+        tabId: _blank ? null : _service.activeTabId,
+        viewIdentity: _service.activeTab?.runtimeVersion,
+        top: _immersive ? MediaQuery.viewPaddingOf(context).top : topWithBar,
+        bottom: bottomContentInset,
+        builder: (context, underlap) => ValueListenableBuilder<bool>(
+          valueListenable: BrowserViewportInsets.reduceTransparency,
+          builder: (context, reduceTransparency, _) => BrowserMobileLayout(
+            key: _mobileLayoutKey,
+            underlapStatusBar: _blank || underlap,
+            bottomContentInset: bottomContentInset,
+            underlapToolbar: underlap,
+            fadeBehindToolbar: false,
+            viewPadding: viewPadding,
+            keyboardInset: keyboardInset,
+            viewportResizesForKeyboard: !retainKeyboardBackdrop,
+            onViewportHeight: (height) => _viewportHeight = height,
+            immersive: _immersive,
+            topBar: _immersive ? null : _edgeTopBar(context, editing),
+            toolbar: _edgeBottomBar(context),
+            agentStatus: _agentStatus(context),
+            findBar: _showFind ? _findBar(context) : null,
+            content: _content(
+              context,
+              previewTopInset: underlap ? viewPadding.top : 0,
             ),
-          );
-        },
-      ),
-    );
+            transitionOverlay: _tabReturnOverlay(context),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _mobileHeader(BuildContext context) {
@@ -1126,6 +1108,237 @@ class BrowserPageViewState extends State<BrowserPage>
   String get _displayHost {
     final uri = Uri.tryParse(_service.activeTab?.url ?? '');
     return uri?.host.replaceFirst(RegExp(r'^www\.'), '') ?? '';
+  }
+
+  /// Edge 风格顶部地址栏：浅灰底 + 白色圆角条（书签 / 网址 / 刷新）。
+  Widget _edgeTopBar(BuildContext context, bool editing) {
+    final l = AppLocalizations.of(context)!;
+    final tab = _service.activeTab;
+    final bookmarked = _bookmarked;
+    final loading = tab?.isLoading ?? false;
+    return ColoredBox(
+      color: const Color(0xFFF3F3F3),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 12,
+          right: 12,
+          top: MediaQuery.viewPaddingOf(context).top,
+          bottom: 8,
+        ),
+        child: Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 3,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // 书签：单色，空心=未收藏，实心=已收藏（深灰）
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                  icon: Icon(
+                    bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                    size: 20,
+                    color: bookmarked
+                        ? const Color(0xFF5F6368)
+                        : const Color(0xFF1B1B1B),
+                  ),
+                  tooltip: bookmarked
+                      ? l.browserRemoveBookmark
+                      : l.browserAddBookmark,
+                  onPressed: _hasWebAddress
+                      ? () => unawaited(_run(() => _service.toggleBookmark()))
+                      : null,
+                ),
+              ),
+              Expanded(
+                child: editing
+                    ? BrowserTextField(
+                        key: const ValueKey('edgeAddressField'),
+                        controller: _address,
+                        focusNode: _addressFocus,
+                        autofocus: false,
+                        autocorrect: false,
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.go,
+                        placeholder: l.browserSearchHint,
+                        placeholderStyle: const TextStyle(
+                          color: Color(0xFF9AA0A6),
+                          fontSize: 15,
+                        ),
+                        style: const TextStyle(
+                          color: Color(0xFF202124),
+                          fontSize: 15,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        onSubmitted: _navigate,
+                      )
+                    : GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _focusAddress,
+                        child: Center(
+                          child: Text(
+                            _displayHost?.isNotEmpty == true
+                                ? _displayHost!
+                                : l.browserSearchHint,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Color(0xFF202124),
+                              fontSize: 15,
+                              fontWeight: AppFontWeights.medium,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+              // 刷新 / 停止
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                  icon: Icon(
+                    loading ? Icons.close : Icons.refresh,
+                    size: 20,
+                    color: const Color(0xFF1B1B1B),
+                  ),
+                  tooltip: loading ? l.browserStop : l.browserReload,
+                  onPressed: _blank
+                      ? null
+                      : () => unawaited(
+                          _userRun(
+                            () => tab?.isLoading == true
+                                ? _service.stop()
+                                : _service.reload(),
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Edge 风格底部工具栏：后退 / 前进 / 新建标签 / 标签数 / 菜单。
+  Widget _edgeBottomBar(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final tab = _service.activeTab;
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    Widget btn({
+      required IconData icon,
+      required String label,
+      required VoidCallback? onPressed,
+      Widget? child,
+    }) =>
+        SizedBox(
+          width: 52,
+          height: 48,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 52, height: 48),
+            icon: child ??
+                Icon(icon, size: 24, color: const Color(0xFF1B1B1B)),
+            tooltip: label,
+            onPressed: onPressed,
+            color: const Color(0xFF1B1B1B),
+            disabledColor: const Color(0xFFB8BCC2),
+          ),
+        );
+    return ColoredBox(
+      color: const Color(0xFFF3F3F3),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Divider(height: 1, color: Color(0xFFE3E3E3)),
+          SizedBox(
+            height: 56,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                btn(
+                  icon: Icons.arrow_back_ios_new,
+                  label: l.browserBack,
+                  onPressed: tab?.canGoBack == true
+                      ? () => unawaited(_userRun(() => _service.back()))
+                      : null,
+                ),
+                btn(
+                  icon: Icons.arrow_forward_ios,
+                  label: l.browserForward,
+                  onPressed: tab?.canGoForward == true
+                      ? () => unawaited(_userRun(() => _service.forward()))
+                      : null,
+                ),
+                btn(
+                  icon: Icons.add,
+                  label: l.browserNewTab,
+                  onPressed: () => unawaited(_newTab()),
+                ),
+                btn(
+                  icon: Icons.tab,
+                  label: l.browserTabs,
+                  onPressed: _openTabs,
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFF1B1B1B), width: 2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${_service.tabsForSession(_visibleTabScope).length}',
+                        style: const TextStyle(
+                          color: Color(0xFF1B1B1B),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                btn(
+                  icon: Icons.menu,
+                  label: l.browserMore,
+                  onPressed: () => unawaited(_openMenu()),
+                ),
+              ],
+            ),
+          ),
+          // 手势条区域
+          SizedBox(
+            height: viewPadding.bottom > 0 ? viewPadding.bottom : 16,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Container(
+                width: 128,
+                height: 4,
+                margin: const EdgeInsets.only(top: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B1B1B),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _mobileToolbar(
@@ -2458,6 +2671,14 @@ class BrowserPageViewState extends State<BrowserPage>
                 : l.browserTakeOver,
           ),
         BrowserMenuEntry(
+          value: _BrowserMenu.maximize,
+          group: BrowserMenuGroup.application,
+          icon: Icons.fullscreen,
+          label: _immersive
+              ? l.browserRestoreChrome
+              : l.browserMaximize,
+        ),
+        BrowserMenuEntry(
           value: _BrowserMenu.settings,
           footer: true,
           group: BrowserMenuGroup.application,
@@ -2563,6 +2784,8 @@ class BrowserPageViewState extends State<BrowserPage>
           case BrowserAiEntryResult.browserPermissionDisabled:
             _notify(l.browserAskAiBrowserDisabled);
         }
+      case _BrowserMenu.maximize:
+        setState(() => _immersive = !_immersive);
       case _BrowserMenu.settings:
         _openSettings();
       case _BrowserMenu.close:

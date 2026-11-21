@@ -4140,6 +4140,8 @@
   "browserAskAiBrowserDisabled": "Сначала разрешите ассистентам использовать браузер в настройках браузера.",
   "browserAskAiDraft": "Пожалуйста, используй браузер, чтобы поработать с этой страницей:\n{page}\n\nМой запрос: ",
   "browserOpenFullPage": "Открыть на всю страницу",
+  "browserRestoreChrome": "Вернуть панель браузера",
+  "browserMaximize": "Развернуть браузер",
   "browserClosePanel": "Закрыть панель браузера",
   "browserSearchTabs": "Поиск вкладок",
   "browserTabsCount": "{count, plural, one{{count} вкладка} few{{count} вкладки} many{{count} вкладок} other{{count} вкладки}}",

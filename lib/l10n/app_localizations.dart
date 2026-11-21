@@ -24972,6 +24972,16 @@ abstract class AppLocalizations {
   /// **'Open in full page'**
   String get browserOpenFullPage;
 
+  /// Immersive browser view toggle.
+  ///
+  /// In en, this message translates to:/n  /// **'Maximize browser'**
+  String get browserMaximize;
+
+  /// Immersive browser view toggle.
+  ///
+  /// In en, this message translates to:/n  /// **'Restore browser controls'**
+  String get browserRestoreChrome;
+
   /// Button label to close the browser panel.
   ///
   /// In en, this message translates to:

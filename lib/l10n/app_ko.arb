@@ -4140,6 +4140,8 @@
   "browserAskAiBrowserDisabled": "먼저 브라우저 설정에서 어시스턴트의 브라우저 사용을 허용하세요.",
   "browserAskAiDraft": "브라우저를 사용해 이 페이지를 처리해 주세요:\n{page}\n\n내 요청: ",
   "browserOpenFullPage": "전체 페이지로 열기",
+  "browserRestoreChrome": "브라우저 컨트롤 복원",
+  "browserMaximize": "브라우저 최대화",
   "browserClosePanel": "브라우저 패널 닫기",
   "browserSearchTabs": "탭 검색",
   "browserTabsCount": "{count, plural, =1{탭 1개} other{탭 {count}개}}",

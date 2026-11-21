@@ -6671,6 +6671,8 @@
     "description": "Prefilled composer text inserted into the chat when using Ask AI; {page} is replaced with the page URL or name."
   },
   "browserOpenFullPage": "Open in full page",
+  "browserRestoreChrome": "Restore browser controls",
+  "browserMaximize": "Maximize browser",
   "browserClosePanel": "Close browser panel",
   "browserSearchTabs": "Search tabs",
   "browserTabsCount": "{count, plural, =1{1 tab} other{{count} tabs}}",
@@ -19945,7 +19947,13 @@
   "@browserOpenFullPage": {
     "description": "Button label to expand the browser panel into a full page view."
   },
-  "@browserClosePanel": {
+
+  "@browserRestoreChrome": {
+    "description": "Toggle immersive browser view."
+  },
+  "@browserMaximize": {
+    "description": "Toggle immersive browser view."
+  },  "@browserClosePanel": {
     "description": "Button label to close the browser panel."
   },
   "@browserSearchTabs": {

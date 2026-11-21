@@ -14122,6 +14122,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get browserOpenFullPage => 'Tam sayfa olarak aç';
 
   @override
+  String get browserMaximize => 'Tarayıcıyı büyüt';
+
+  @override
+  String get browserRestoreChrome => 'Tarayıcı kontrollerini geri yükle';
+
+  @override
   String get browserClosePanel => 'Tarayıcı panelini kapat';
 
   @override

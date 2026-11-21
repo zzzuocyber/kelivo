@@ -13373,6 +13373,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get browserOpenFullPage => '完整页面打开';
 
   @override
+  String get browserMaximize => '浏览器最大化';
+
+  @override
+  String get browserRestoreChrome => '恢复浏览器界面';
+
+  @override
   String get browserClosePanel => '关闭浏览器面板';
 
   @override
@@ -29801,6 +29807,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get browserOpenFullPage => '完整页面打开';
+
+  @override
+  String get browserMaximize => '浏览器最大化';
+
+  @override
+  String get browserRestoreChrome => '恢复浏览器界面';
 
   @override
   String get browserClosePanel => '关闭浏览器面板';
@@ -46241,6 +46253,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get browserOpenFullPage => '完整頁面開啟';
+
+  @override
+  String get browserMaximize => '瀏覽器最大化';
+
+  @override
+  String get browserRestoreChrome => '還原瀏覽器介面';
 
   @override
   String get browserClosePanel => '關閉瀏覽器面板';

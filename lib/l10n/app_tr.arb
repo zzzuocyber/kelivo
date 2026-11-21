@@ -4140,6 +4140,8 @@
   "browserAskAiBrowserDisabled": "Önce tarayıcı ayarlarında asistanların tarayıcıyı kullanmasına izin verin.",
   "browserAskAiDraft": "Lütfen bu sayfa üzerinde çalışmak için tarayıcıyı kullanın:\n{page}\n\nİsteğim: ",
   "browserOpenFullPage": "Tam sayfa olarak aç",
+  "browserRestoreChrome": "Tarayıcı kontrollerini geri yükle",
+  "browserMaximize": "Tarayıcıyı büyüt",
   "browserClosePanel": "Tarayıcı panelini kapat",
   "browserSearchTabs": "Sekmelerde ara",
   "browserTabsCount": "{count, plural, =1{1 sekme} other{{count} sekme}}",

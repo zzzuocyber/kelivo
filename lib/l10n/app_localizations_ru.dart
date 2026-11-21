@@ -14238,6 +14238,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get browserOpenFullPage => 'Открыть на всю страницу';
 
   @override
+  String get browserMaximize => 'Развернуть браузер';
+
+  @override
+  String get browserRestoreChrome => 'Вернуть панель браузера';
+
+  @override
   String get browserClosePanel => 'Закрыть панель браузера';
 
   @override

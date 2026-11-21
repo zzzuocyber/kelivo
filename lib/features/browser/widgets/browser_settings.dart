@@ -20,7 +20,6 @@ typedef _BrowserSettingsValues = ({
   bool saveHistory,
   bool agentEnabled,
   int operationTimeoutSeconds,
-  BrowserSurfaceStyle surfaceStyle,
   bool supportsWebsiteDataClear,
 });
 
@@ -62,7 +61,6 @@ class BrowserSettingsPanel extends StatelessWidget {
             saveHistory: settings.saveHistory,
             agentEnabled: settings.agentEnabled,
             operationTimeoutSeconds: settings.operationTimeoutSeconds,
-            surfaceStyle: settings.surfaceStyle,
             supportsWebsiteDataClear: service.supportsWebsiteDataClear,
           );
         },
@@ -72,43 +70,7 @@ class BrowserSettingsPanel extends StatelessWidget {
               const EdgeInsets.fromLTRB(18, 4, 18, 28) +
               BrowserManagementPage.contentInsetsOf(context),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Text(
-                l.browserSurfaceStyle,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: AppFontWeights.semibold,
-                ),
-              ),
-            ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final style in BrowserSurfaceStyle.values)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: _SurfaceChoice(
-                        style: style,
-                        selected: s.surfaceStyle == style,
-                        label: switch (style) {
-                          BrowserSurfaceStyle.liquid => l.browserSurfaceLiquid,
-                          BrowserSurfaceStyle.frosted =>
-                            l.browserSurfaceFrosted,
-                          BrowserSurfaceStyle.solid => l.browserSurfaceSolid,
-                        },
-                        onSelected: () => _run(
-                          () => service.updateSettings(
-                            service.settings.copyWith(surfaceStyle: style),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
+            // Edge 风格：表面样式（液态玻璃/磨砂/纯色）已移除，外观固定纯色浅色。
             BrowserSurfaceGroup(
               children: [
                 _choiceRow(
@@ -499,79 +461,6 @@ class _UserAgentEditorState extends State<_UserAgentEditor> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SurfaceChoice extends StatelessWidget {
-  const _SurfaceChoice({
-    required this.style,
-    required this.selected,
-    required this.label,
-    required this.onSelected,
-  });
-
-  final BrowserSurfaceStyle style;
-  final bool selected;
-  final String label;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      selected: selected,
-      child: BrowserSurfaceButton(
-        semanticLabel: label,
-        onPressed: onSelected,
-        child: Column(
-          children: [
-            SizedBox(
-              height: 66,
-              child: BrowserGlassScope(
-                style: style,
-                child: BrowserGlass(
-                  radius: 24,
-                  elevated: false,
-                  // This sample sits on a uniform page color; blurring that
-                  // color is identical to drawing it, but allocates a GPU pass.
-                  blur:
-                      defaultTargetPlatform != TargetPlatform.android ||
-                      style != BrowserSurfaceStyle.frosted,
-                  child: Center(
-                    child: Icon(
-                      switch (style) {
-                        BrowserSurfaceStyle.liquid => LucideIcons.droplet,
-                        BrowserSurfaceStyle.frosted => LucideIcons.layers,
-                        BrowserSurfaceStyle.solid => LucideIcons.square,
-                      },
-                      size: 25,
-                      color: colors.onSurface,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 9),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected
-                    ? AppFontWeights.strong
-                    : AppFontWeights.regular,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Icon(
-              selected ? LucideIcons.circleCheck : LucideIcons.circle,
-              size: 17,
-              color: selected ? colors.onSurface : colors.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -4140,6 +4140,8 @@
   "browserAskAiBrowserDisabled": "請先在瀏覽器設定中允許助理使用瀏覽器。",
   "browserAskAiDraft": "請使用瀏覽器處理這個頁面：\n{page}\n\n我的需求：",
   "browserOpenFullPage": "完整頁面開啟",
+  "browserRestoreChrome": "還原瀏覽器介面",
+  "browserMaximize": "瀏覽器最大化",
   "browserClosePanel": "關閉瀏覽器面板",
   "browserSearchTabs": "搜尋分頁",
   "browserTabsCount": "{count} 個分頁",

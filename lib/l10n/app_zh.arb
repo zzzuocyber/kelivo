@@ -5004,6 +5004,8 @@
   "browserAskAiBrowserDisabled": "请先在浏览器设置中允许助手使用浏览器。",
   "browserAskAiDraft": "请使用浏览器处理这个页面：\n{page}\n\n我的需求：",
   "browserOpenFullPage": "完整页面打开",
+  "browserRestoreChrome": "恢复浏览器界面",
+  "browserMaximize": "浏览器最大化",
   "browserClosePanel": "关闭浏览器面板",
   "browserSearchTabs": "搜索标签页",
   "browserTabsCount": "{count} 个标签页",
