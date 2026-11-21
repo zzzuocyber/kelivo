@@ -17169,4 +17169,58 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get bubbleSchemeDebugHint => '正在编辑方案，改动只影响该方案，不影响全局气泡。';
 
+  @override
+  String get backgroundMaskSettingsTitle => '背景遮罩';
+
+  @override
+  String get backgroundMaskSettingsModeTitle => '遮罩方式';
+
+  @override
+  String get backgroundMaskSettingsModeLinear => '线性遮罩';
+
+  @override
+  String get backgroundMaskSettingsModeRadial => '径向遮罩';
+
+  @override
+  String get backgroundMaskSettingsParamsTitle => '遮罩参数';
+
+  @override
+  String get backgroundMaskSettingsVignetteStrength => '暗角强度';
+
+  @override
+  String get backgroundMaskSettingsFeather => '羽化过渡';
+
+  @override
+  String get backgroundMaskSettingsSize => '暗角大小';
+
+  @override
+  String get backgroundMaskSettingsCenterX => '中心偏移 X';
+
+  @override
+  String get backgroundMaskSettingsCenterY => '中心偏移 Y';
+
+  @override
+  String get backgroundMaskSettingsHint => '拉到 0% 即关闭遮罩，背景图原样显示。';
+
+  @override
+  String get displaySettingsGroupAppearance => '外观';
+
+  @override
+  String get displaySettingsGroupBackgroundInput => '背景与输入';
+
+  @override
+  String get displaySettingsGroupChatBehavior => '聊天行为';
+
+  @override
+  String get displaySettingsGroupSystem => '系统';
+
+  @override
+  String get settingsPageGroupModelInterfaces => '模型与接口';
+
+  @override
+  String get settingsPageGroupAssistantCapabilities => '助手能力';
+
+  @override
+  String get settingsPageGroupEnvironmentTools => '环境与工具';
+
 }

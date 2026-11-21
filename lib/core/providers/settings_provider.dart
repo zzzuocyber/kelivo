@@ -85,6 +85,9 @@ enum DesktopMessageNavButtonsMode {
 // Mobile: message navigation buttons visibility mode
 enum MobileMessageNavButtonsMode { always, scroll, never }
 
+// Chat background mask style: linear top-to-bottom gradient or radial vignette.
+enum ChatBackgroundMaskMode { linear, radial }
+
 class SettingsProvider extends ChangeNotifier {
   static const String _providersOrderKey = 'providers_order_v1';
   static const String _providerGroupsKey =
@@ -320,6 +323,15 @@ class SettingsProvider extends ChangeNotifier {
       'display_auto_scroll_enabled_v1';
   static const String _displayChatBackgroundMaskStrengthKey =
       'display_chat_background_mask_strength_v1';
+  static const String _displayChatBackgroundMaskModeKey =
+      'display_chat_background_mask_mode_v1';
+  static const String _displayRadialMaskFeatherKey =
+      'display_radial_mask_feather_v1';
+  static const String _displayRadialMaskSizeKey = 'display_radial_mask_size_v1';
+  static const String _displayRadialMaskCenterXKey =
+      'display_radial_mask_center_x_v1';
+  static const String _displayRadialMaskCenterYKey =
+      'display_radial_mask_center_y_v1';
   static const String _displayChatInputBackgroundOpacityLightKey =
       'display_chat_input_background_opacity_light_v1';
   static const String _displayChatInputBackgroundOpacityDarkKey =
@@ -1248,6 +1260,20 @@ class SettingsProvider extends ChangeNotifier {
     _autoScrollEnabled = prefs.getBool(_displayAutoScrollEnabledKey) ?? true;
     _chatBackgroundMaskStrength =
         prefs.getDouble(_displayChatBackgroundMaskStrengthKey) ?? 1.0;
+    final maskModeStr = prefs.getString(_displayChatBackgroundMaskModeKey);
+    _chatBackgroundMaskMode = maskModeStr == 'radial'
+        ? ChatBackgroundMaskMode.radial
+        : ChatBackgroundMaskMode.linear;
+    _radialMaskFeather = (prefs.getDouble(_displayRadialMaskFeatherKey) ?? 0.3)
+        .clamp(0.0, 0.8);
+    _radialMaskSize = (prefs.getDouble(_displayRadialMaskSizeKey) ?? 1.0).clamp(
+      0.5,
+      1.5,
+    );
+    _radialMaskCenterX = (prefs.getDouble(_displayRadialMaskCenterXKey) ?? 0.5)
+        .clamp(0.0, 1.0);
+    _radialMaskCenterY = (prefs.getDouble(_displayRadialMaskCenterYKey) ?? 0.5)
+        .clamp(0.0, 1.0);
     _chatInputBackgroundOpacityLight =
         (prefs.getDouble(_displayChatInputBackgroundOpacityLightKey) ??
                 defaultChatInputBackgroundOpacityLight)
@@ -5913,6 +5939,61 @@ Requirements:
       _displayChatBackgroundMaskStrengthKey,
       _chatBackgroundMaskStrength,
     );
+  }
+
+  // Display: chat background mask style (linear gradient or radial vignette).
+  ChatBackgroundMaskMode _chatBackgroundMaskMode = ChatBackgroundMaskMode.linear;
+  ChatBackgroundMaskMode get chatBackgroundMaskMode => _chatBackgroundMaskMode;
+  Future<void> setChatBackgroundMaskMode(ChatBackgroundMaskMode mode) async {
+    if (_chatBackgroundMaskMode == mode) return;
+    _chatBackgroundMaskMode = mode;
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setString(
+      _displayChatBackgroundMaskModeKey,
+      mode == ChatBackgroundMaskMode.radial ? 'radial' : 'linear',
+    );
+  }
+
+  // Radial vignette: feather (inner radius), size (outer radius), center X/Y.
+  double _radialMaskFeather = 0.3;
+  double get radialMaskFeather => _radialMaskFeather;
+  Future<void> setRadialMaskFeather(double v) async {
+    final s = v.clamp(0.0, 0.8);
+    if (_radialMaskFeather == s) return;
+    _radialMaskFeather = s;
+    notifyListeners();
+    await _preferences.setDouble(_displayRadialMaskFeatherKey, s);
+  }
+
+  double _radialMaskSize = 1.0;
+  double get radialMaskSize => _radialMaskSize;
+  Future<void> setRadialMaskSize(double v) async {
+    final s = v.clamp(0.5, 1.5);
+    if (_radialMaskSize == s) return;
+    _radialMaskSize = s;
+    notifyListeners();
+    await _preferences.setDouble(_displayRadialMaskSizeKey, s);
+  }
+
+  double _radialMaskCenterX = 0.5;
+  double get radialMaskCenterX => _radialMaskCenterX;
+  Future<void> setRadialMaskCenterX(double v) async {
+    final s = v.clamp(0.0, 1.0);
+    if (_radialMaskCenterX == s) return;
+    _radialMaskCenterX = s;
+    notifyListeners();
+    await _preferences.setDouble(_displayRadialMaskCenterXKey, s);
+  }
+
+  double _radialMaskCenterY = 0.5;
+  double get radialMaskCenterY => _radialMaskCenterY;
+  Future<void> setRadialMaskCenterY(double v) async {
+    final s = v.clamp(0.0, 1.0);
+    if (_radialMaskCenterY == s) return;
+    _radialMaskCenterY = s;
+    notifyListeners();
+    await _preferences.setDouble(_displayRadialMaskCenterYKey, s);
   }
 
   // Display: chat input background opacity by theme brightness.

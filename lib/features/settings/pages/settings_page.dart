@@ -207,7 +207,7 @@ class SettingsPage extends StatelessWidget {
           ),
 
           const SizedBox(height: 12),
-          header(l10n.settingsPageModelsServicesSection),
+          header(l10n.settingsPageGroupModelInterfaces),
           SectionCard(
             children: [
               _iosNavRow(
@@ -266,34 +266,12 @@ class SettingsPage extends StatelessWidget {
                   ).push(MaterialPageRoute(builder: (_) => const McpPage()));
                 },
               ),
-              _iosDivider(context),
-              _iosNavRow(
-                context,
-                icon: Lucide.FolderCode,
-                label: l10n.settingsPageWorkspace,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const WorkspaceSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              _iosDivider(context),
-              if (defaultTargetPlatform == TargetPlatform.android ||
-                  defaultTargetPlatform == TargetPlatform.iOS) ...[
-                _iosNavRow(
-                  context,
-                  icon: LucideIcons.clock,
-                  label: l10n.scheduledTasksTitle,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ScheduledTasksPage(),
-                    ),
-                  ),
-                ),
-                _iosDivider(context),
-              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          header(l10n.settingsPageGroupAssistantCapabilities),
+          SectionCard(
+            children: [
               _iosNavRow(
                 context,
                 icon: Lucide.WandSparkles,
@@ -329,15 +307,6 @@ class SettingsPage extends StatelessWidget {
                 },
               ),
               _iosDivider(context),
-              if (DeviceLocalTools.phoneControlSupported) ...[
-                _iosNavRow(
-                  context,
-                  icon: Lucide.Smartphone,
-                  label: l10n.phoneControlTitle,
-                  onTap: () => PhoneControlSettingsPage.open(context),
-                ),
-                _iosDivider(context),
-              ],
               _iosNavRow(
                 context,
                 icon: Lucide.Zap,
@@ -361,7 +330,48 @@ class SettingsPage extends StatelessWidget {
                   );
                 },
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          header(l10n.settingsPageGroupEnvironmentTools),
+          SectionCard(
+            children: [
+              _iosNavRow(
+                context,
+                icon: Lucide.FolderCode,
+                label: l10n.settingsPageWorkspace,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const WorkspaceSettingsPage(),
+                    ),
+                  );
+                },
+              ),
               _iosDivider(context),
+              if (defaultTargetPlatform == TargetPlatform.android ||
+                  defaultTargetPlatform == TargetPlatform.iOS) ...[
+                _iosNavRow(
+                  context,
+                  icon: LucideIcons.clock,
+                  label: l10n.scheduledTasksTitle,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ScheduledTasksPage(),
+                    ),
+                  ),
+                ),
+                _iosDivider(context),
+              ],
+              if (DeviceLocalTools.phoneControlSupported) ...[
+                _iosNavRow(
+                  context,
+                  icon: Lucide.Smartphone,
+                  label: l10n.phoneControlTitle,
+                  onTap: () => PhoneControlSettingsPage.open(context),
+                ),
+                _iosDivider(context),
+              ],
               _iosNavRow(
                 context,
                 icon: Lucide.EthernetPort,
@@ -374,6 +384,7 @@ class SettingsPage extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
 
           const SizedBox(height: 12),
           header(l10n.settingsPageDataSection),

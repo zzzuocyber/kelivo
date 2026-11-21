@@ -17708,4 +17708,58 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get bubbleSchemeDebugHint => 'Editing a scheme. Changes affect this scheme only, not the global bubble.';
 
+  @override
+  String get backgroundMaskSettingsTitle => 'Background Mask';
+
+  @override
+  String get backgroundMaskSettingsModeTitle => 'Mask Style';
+
+  @override
+  String get backgroundMaskSettingsModeLinear => 'Linear Mask';
+
+  @override
+  String get backgroundMaskSettingsModeRadial => 'Radial Mask';
+
+  @override
+  String get backgroundMaskSettingsParamsTitle => 'Mask Parameters';
+
+  @override
+  String get backgroundMaskSettingsVignetteStrength => 'Vignette Strength';
+
+  @override
+  String get backgroundMaskSettingsFeather => 'Feathering';
+
+  @override
+  String get backgroundMaskSettingsSize => 'Vignette Size';
+
+  @override
+  String get backgroundMaskSettingsCenterX => 'Center Offset X';
+
+  @override
+  String get backgroundMaskSettingsCenterY => 'Center Offset Y';
+
+  @override
+  String get backgroundMaskSettingsHint => 'Set to 0% to turn off the mask and show the wallpaper unchanged.';
+
+  @override
+  String get displaySettingsGroupAppearance => 'Appearance';
+
+  @override
+  String get displaySettingsGroupBackgroundInput => 'Background & Input';
+
+  @override
+  String get displaySettingsGroupChatBehavior => 'Chat Behavior';
+
+  @override
+  String get displaySettingsGroupSystem => 'System';
+
+  @override
+  String get settingsPageGroupModelInterfaces => 'Models & Interfaces';
+
+  @override
+  String get settingsPageGroupAssistantCapabilities => 'Assistant Capabilities';
+
+  @override
+  String get settingsPageGroupEnvironmentTools => 'Environment & Tools';
+
 }

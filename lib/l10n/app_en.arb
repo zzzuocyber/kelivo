@@ -23001,5 +23001,80 @@
   "bubbleSchemeDebugHint": "Editing a scheme. Changes affect this scheme only, not the global bubble.",
   "@bubbleSchemeDebugHint": {
     "description": "UI text for bubbleSchemeDebugHint in the bubble scheme debug editor."
+  },
+  "backgroundMaskSettingsTitle": "Background Mask",
+  "backgroundMaskSettingsModeTitle": "Mask Style",
+  "backgroundMaskSettingsModeLinear": "Linear Mask",
+  "backgroundMaskSettingsModeRadial": "Radial Mask",
+  "backgroundMaskSettingsParamsTitle": "Mask Parameters",
+  "backgroundMaskSettingsVignetteStrength": "Vignette Strength",
+  "backgroundMaskSettingsFeather": "Feathering",
+  "backgroundMaskSettingsSize": "Vignette Size",
+  "backgroundMaskSettingsCenterX": "Center Offset X",
+  "backgroundMaskSettingsCenterY": "Center Offset Y",
+  "backgroundMaskSettingsHint": "Set to 0% to turn off the mask and show the wallpaper unchanged.",
+
+  "@backgroundMaskSettingsTitle": {
+    "description": "Title of the chat background mask settings page."
+  },
+  "@backgroundMaskSettingsModeTitle": {
+    "description": "Section title for choosing the mask style."
+  },
+  "@backgroundMaskSettingsModeLinear": {
+    "description": "Linear top-to-bottom gradient mask option."
+  },
+  "@backgroundMaskSettingsModeRadial": {
+    "description": "Radial vignette mask option."
+  },
+  "@backgroundMaskSettingsParamsTitle": {
+    "description": "Section title for mask parameters."
+  },
+  "@backgroundMaskSettingsVignetteStrength": {
+    "description": "Strength of the radial vignette (outer ring darkness)."
+  },
+  "@backgroundMaskSettingsFeather": {
+    "description": "Inner radius where the vignette starts to darken."
+  },
+  "@backgroundMaskSettingsSize": {
+    "description": "Outer radius of the vignette."
+  },
+  "@backgroundMaskSettingsCenterX": {
+    "description": "Horizontal center offset of the vignette."
+  },
+  "@backgroundMaskSettingsCenterY": {
+    "description": "Vertical center offset of the vignette."
+  },
+  "@backgroundMaskSettingsHint": {
+    "description": "Hint that zero strength disables the mask."
+  },
+  "displaySettingsGroupAppearance": "Appearance",
+  "displaySettingsGroupBackgroundInput": "Background & Input",
+  "displaySettingsGroupChatBehavior": "Chat Behavior",
+  "displaySettingsGroupSystem": "System",
+
+  "@displaySettingsGroupAppearance": {
+    "description": "Group title for appearance settings."
+  },
+  "@displaySettingsGroupBackgroundInput": {
+    "description": "Group title for background and input appearance settings."
+  },
+  "@displaySettingsGroupChatBehavior": {
+    "description": "Group title for chat behavior settings."
+  },
+  "@displaySettingsGroupSystem": {
+    "description": "Group title for system-level settings."
+  },
+  "settingsPageGroupModelInterfaces": "Models & Interfaces",
+  "settingsPageGroupAssistantCapabilities": "Assistant Capabilities",
+  "settingsPageGroupEnvironmentTools": "Environment & Tools",
+
+  "@settingsPageGroupModelInterfaces": {
+    "description": "Group title for model and service provider settings."
+  },
+  "@settingsPageGroupAssistantCapabilities": {
+    "description": "Group title for assistant capability settings."
+  },
+  "@settingsPageGroupEnvironmentTools": {
+    "description": "Group title for environment and system tool settings."
   }
 }

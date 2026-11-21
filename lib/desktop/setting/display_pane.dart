@@ -177,14 +177,22 @@ class _DisplaySettingsBody extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _SettingsCard(
-                title: l10n.displaySettingsPageOtherSettingsTitle,
+                title: l10n.displaySettingsGroupAppearance,
                 children: const [
-                  _AutoScrollRow(),
-                  _RowDivider(),
                   _BackgroundMaskRow(),
                   _RowDivider(),
                   _ChatInputBackgroundOpacityRow(),
-                  _RowDivider(),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _SettingsCard(
+                title: l10n.displaySettingsGroupChatBehavior,
+                children: const [_AutoScrollRow()],
+              ),
+              const SizedBox(height: 16),
+              _SettingsCard(
+                title: l10n.displaySettingsPageOtherSettingsTitle,
+                children: const [
                   _ToggleRowRequestLogging(),
                   _RowDivider(),
                   _ToggleRowFlutterLogging(),
@@ -3521,66 +3529,46 @@ class _AutoCollapseCodeBlockLinesRowState
   }
 }
 
-class _BackgroundMaskRow extends StatefulWidget {
+class _BackgroundMaskRow extends StatelessWidget {
   const _BackgroundMaskRow();
-  @override
-  State<_BackgroundMaskRow> createState() => _BackgroundMaskRowState();
-}
-
-class _BackgroundMaskRowState extends State<_BackgroundMaskRow> {
-  late final TextEditingController _controller;
-  @override
-  void initState() {
-    super.initState();
-    final v = context.read<SettingsProvider>().chatBackgroundMaskStrength;
-    _controller = TextEditingController(text: '${(v * 100).round()}');
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _commit(String text) {
-    final v = text.trim();
-    final n = double.tryParse(v);
-    if (n == null) return;
-    final clamped = (n / 100.0).clamp(0.0, 1.0);
-    context.read<SettingsProvider>().setChatBackgroundMaskStrength(clamped);
-    _controller.text = '${(clamped * 100).round()}';
-  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final settings = context.watch<SettingsProvider>();
+    final v = settings.chatBackgroundMaskStrength;
+    final modeLabel =
+        settings.chatBackgroundMaskMode == ChatBackgroundMaskMode.radial
+        ? l10n.backgroundMaskSettingsModeRadial
+        : l10n.backgroundMaskSettingsModeLinear;
     return _LabeledRow(
       label: l10n.displaySettingsPageChatBackgroundMaskTitle,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IntrinsicWidth(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 36, maxWidth: 72),
-              child: _BorderInput(
-                controller: _controller,
-                onSubmitted: _commit,
-                onFocusLost: _commit,
+      trailing: GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const BackgroundMaskSettingsPage(desktop: true),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$modeLabel · ${(v * 100).round()}%',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontSize: 13,
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '%',
-            style: TextStyle(
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_right,
+              size: 16,
               color: Theme.of(
                 context,
-              ).colorScheme.onSurface.withValues(alpha: 0.7),
-              fontSize: 14,
-              decoration: TextDecoration.none,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

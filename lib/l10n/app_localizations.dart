@@ -30854,6 +30854,96 @@ abstract class AppLocalizations {
   String get bubbleSchemeExitDebug;
   String get bubbleSchemeDebugHint;
 
+  /// Title of the chat background mask settings page.
+  ///
+  /// In en, this message translates to:/n  /// **'Background Mask'**
+  String get backgroundMaskSettingsTitle;
+
+  /// Section title for choosing the mask style.
+  ///
+  /// In en, this message translates to:/n  /// **'Mask Style'**
+  String get backgroundMaskSettingsModeTitle;
+
+  /// Linear top-to-bottom gradient mask option.
+  ///
+  /// In en, this message translates to:/n  /// **'Linear Mask'**
+  String get backgroundMaskSettingsModeLinear;
+
+  /// Radial vignette mask option.
+  ///
+  /// In en, this message translates to:/n  /// **'Radial Mask'**
+  String get backgroundMaskSettingsModeRadial;
+
+  /// Section title for mask parameters.
+  ///
+  /// In en, this message translates to:/n  /// **'Mask Parameters'**
+  String get backgroundMaskSettingsParamsTitle;
+
+  /// Strength of the radial vignette (outer ring darkness).
+  ///
+  /// In en, this message translates to:/n  /// **'Vignette Strength'**
+  String get backgroundMaskSettingsVignetteStrength;
+
+  /// Inner radius where the vignette starts to darken.
+  ///
+  /// In en, this message translates to:/n  /// **'Feathering'**
+  String get backgroundMaskSettingsFeather;
+
+  /// Outer radius of the vignette.
+  ///
+  /// In en, this message translates to:/n  /// **'Vignette Size'**
+  String get backgroundMaskSettingsSize;
+
+  /// Horizontal center offset of the vignette.
+  ///
+  /// In en, this message translates to:/n  /// **'Center Offset X'**
+  String get backgroundMaskSettingsCenterX;
+
+  /// Vertical center offset of the vignette.
+  ///
+  /// In en, this message translates to:/n  /// **'Center Offset Y'**
+  String get backgroundMaskSettingsCenterY;
+
+  /// Hint that zero strength disables the mask.
+  ///
+  /// In en, this message translates to:/n  /// **'Set to 0% to turn off the mask and show the wallpaper unchanged.'**
+  String get backgroundMaskSettingsHint;
+
+  /// Group title for appearance settings.
+  ///
+  /// In en, this message translates to:/n  /// **'Appearance'**
+  String get displaySettingsGroupAppearance;
+
+  /// Group title for background and input appearance settings.
+  ///
+  /// In en, this message translates to:/n  /// **'Background & Input'**
+  String get displaySettingsGroupBackgroundInput;
+
+  /// Group title for chat behavior settings.
+  ///
+  /// In en, this message translates to:/n  /// **'Chat Behavior'**
+  String get displaySettingsGroupChatBehavior;
+
+  /// Group title for system-level settings.
+  ///
+  /// In en, this message translates to:/n  /// **'System'**
+  String get displaySettingsGroupSystem;
+
+  /// Group title for model and service provider settings.
+  ///
+  /// In en, this message translates to:/n  /// **'Models & Interfaces'**
+  String get settingsPageGroupModelInterfaces;
+
+  /// Group title for assistant capability settings.
+  ///
+  /// In en, this message translates to:/n  /// **'Assistant Capabilities'**
+  String get settingsPageGroupAssistantCapabilities;
+
+  /// Group title for environment and system tool settings.
+  ///
+  /// In en, this message translates to:/n  /// **'Environment & Tools'**
+  String get settingsPageGroupEnvironmentTools;
+
 }
 
 class _AppLocalizationsDelegate
