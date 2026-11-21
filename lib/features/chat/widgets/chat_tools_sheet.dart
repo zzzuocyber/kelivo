@@ -11,6 +11,7 @@ import '../utils/ensure_conversation.dart';
 import 'package:Kelivo/core/providers/assistant_provider.dart';
 import 'package:Kelivo/core/providers/mcp_provider.dart';
 import 'package:Kelivo/core/providers/workspace_provider.dart';
+import 'package:Kelivo/core/models/workspace.dart';
 import 'package:Kelivo/core/models/workspace_binding.dart';
 import 'package:Kelivo/core/services/chat/chat_service.dart';
 import 'package:Kelivo/core/services/haptics.dart';
@@ -29,6 +30,7 @@ import 'package:Kelivo/theme/app_semantic_colors.dart';
 import 'tools_sheet_row.dart';
 import 'image_recall_control.dart';
 import 'local_path_picker.dart';
+import 'workspace_path_picker.dart';
 import '../../mcp/widgets/mcp_server_avatar.dart';
 import '../../mcp/widgets/mcp_tool_connection_status.dart';
 import '../../mcp/utils/mcp_tool_groups.dart';
@@ -94,6 +96,9 @@ class ChatToolsSheet extends StatefulWidget {
   static const Key localPathsGroupKey = ValueKey<String>(
     'chat-tools-group-local-paths',
   );
+  static const Key workspacePathsGroupKey = ValueKey<String>(
+    'chat-tools-group-workspace-paths',
+  );
   static Key localToolKey(String id) =>
       ValueKey<String>('chat-tools-local-$id');
 
@@ -103,7 +108,7 @@ class ChatToolsSheet extends StatefulWidget {
   State<ChatToolsSheet> createState() => _ChatToolsSheetState();
 }
 
-enum _ToolsGroupId { local, mcp, workspace, paths }
+enum _ToolsGroupId { local, mcp, workspace, paths, workspacePaths }
 
 /// Which groups are open, remembered across sheets and restarts.
 const String _expandedGroupsKey = 'display_chat_tools_expanded_groups_v1';
@@ -116,6 +121,7 @@ const Set<_ToolsGroupId> _defaultExpandedGroups = <_ToolsGroupId>{
   _ToolsGroupId.mcp,
   _ToolsGroupId.workspace,
   _ToolsGroupId.paths,
+  _ToolsGroupId.workspacePaths,
 };
 
 class _ChatToolsSheetState extends State<ChatToolsSheet> {
@@ -231,6 +237,22 @@ class _ChatToolsSheetState extends State<ChatToolsSheet> {
                                 ),
                                 onToggle: () =>
                                     _toggleGroup(_ToolsGroupId.paths),
+                                onInsertText: widget.onInsertText,
+                                onClose: widget.onClose,
+                              ),
+                            ),
+                          // Android only, and only when the conversation is
+                          // bound to a workspace that still exists.
+                          if (Theme.of(context).platform ==
+                              TargetPlatform.android)
+                            SliverToBoxAdapter(
+                              child: _WorkspacePathGroup(
+                                conversationId: widget.conversationId,
+                                expanded: _expanded.contains(
+                                  _ToolsGroupId.workspacePaths,
+                                ),
+                                onToggle: () =>
+                                    _toggleGroup(_ToolsGroupId.workspacePaths),
                                 onInsertText: widget.onInsertText,
                                 onClose: widget.onClose,
                               ),
@@ -731,6 +753,89 @@ class _LocalPathGroup extends StatelessWidget {
           label: '文件夹链接',
           subtitle: '只把文件夹路径写进输入框',
           onTap: () => unawaited(_pick(context, LocalPathKind.folder)),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorkspacePathGroup extends StatelessWidget {
+  const _WorkspacePathGroup({
+    required this.conversationId,
+    required this.expanded,
+    required this.onToggle,
+    this.onInsertText,
+    this.onClose,
+  });
+
+  final String? conversationId;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final ValueChanged<String>? onInsertText;
+  final VoidCallback? onClose;
+
+  Future<void> _pick(BuildContext context, LocalPathKind kind, Workspace workspace) async {
+    Haptics.light();
+    final relative = await pickWorkspacePath(
+      context,
+      kind: kind,
+      workspace: workspace,
+    );
+    if (relative == null || !context.mounted) return;
+    onInsertText?.call(workspaceChatInsertion(kind, relative));
+    onClose?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final conversationId = this.conversationId;
+    if (conversationId == null || conversationId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    Map<String, dynamic> extras = const <String, dynamic>{};
+    try {
+      extras = context.select<ChatService, Map<String, dynamic>>(
+        (chat) => chat.getConversation(conversationId)?.extras ?? const {},
+      );
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+    final workspaceId = WorkspaceBinding.fromExtras(extras).workspaceId;
+    if (workspaceId == null || workspaceId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final workspace = context
+        .watch<WorkspaceProvider>()
+        .byId(workspaceId);
+    if (workspace == null) return const SizedBox.shrink();
+
+    return _ToolsGroup(
+      key: ChatToolsSheet.workspacePathsGroupKey,
+      title: '工作区路径提取',
+      summary: expanded ? null : '图片 / 文件 / 文件夹',
+      expanded: expanded,
+      onToggle: onToggle,
+      children: [
+        ToolsSheetRow(
+          key: const ValueKey<String>('chat-tools-workspace-paths-image'),
+          icon: Lucide.Image,
+          label: '图片链接',
+          subtitle: '插入成图片，聊天里直接显示，不上传',
+          onTap: () => unawaited(_pick(context, LocalPathKind.image, workspace)),
+        ),
+        ToolsSheetRow(
+          key: const ValueKey<String>('chat-tools-workspace-paths-file'),
+          icon: Lucide.FileText,
+          label: '文件链接',
+          subtitle: '把 /workspace 路径写进输入框',
+          onTap: () => unawaited(_pick(context, LocalPathKind.file, workspace)),
+        ),
+        ToolsSheetRow(
+          key: const ValueKey<String>('chat-tools-workspace-paths-folder'),
+          icon: Lucide.FolderOpen,
+          label: '文件夹链接',
+          subtitle: '把 /workspace 路径写进输入框',
+          onTap: () => unawaited(_pick(context, LocalPathKind.folder, workspace)),
         ),
       ],
     );

@@ -593,6 +593,7 @@ class _InstructionInjectionEditSheetState
       builder: (_) => PromptFullScreenEditor(
         initial: _promptController.text,
         hintText: l10n.instructionInjectionPromptLabel,
+        enablePathInsert: true,
       ),
     );
     if (!mounted || next == null || next == _promptController.text) return;

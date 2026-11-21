@@ -1,6 +1,15 @@
+import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/models/workspace.dart';
+import '../../core/providers/assistant_provider.dart';
+import '../../core/providers/workspace_provider.dart';
 import '../../core/services/haptics.dart';
+import '../../features/chat/widgets/local_path_picker.dart'
+    show LocalPathKind, pickLocalPath;
+import '../../features/chat/widgets/workspace_path_picker.dart'
+    show localPromptInsertion, pickWorkspacePath, workspacePromptInsertion;
 import '../../icons/lucide_adapter.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_font_weights.dart';
@@ -13,7 +22,7 @@ class PromptVariable {
   final String value;
 }
 
-enum _InsertPanel { none, variables, markdown }
+enum _InsertPanel { none, variables, markdown, paths }
 
 enum _SnippetKind { plain, fontColor, backgroundColor, fontSize }
 
@@ -119,6 +128,8 @@ class PromptInsertBar extends StatefulWidget {
     this.cacheWarningValues = const <String>{},
     this.cacheWarningTooltip,
     this.warning,
+    this.enablePathInsert = false,
+    this.assistantId,
   });
 
   final TextEditingController controller;
@@ -131,6 +142,14 @@ class PromptInsertBar extends StatefulWidget {
   /// Extra note shown at the bottom of the expanded variables panel.
   final Widget? warning;
 
+  /// Adds a third "路径提取" pill with local + bound-workspace path pickers.
+  /// Only enabled on the system prompt / world book / injection fields.
+  final bool enablePathInsert;
+
+  /// Which assistant's default workspace to browse. Falls back to the current
+  /// assistant when null (world book / injection pages have no assistant id).
+  final String? assistantId;
+
   @override
   State<PromptInsertBar> createState() => _PromptInsertBarState();
 }
@@ -139,6 +158,29 @@ class _PromptInsertBarState extends State<PromptInsertBar> {
   _InsertPanel _open = _InsertPanel.none;
 
   bool get _hasVariables => widget.variables.isNotEmpty;
+
+  /// Path pickers are Android-only, matching the chat composer group.
+  bool get _showPathPill =>
+      widget.enablePathInsert &&
+      Theme.of(context).platform == TargetPlatform.android;
+
+  /// The assistant whose default workspace the path picker browses.
+  /// Uses [read] so it is safe to call from tap callbacks as well as build;
+  /// build() watches the providers explicitly to keep this reactive.
+  String? get _resolvedAssistantId =>
+      widget.assistantId ?? context.read<AssistantProvider>().currentAssistantId;
+
+  /// The bound default workspace, or null when this assistant has none.
+  Workspace? _boundWorkspace() {
+    final assistantId = _resolvedAssistantId;
+    if (assistantId == null) return null;
+    final workspaceId = context
+        .read<AssistantProvider>()
+        .getById(assistantId)
+        ?.defaultWorkspaceId;
+    if (workspaceId == null || workspaceId.isEmpty) return null;
+    return context.read<WorkspaceProvider>().byId(workspaceId);
+  }
 
   void _toggle(_InsertPanel panel) {
     setState(() => _open = _open == panel ? _InsertPanel.none : panel);
@@ -179,6 +221,34 @@ class _PromptInsertBarState extends State<PromptInsertBar> {
     );
     widget.onChanged?.call(next);
     Future.microtask(() => widget.focusNode?.requestFocus());
+  }
+
+  /// Pick a local absolute path and insert prompt-form text at the caret.
+  Future<void> _pickLocalPath(LocalPathKind kind) async {
+    Haptics.light();
+    final path = await pickLocalPath(context, kind: kind);
+    if (path == null || !mounted) return;
+    _insert(
+      localPromptInsertion(kind, path),
+      placeholder: kind == LocalPathKind.image ? '240' : null,
+    );
+  }
+
+  /// Pick a workspace-relative path and insert prompt-form text at the caret.
+  Future<void> _pickWorkspacePath(LocalPathKind kind) async {
+    final workspace = _boundWorkspace();
+    if (workspace == null) return;
+    Haptics.light();
+    final relative = await pickWorkspacePath(
+      context,
+      kind: kind,
+      workspace: workspace,
+    );
+    if (relative == null || !mounted) return;
+    _insert(
+      workspacePromptInsertion(kind, relative),
+      placeholder: kind == LocalPathKind.image ? '240' : null,
+    );
   }
 
   Future<String?> _pickPanel({
@@ -473,8 +543,122 @@ class _PromptInsertBarState extends State<PromptInsertBar> {
     );
   }
 
+  Widget _pathTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: context.appColors.surfaceCardFill,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.30)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: cs.onSurface.withValues(alpha: 0.85)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: AppFontWeights.medium,
+                color: cs.onSurface.withValues(alpha: 0.9),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pathsPanel(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final workspace = _boundWorkspace();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '本地路径',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: AppFontWeights.semibold,
+            color: cs.onSurface.withValues(alpha: 0.65),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _pathTile(
+              icon: Lucide.Image,
+              label: '图片链接',
+              onTap: () => unawaited(_pickLocalPath(LocalPathKind.image)),
+            ),
+            _pathTile(
+              icon: Lucide.FileText,
+              label: '文件链接',
+              onTap: () => unawaited(_pickLocalPath(LocalPathKind.file)),
+            ),
+            _pathTile(
+              icon: Lucide.FolderOpen,
+              label: '文件夹链接',
+              onTap: () => unawaited(_pickLocalPath(LocalPathKind.folder)),
+            ),
+          ],
+        ),
+        if (workspace != null) ...[
+          const SizedBox(height: 14),
+          Text(
+            '工作区路径 · ${workspace.name}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: AppFontWeights.semibold,
+              color: cs.onSurface.withValues(alpha: 0.65),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _pathTile(
+                icon: Lucide.Image,
+                label: '图片链接',
+                onTap: () => unawaited(_pickWorkspacePath(LocalPathKind.image)),
+              ),
+              _pathTile(
+                icon: Lucide.FileText,
+                label: '文件链接',
+                onTap: () => unawaited(_pickWorkspacePath(LocalPathKind.file)),
+              ),
+              _pathTile(
+                icon: Lucide.FolderOpen,
+                label: '文件夹链接',
+                onTap: () => unawaited(_pickWorkspacePath(LocalPathKind.folder)),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Watch the binding sources during build so the workspace group appears
+    // or disappears as soon as the assistant's default workspace changes.
+    if (widget.enablePathInsert) {
+      context.watch<AssistantProvider>();
+      context.watch<WorkspaceProvider>();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -497,6 +681,16 @@ class _PromptInsertBarState extends State<PromptInsertBar> {
                 onTap: () => _toggle(_InsertPanel.markdown),
               ),
             ),
+            if (_showPathPill) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: _pill(
+                  label: '路径提取',
+                  expanded: _open == _InsertPanel.paths,
+                  onTap: () => _toggle(_InsertPanel.paths),
+                ),
+              ),
+            ],
           ],
         ),
         AnimatedSize(
@@ -507,9 +701,11 @@ class _PromptInsertBarState extends State<PromptInsertBar> {
               ? const SizedBox(width: double.infinity, height: 0)
               : Padding(
                   padding: const EdgeInsets.only(top: 10),
-                  child: _open == _InsertPanel.variables
-                      ? _variablesPanel(context)
-                      : _markdownPanel(context),
+                  child: switch (_open) {
+                    _InsertPanel.variables => _variablesPanel(context),
+                    _InsertPanel.paths => _pathsPanel(context),
+                    _ => _markdownPanel(context),
+                  },
                 ),
         ),
       ],
@@ -528,6 +724,8 @@ class PromptFullScreenEditor extends StatefulWidget {
     this.cacheWarningValues = const <String>{},
     this.cacheWarningTooltip,
     this.warning,
+    this.enablePathInsert = false,
+    this.assistantId,
   });
 
   final String initial;
@@ -536,6 +734,8 @@ class PromptFullScreenEditor extends StatefulWidget {
   final Set<String> cacheWarningValues;
   final String? cacheWarningTooltip;
   final Widget? warning;
+  final bool enablePathInsert;
+  final String? assistantId;
 
   @override
   State<PromptFullScreenEditor> createState() => _PromptFullScreenEditorState();
@@ -616,6 +816,8 @@ class _PromptFullScreenEditorState extends State<PromptFullScreenEditor> {
               cacheWarningValues: widget.cacheWarningValues,
               cacheWarningTooltip: widget.cacheWarningTooltip,
               warning: widget.warning,
+              enablePathInsert: widget.enablePathInsert,
+              assistantId: widget.assistantId,
             ),
           ],
         ),

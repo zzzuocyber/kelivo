@@ -224,6 +224,8 @@ class _PromptTabState extends State<_PromptTab> {
         },
         cacheWarningTooltip: l10n.assistantEditPromptTimeVarWarning,
         warning: hits.isEmpty ? null : _timeVarWarningBanner(context, l10n),
+        enablePathInsert: true,
+        assistantId: widget.assistantId,
       ),
     );
   }
@@ -497,6 +499,8 @@ class _PromptTabState extends State<_PromptTab> {
               warning: timeVarsInPrompt.isEmpty
                   ? null
                   : _timeVarWarningBanner(context, l10n),
+              enablePathInsert: true,
+              assistantId: widget.assistantId,
             ),
           ],
         ),

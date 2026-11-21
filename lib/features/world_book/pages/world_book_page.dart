@@ -1671,6 +1671,7 @@ class _WorldBookEntryEditSheetState extends State<_WorldBookEntryEditSheet> {
       builder: (_) => PromptFullScreenEditor(
         initial: _contentController.text,
         hintText: l10n.worldBookEntryContentLabel,
+        enablePathInsert: true,
       ),
     );
     if (!mounted || next == null || next == _contentController.text) return;
