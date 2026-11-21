@@ -390,6 +390,9 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   List<String> _orderedKeys = [];
   bool _autoScrolled = false; // ensure we only auto-scroll once per open
 
+  /// 收藏是独立模块：为真时列表只渲染收藏，不显示任何服务商分类。
+  bool _favoritesOnly = false;
+
   Map<String, ProviderConfig> _providerConfigsForPicker(
     SettingsProvider settings,
   ) {
@@ -933,15 +936,21 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                                 ? ExcludeSemantics(
                                     child: IconButton(
                                       icon: Icon(
-                                        Lucide.Bookmark,
+                                        _favoritesOnly
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
                                         size: 18,
-                                        color: cs.onSurface.withValues(
-                                          alpha: _isLoading ? 0.35 : 0.7,
-                                        ),
+                                        color: _favoritesOnly
+                                            ? cs.primary
+                                            : cs.onSurface.withValues(
+                                                alpha: _isLoading ? 0.35 : 0.7,
+                                              ),
                                       ),
                                       onPressed: _isLoading
                                           ? null
-                                          : _jumpToFavorites,
+                                          : () => _setFavoritesOnly(
+                                              !_favoritesOnly,
+                                            ),
                                       splashColor: Colors.transparent,
                                       highlightColor: Colors.transparent,
                                       hoverColor: Colors.transparent,
@@ -1022,6 +1031,23 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   Widget _buildContent(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final query = _search.text.trim();
+    final settings = context.watch<SettingsProvider>();
+    // 收藏是独立模块：打开后只列收藏，不掺任何服务商分类。
+    final favoritesOnly =
+        _favoritesOnly &&
+        widget.limitProviderKey == null &&
+        _hasDisplayableFavorites(context);
+    if (_favoritesOnly && !favoritesOnly) {
+      // 收藏被清空时自动退出，免得下次加收藏又莫名回到这里。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _favoritesOnly) {
+          setState(() {
+            _favoritesOnly = false;
+            _activeProviderKey = null;
+          });
+        }
+      });
+    }
     // Build flattened rows and index maps for precise positioning
     _rows.clear();
     _headerIndexMap.clear();
@@ -1030,18 +1056,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 
     final Set<String> favMatchedKeys = <String>{};
 
-    // Offered above everything else, and only when not searching: it is an
-    // action, not a search result.
-    if (widget.allowInherit && query.isEmpty) {
-      _rows.add(
-        _InheritRow(
-          widget.inheritLabel ?? l10n.modelSelectSheetFollowAssistant,
-        ),
-      );
-    }
-
     if (widget.limitProviderKey == null) {
-      final settings = context.watch<SettingsProvider>();
       final pinned = settings.pinnedModels;
       if (pinned.isNotEmpty) {
         final favs = <_ModelItem>[];
@@ -1090,82 +1105,110 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
       }
     }
 
-    for (final pk in _orderedKeys) {
-      final g = _groups[pk]!;
-      List<_ModelItem> items;
-      if (query.isEmpty) {
-        items = g.items;
-      } else {
-        final providerMatches = _providerMatchesSearch(query, g.name);
-        items = providerMatches
-            ? g.items
-            : g.items.where((e) => _matchesSearch(query, e, g.name)).toList();
-        if (favMatchedKeys.isNotEmpty) {
-          items = items
-              .where(
-                (e) => !favMatchedKeys.contains('${e.providerKey}::${e.id}'),
-              )
-              .toList();
+    if (!favoritesOnly) {
+      for (final pk in _orderedKeys) {
+        final g = _groups[pk]!;
+        List<_ModelItem> items;
+        if (query.isEmpty) {
+          items = g.items;
+        } else {
+          final providerMatches = _providerMatchesSearch(query, g.name);
+          items = providerMatches
+              ? g.items
+              : g.items.where((e) => _matchesSearch(query, e, g.name)).toList();
+          if (favMatchedKeys.isNotEmpty) {
+            items = items
+                .where(
+                  (e) => !favMatchedKeys.contains('${e.providerKey}::${e.id}'),
+                )
+                .toList();
+          }
         }
-      }
-      if (items.isEmpty) continue;
-      _headerIndexMap[pk] = _rows.length;
-      _rows.add(_HeaderRow(g.name, providerKey: pk));
-      for (final m in items) {
-        _modelIndexMap['${m.providerKey}::${m.id}'] = _rows.length;
-        _rows.add(_ModelRow(m));
+        if (items.isEmpty) continue;
+        _headerIndexMap[pk] = _rows.length;
+        _rows.add(_HeaderRow(g.name, providerKey: pk));
+        for (final m in items) {
+          _modelIndexMap['${m.providerKey}::${m.id}'] = _rows.length;
+          _rows.add(_ModelRow(m));
+        }
       }
     }
 
-    if (_rows.isEmpty) return const SizedBox.shrink();
-
-    _scheduleActiveProviderUpdate();
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        _listViewportHeight = constraints.maxHeight;
-        return Stack(
-          children: [
-            ScrollablePositionedList.builder(
-              itemCount: _rows.length,
-              itemScrollController: _itemScrollController,
-              itemPositionsListener: _itemPositionsListener,
-              padding: const EdgeInsets.only(bottom: 12),
-              itemBuilder: (context, index) {
-                final row = _rows[index];
-                if (row is _InheritRow) {
-                  return _inheritTile(context, row);
-                } else if (row is _HeaderRow) {
-                  return _sectionHeader(
-                    context,
-                    row.title,
-                    providerKey: row.providerKey,
-                  );
-                } else if (row is _ModelRow) {
-                  return _modelTile(
-                    context,
-                    row.item,
-                    showProviderLabel: row.showProviderLabel,
-                  );
-                }
-                return const SizedBox.shrink();
-              },
+    // 「跟随助手」不再是列表里的一行，改成钉在列表上方：收藏、任何服务商分类、
+    // 甚至搜索时都在，不用滚回顶部找。
+    final inheritRow = widget.allowInherit
+        ? _inheritTile(
+            context,
+            _InheritRow(
+              widget.inheritLabel ?? l10n.modelSelectSheetFollowAssistant,
             ),
-            if (widget.limitProviderKey == null)
-              Positioned(
-                top: -1,
-                left: 0,
-                right: 0,
-                child: ColoredBox(
-                  key: const ValueKey('model-selector-top-seam-cover'),
-                  color: context.overlaySurface,
-                  child: const SizedBox(height: 1),
-                ),
-              ),
-            if (_activeProviderKey != null) _stickyProviderHeader(context),
-          ],
-        );
-      },
+          )
+        : null;
+
+    if (_rows.isEmpty) {
+      return Column(
+        children: [
+          if (inheritRow != null) inheritRow,
+          const Expanded(child: SizedBox.shrink()),
+        ],
+      );
+    }
+
+    if (!favoritesOnly) _scheduleActiveProviderUpdate();
+
+    return Column(
+      children: [
+        if (inheritRow != null) inheritRow,
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              _listViewportHeight = constraints.maxHeight;
+              return Stack(
+                children: [
+                  ScrollablePositionedList.builder(
+                    itemCount: _rows.length,
+                    itemScrollController: _itemScrollController,
+                    itemPositionsListener: _itemPositionsListener,
+                    padding: const EdgeInsets.only(bottom: 12),
+                    itemBuilder: (context, index) {
+                      final row = _rows[index];
+                      if (row is _InheritRow) {
+                        return _inheritTile(context, row);
+                      } else if (row is _HeaderRow) {
+                        return _sectionHeader(
+                          context,
+                          row.title,
+                          providerKey: row.providerKey,
+                        );
+                      } else if (row is _ModelRow) {
+                        return _modelTile(
+                          context,
+                          row.item,
+                          showProviderLabel: row.showProviderLabel,
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                  if (widget.limitProviderKey == null)
+                    Positioned(
+                      top: -1,
+                      left: 0,
+                      right: 0,
+                      child: ColoredBox(
+                        key: const ValueKey('model-selector-top-seam-cover'),
+                        color: context.overlaySurface,
+                        child: const SizedBox(height: 1),
+                      ),
+                    ),
+                  if (!favoritesOnly && _activeProviderKey != null)
+                    _stickyProviderHeader(context),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -1194,7 +1237,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
               context,
               k,
               g.name,
-              selected: k == selectedProviderKey,
+              selected: !_favoritesOnly && k == selectedProviderKey,
             ),
           );
         }
@@ -1398,109 +1441,122 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = m.selected
         ? (isDark
-              ? cs.primary.withValues(alpha: 0.12)
-              : cs.primary.withValues(alpha: 0.08))
+              ? cs.primary.withValues(alpha: 0.18)
+              : cs.primary.withValues(alpha: 0.12))
         : sheetTileColor(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: RepaintBoundary(
-        child: IosCardPress(
-          baseColor: bg,
-          borderRadius: BorderRadius.circular(14),
-          pressedBlendStrength: 0.10,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          onTap: () =>
-              Navigator.of(context).pop(ModelSelection(m.providerKey, m.id)),
-          onLongPress: () async {
-            if (ResponsiveHelper.isDesktop(context)) {
-              await showDesktopModelSpecEditDialog(
-                context,
-                providerKey: m.providerKey,
-                modelKey: m.id,
-              );
-            } else {
-              await showModelSpecEditPage(
-                context,
-                providerKey: m.providerKey,
-                modelKey: m.id,
-              );
-            }
-            if (mounted) {
-              _isLoading = true;
-              setState(() {});
-              await _loadModelsAsync();
-            }
-          },
-          child: SizedBox(
-            width: double.infinity,
-            child: Row(
-              children: [
-                CurrentModelIcon(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: m.selected
+                ? Border.all(
+                    color: cs.primary.withValues(alpha: 0.45),
+                    width: 1,
+                  )
+                : null,
+          ),
+          child: IosCardPress(
+            baseColor: bg,
+            borderRadius: BorderRadius.circular(14),
+            pressedBlendStrength: 0.10,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            onTap: () =>
+                Navigator.of(context).pop(ModelSelection(m.providerKey, m.id)),
+            onLongPress: () async {
+              if (ResponsiveHelper.isDesktop(context)) {
+                await showDesktopModelSpecEditDialog(
+                  context,
                   providerKey: m.providerKey,
-                  modelId: m.id,
-                  size: 28,
-                  iconScale: .62,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!showProviderLabel)
-                        Text(
-                          m.info.displayName,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: AppFontWeights.semibold,
-                          ),
-                        )
-                      else
-                        Text.rich(
-                          TextSpan(
-                            text: m.info.displayName,
+                  modelKey: m.id,
+                );
+              } else {
+                await showModelSpecEditPage(
+                  context,
+                  providerKey: m.providerKey,
+                  modelKey: m.id,
+                );
+              }
+              if (mounted) {
+                _isLoading = true;
+                setState(() {});
+                await _loadModelsAsync();
+              }
+            },
+            child: SizedBox(
+              width: double.infinity,
+              child: Row(
+                children: [
+                  CurrentModelIcon(
+                    providerKey: m.providerKey,
+                    modelId: m.id,
+                    size: 28,
+                    iconScale: .62,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!showProviderLabel)
+                          Text(
+                            m.info.displayName,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: AppFontWeights.semibold,
+                              color: m.selected ? cs.primary : null,
                             ),
-                            children: [
-                              TextSpan(
-                                text: ' | ${m.providerName}',
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.6),
-                                  fontSize: 12,
-                                ),
+                          )
+                        else
+                          Text.rich(
+                            TextSpan(
+                              text: m.info.displayName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: AppFontWeights.semibold,
+                                color: m.selected ? cs.primary : null,
                               ),
-                            ],
+                              children: [
+                                TextSpan(
+                                  text: ' | ${m.providerName}',
+                                  style: TextStyle(
+                                    color: cs.onSurface.withValues(alpha: 0.6),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      const SizedBox(height: 4),
-                      ModelTagWrap(model: m.info),
-                    ],
+                        const SizedBox(height: 4),
+                        ModelTagWrap(model: m.info),
+                      ],
+                    ),
                   ),
-                ),
-                Builder(
-                  builder: (context) {
-                    final pinnedNow = context.select<SettingsProvider, bool>(
-                      (s) => s.isModelPinned(m.providerKey, m.id),
-                    );
-                    final icon = pinnedNow
-                        ? Icons.favorite
-                        : Icons.favorite_border;
-                    return Tooltip(
-                      message: l10n.modelSelectSheetFavoriteTooltip,
-                      child: IosIconButton(
-                        icon: icon,
-                        size: 20,
-                        color: cs.primary,
-                        onTap: () =>
-                            settings.togglePinModel(m.providerKey, m.id),
-                        padding: const EdgeInsets.all(6),
-                        minSize: 36,
-                      ),
-                    );
-                  },
-                ),
-              ],
+                  Builder(
+                    builder: (context) {
+                      final pinnedNow = context.select<SettingsProvider, bool>(
+                        (s) => s.isModelPinned(m.providerKey, m.id),
+                      );
+                      final icon = pinnedNow
+                          ? Icons.favorite
+                          : Icons.favorite_border;
+                      return Tooltip(
+                        message: l10n.modelSelectSheetFavoriteTooltip,
+                        child: IosIconButton(
+                          icon: icon,
+                          size: 20,
+                          color: cs.primary,
+                          onTap: () =>
+                              settings.togglePinModel(m.providerKey, m.id),
+                          padding: const EdgeInsets.all(6),
+                          minSize: 36,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1544,9 +1600,11 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   /// pinned model whose provider is still around and whose model isn't
   /// disabled. Same rule the section itself uses, so the tab never points at
   /// a section that isn't there.
-  bool _hasDisplayableFavorites(BuildContext context) {
-    if (widget.limitProviderKey != null) return false;
-    final settings = context.watch<SettingsProvider>();
+  bool _hasDisplayableFavorites(BuildContext context) =>
+      widget.limitProviderKey == null &&
+      _favoritesAvailable(context.watch<SettingsProvider>());
+
+  bool _favoritesAvailable(SettingsProvider settings) {
     for (final k in settings.pinnedModels) {
       final parts = k.split('::');
       if (parts.length < 2) continue;
@@ -1560,7 +1618,8 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   }
 
   /// Favorites tab: a solid heart in a single colour (no provider avatar), so
-  /// it reads as its own category rather than one of the providers.
+  /// it reads as its own category rather than one of the providers. Selecting
+  /// it switches the list to favourites only; tapping again returns to all.
   Widget _favoritesTab(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
@@ -1569,15 +1628,50 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
         key: const ValueKey('model-selector-favorites-tab'),
         avatar: Icon(Icons.favorite, size: 18, color: cs.primary),
         label: AppLocalizations.of(context)!.modelSelectSheetFavoritesSection,
+        selected: _favoritesOnly,
         borderColor: cs.outlineVariant.withValues(alpha: 0.25),
         onTap: () async {
-          await _jumpToFavorites();
+          await _setFavoritesOnly(!_favoritesOnly);
         },
       ),
     );
   }
 
+  /// Switches between "favourites only" and the full list. Both the bottom
+  /// heart tab and the search-bar icon drive this same state.
+  Future<void> _setFavoritesOnly(bool value) async {
+    if (widget.limitProviderKey != null || _favoritesOnly == value) return;
+    if (value && !_favoritesAvailable(context.read<SettingsProvider>())) return;
+    if (value) await _expandSheetIfNeeded(_maxSize);
+    if (!mounted) return;
+    // 进入收藏时清掉搜索词，免得搜索把收藏也筛没了、看起来像空的。
+    if (value && _search.text.isNotEmpty) _search.clear();
+    setState(() {
+      _favoritesOnly = value;
+      _activeProviderKey = null;
+      _autoScrolled = true;
+    });
+    if (!_itemScrollController.isAttached) return;
+    try {
+      await _itemScrollController.scrollTo(
+        index: 0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    } catch (_) {}
+  }
+
   Future<void> _jumpToProvider(String pk) async {
+    // Any provider category leaves favourites-only and scrolls to that section.
+    if (_favoritesOnly) {
+      setState(() {
+        _favoritesOnly = false;
+        _activeProviderKey = null;
+      });
+      // Let the full list rebuild so its header index map exists again.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
     // Expand sheet first if needed
     await _expandSheetIfNeeded(_maxSize);
 
@@ -1590,36 +1684,6 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
           if (mounted) {
             _jumpToProvider(pk);
           }
-        });
-        return;
-      }
-      try {
-        await _itemScrollController.scrollTo(
-          index: idx,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
-        );
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _jumpToFavorites() async {
-    if (widget.limitProviderKey != null) return;
-    // Expand sheet first to reveal more content
-    await _expandSheetIfNeeded(_maxSize);
-
-    // If search text hides favorites section, clear it to ensure favorites are visible
-    if (_search.text.isNotEmpty) {
-      setState(() => _search.clear());
-      await Future.delayed(const Duration(milliseconds: 150));
-    }
-
-    // Jump to favorites header index if present
-    final idx = _headerIndexMap['__fav__'];
-    if (idx != null) {
-      if (!_itemScrollController.isAttached) {
-        Future.delayed(const Duration(milliseconds: 60), () {
-          if (mounted) _jumpToFavorites();
         });
         return;
       }
