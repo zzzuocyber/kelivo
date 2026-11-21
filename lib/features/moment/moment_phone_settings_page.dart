@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../../icons/lucide_adapter.dart';
-import '../../../utils/avatar_files.dart';
-import '../../../utils/sandbox_path_resolver.dart';
+import '../../icons/lucide_adapter.dart';
+import '../../utils/avatar_files.dart';
+import '../../utils/sandbox_path_resolver.dart';
 import '../../core/services/chat/chat_service.dart';
 import 'moment_phone_theme_store.dart';
 import 'moment_widgets.dart';

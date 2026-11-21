@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../theme/app_font_weights.dart';
-import '../../core/services/path_picker_store.dart';
+import '../../../core/services/path_picker_store.dart';
 import '../../workspace/widgets/files/file_browser.dart';
 
 /// 路径选择器标题行那个书签按钮点开的收藏夹。

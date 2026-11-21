@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../../../icons/lucide_adapter.dart';
+import '../../icons/lucide_adapter.dart';
 import 'moment_emoji.dart';
 import 'moment_models.dart';
 import 'moment_store.dart';
