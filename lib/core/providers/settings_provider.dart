@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import '../models/request_budget.dart';
 import 'package:path/path.dart' as p;
@@ -2346,20 +2347,24 @@ class SettingsProvider extends ChangeNotifier {
       final bytes = await file.readAsBytes();
       if (!_looksLikeFontBytes(bytes)) return null;
       final loader = FontLoader(alias);
-      // A FontLoader family may only be load()ed once, so a bold face must be
-      // registered here in the same load as the regular face. Bold is bound to
-      // w500: AppFontWeights.normalize maps Android w500 -> w400 and w600+ ->
-      // w500, so "should be bold" requests resolve to this face; on other
-      // platforms w600/w700 requests fall back to the nearest registered w500.
+      // A FontLoader family may only be load()ed once, so the bold face is
+      // registered here in the same load as the regular face. FontLoader has
+      // no weight parameter (Flutter derives weight from the font metadata),
+      // so the bold file's OS/2 usWeightClass is rewritten to 500 in memory.
+      // AppFontWeights.normalize maps Android w500 -> w400 and w600+ -> w500,
+      // therefore bold requests resolve to this face without changing every
+      // TextStyle in the app.
       loader.addFont(Future.value(bytes.buffer.asByteData()));
       if (boldPath != null && boldPath.isNotEmpty) {
         final boldFile = File(boldPath);
         if (await boldFile.exists()) {
           final boldBytes = await boldFile.readAsBytes();
           if (_looksLikeFontBytes(boldBytes)) {
+            final boldWithWeight = _fontBytesWithWeight(boldBytes, 500);
             loader.addFont(
-              Future.value(boldBytes.buffer.asByteData()),
-              weight: FontWeight.w500,
+              Future.value(
+                ByteData.sublistView(boldWithWeight),
+              ),
             );
           }
         }
@@ -2369,6 +2374,49 @@ class SettingsProvider extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Rewrites the OS/2 usWeightClass of a TTF/OTF in memory so Flutter's font
+  /// matcher treats the face as [weight]. Glyph outlines are untouched.
+  /// Returns the original bytes when the table cannot be located (e.g. TTC).
+  Uint8List _fontBytesWithWeight(List<int> source, int weight) {
+    final bytes = Uint8List.fromList(source);
+    if (bytes.length < 12 || String.fromCharCodes(bytes.take(4)) == 'ttcf') {
+      return bytes;
+    }
+    final view = ByteData.sublistView(bytes);
+    final numTables = view.getUint16(4);
+    if (12 + numTables * 16 > bytes.length) return bytes;
+    for (var i = 0; i < numTables; i++) {
+      final entry = 12 + i * 16;
+      if (String.fromCharCodes(bytes.sublist(entry, entry + 4)) != 'OS/2') {
+        continue;
+      }
+      final tableOffset = view.getUint32(entry + 8);
+      final tableLength = view.getUint32(entry + 12);
+      if (tableOffset + 6 > bytes.length || tableLength < 6) return bytes;
+      view.setUint16(tableOffset + 4, weight);
+      view.setUint32(
+        entry + 4,
+        _fontTableChecksum(bytes, tableOffset, tableLength),
+      );
+      return bytes;
+    }
+    return bytes;
+  }
+
+  int _fontTableChecksum(Uint8List bytes, int offset, int length) {
+    var sum = 0;
+    final end = offset + length;
+    for (var i = offset; i < end; i += 4) {
+      var word = 0;
+      for (var j = 0; j < 4; j++) {
+        final index = i + j;
+        word = (word << 8) | (index < end ? bytes[index] : 0);
+      }
+      sum = (sum + word) & 0xFFFFFFFF;
+    }
+    return sum;
   }
 
   bool _looksLikeFontBytes(List<int> bytes) {
