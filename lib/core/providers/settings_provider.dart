@@ -60,6 +60,7 @@ import '../services/memory/memory_trace.dart';
 import '../../theme/palettes.dart';
 import '../../theme/custom_theme.dart';
 import '../../theme/chat_bubble_style.dart';
+import '../../theme/bubble_color_scheme.dart';
 import '../models/tool_schema_override.dart';
 import '../services/app_exit_flush.dart';
 import '../services/linux_window_service.dart';
@@ -385,6 +386,7 @@ class SettingsProvider extends ChangeNotifier {
       'chat_bubble_style_overrides_user_v1';
   static const String _thinkingToolCardStyleKey =
       'chat_bubble_style_thinking_tool_card_v1';
+  static const String _bubbleColorSchemesKey = 'bubble_color_schemes_v1';
   static const String _toolSchemaOverridesKey = 'tool_schema_overrides_v1';
   static const String _mobileAssistantEditTabOrderKey =
       'mobile_assistant_edit_tab_order_v1';
@@ -1432,6 +1434,9 @@ class SettingsProvider extends ChangeNotifier {
         // Malformed data follows the assistant style.
       }
     }
+    _bubbleColorSchemes = _decodeBubbleColorSchemes(
+      prefs.getString(_bubbleColorSchemesKey),
+    );
     _toolSchemaOverrides = _decodeToolSchemaOverrides(
       prefs.getString(_toolSchemaOverridesKey),
     );
@@ -3240,6 +3245,8 @@ class SettingsProvider extends ChangeNotifier {
       const ChatBubbleStyleOverrides();
   ChatBubbleStyleOverrides? _userChatBubbleStyleOverrides;
   ({bool enabled, ChatBubbleStyleOverrides overrides})? _thinkingToolCardStyle;
+  List<BubbleColorScheme> _bubbleColorSchemes =
+      const <BubbleColorScheme>[];
 
   bool get canCustomizeThinkingToolCards =>
       _chatMessageBackgroundStyle != ChatMessageBackgroundStyle.defaultStyle;
@@ -3353,6 +3360,97 @@ class SettingsProvider extends ChangeNotifier {
       _chatBubbleStyleOverridesKey,
       jsonEncode(value.toJson()),
     );
+  }
+
+  // ---- Shared bubble color schemes ----
+  List<BubbleColorScheme> get bubbleColorSchemes =>
+      List<BubbleColorScheme>.unmodifiable(_bubbleColorSchemes);
+
+  BubbleColorScheme? bubbleColorScheme(String id) {
+    for (final scheme in _bubbleColorSchemes) {
+      if (scheme.id == id) return scheme;
+    }
+    return null;
+  }
+
+  Future<void> _persistBubbleColorSchemes() async {
+    await _preferences.setString(
+      _bubbleColorSchemesKey,
+      BubbleColorScheme.encodeList(_bubbleColorSchemes),
+    );
+  }
+
+  Future<BubbleColorScheme> addBubbleColorScheme(
+    BubbleColorScheme scheme,
+  ) async {
+    final created = scheme.id.isEmpty
+        ? scheme.copyWith(
+            id: 'bubble_scheme_${DateTime.now().microsecondsSinceEpoch}',
+          )
+        : scheme;
+    _bubbleColorSchemes = <BubbleColorScheme>[..._bubbleColorSchemes, created];
+    notifyListeners();
+    await _persistBubbleColorSchemes();
+    return created;
+  }
+
+  Future<void> updateBubbleColorScheme(BubbleColorScheme scheme) async {
+    final index = _bubbleColorSchemes.indexWhere((s) => s.id == scheme.id);
+    if (index < 0) return;
+    final next = List<BubbleColorScheme>.from(_bubbleColorSchemes);
+    next[index] = scheme;
+    _bubbleColorSchemes = List<BubbleColorScheme>.unmodifiable(next);
+    notifyListeners();
+    await _persistBubbleColorSchemes();
+  }
+
+  Future<void> deleteBubbleColorScheme(String id) async {
+    final next = _bubbleColorSchemes.where((s) => s.id != id).toList();
+    if (next.length == _bubbleColorSchemes.length) return;
+    _bubbleColorSchemes = List<BubbleColorScheme>.unmodifiable(next);
+    notifyListeners();
+    await _persistBubbleColorSchemes();
+  }
+
+  Future<BubbleColorScheme> duplicateBubbleColorScheme(String id) async {
+    final source = bubbleColorScheme(id);
+    if (source == null) return source ?? const BubbleColorScheme(id: '', name: '');
+    return addBubbleColorScheme(
+      source.copyWith(
+        id: '',
+        name: '${source.name} 副本',
+      ),
+    );
+  }
+
+  /// Text export of the whole scheme library.
+  String exportBubbleColorSchemesText() =>
+      BubbleColorScheme.encodeList(_bubbleColorSchemes);
+
+  /// Import schemes from text. [replace] overwrites the whole library,
+  /// otherwise imported schemes are appended with fresh ids.
+  Future<int> importBubbleColorSchemesText(
+    String text, {
+    bool replace = false,
+  }) async {
+    final imported = BubbleColorScheme.decodeJsonText(text);
+    if (imported.isEmpty) return 0;
+    if (replace) {
+      _bubbleColorSchemes = List<BubbleColorScheme>.unmodifiable(imported);
+    } else {
+      final next = List<BubbleColorScheme>.from(_bubbleColorSchemes);
+      for (final scheme in imported) {
+        next.add(
+          scheme.copyWith(
+            id: 'bubble_scheme_${DateTime.now().microsecondsSinceEpoch}_${next.length}',
+          ),
+        );
+      }
+      _bubbleColorSchemes = List<BubbleColorScheme>.unmodifiable(next);
+    }
+    notifyListeners();
+    await _persistBubbleColorSchemes();
+    return imported.length;
   }
 
   static const Duration toolSchemaOverridePersistDebounce = Duration(
@@ -3480,6 +3578,15 @@ class SettingsProvider extends ChangeNotifier {
       _toolSchemaOverrideExitFlushHandler = null;
     }
     super.dispose();
+  }
+
+  static List<BubbleColorScheme> _decodeBubbleColorSchemes(String? raw) {
+    if (raw == null || raw.isEmpty) return const <BubbleColorScheme>[];
+    try {
+      return BubbleColorScheme.decodeList(jsonDecode(raw));
+    } catch (_) {
+      return const <BubbleColorScheme>[];
+    }
   }
 
   static Map<String, ToolSchemaOverride> _decodeToolSchemaOverrides(
@@ -6766,6 +6873,7 @@ Requirements:
     copy._chatBubbleStyleOverrides = _chatBubbleStyleOverrides;
     copy._userChatBubbleStyleOverrides = _userChatBubbleStyleOverrides;
     copy._thinkingToolCardStyle = _thinkingToolCardStyle;
+    copy._bubbleColorSchemes = _bubbleColorSchemes;
     copy._toolSchemaOverrides = Map<String, ToolSchemaOverride>.from(
       _toolSchemaOverrides,
     );

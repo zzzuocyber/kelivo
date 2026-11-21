@@ -17046,4 +17046,77 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get backupMacKeychainAccessDenied =>
       'macOS에서 백업 비밀번호 접근이 거부되었습니다. 시스템 프롬프트가 나타나면 Kelivo의 접근을 허용해 주세요. 키체인 접근에서 기본 키체인과 비밀번호 항목의 권한을 확인할 수도 있습니다.';
+
+  @override
+  String get messageStyleBubbleParamsTitle => '气泡详细设置';
+
+  @override
+  String get bubbleSchemeSectionTitle => '配色方案';
+
+  @override
+  String get bubbleSchemeNew => '新建方案';
+
+  @override
+  String get bubbleSchemeImport => '导入方案';
+
+  @override
+  String get bubbleSchemeNameLabel => '方案名称';
+
+  @override
+  String get bubbleSchemeSave => '保存';
+
+  @override
+  String get bubbleSchemeCancel => '取消';
+
+  @override
+  String get bubbleSchemeDeleteConfirm => '删除该方案？';
+
+  @override
+  String get bubbleSchemeCopied => '配色方案已复制到剪贴板';
+
+  @override
+  String get bubbleSchemeCopyAction => '复制';
+
+  @override
+  String get bubbleSchemeEditAction => '编辑';
+
+  @override
+  String get bubbleSchemeDeleteAction => '删除';
+
+  @override
+  String get bubbleSchemeRenameAction => '重命名';
+
+  @override
+  String get bubbleSchemeImportHint => '在此粘贴配色方案 JSON';
+
+  @override
+  String get bubbleSchemeImportInvalid => '无效的配色方案 JSON';
+
+  @override
+  String get bubbleSchemeExportAll => '导出全部方案';
+
+  @override
+  String get bubbleSchemeUserColor => '我的气泡';
+
+  @override
+  String get bubbleSchemeAssistantColor => '助手气泡';
+
+  @override
+  String get bubbleSchemeEmptyHint => '还没有保存的配色方案，点右上角 + 新建。';
+
+  @override
+  String get assistantEditBubbleSettingsTitle => '气泡设置';
+
+  @override
+  String get assistantEditBubbleFollowGlobal => '跟随全局气泡';
+
+  @override
+  String get assistantEditBubbleFollowGlobalSubtitle => '关闭后可为该助手单独选一套配色方案';
+
+  @override
+  String get assistantEditBubbleScheme => '气泡配色方案';
+
+  @override
+  String get assistantEditBubbleSchemeNone => '未选择（跟随全局）';
+
 }

@@ -30771,6 +30771,31 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'macOS denied access to the backup password. If a system prompt appears, allow Kelivo to access it. You can also check the default keychain and the password item’s permissions in Keychain Access.'**
   String get backupMacKeychainAccessDenied;
+  String get messageStyleBubbleParamsTitle;
+  String get bubbleSchemeSectionTitle;
+  String get bubbleSchemeNew;
+  String get bubbleSchemeImport;
+  String get bubbleSchemeNameLabel;
+  String get bubbleSchemeSave;
+  String get bubbleSchemeCancel;
+  String get bubbleSchemeDeleteConfirm;
+  String get bubbleSchemeCopied;
+  String get bubbleSchemeCopyAction;
+  String get bubbleSchemeEditAction;
+  String get bubbleSchemeDeleteAction;
+  String get bubbleSchemeRenameAction;
+  String get bubbleSchemeImportHint;
+  String get bubbleSchemeImportInvalid;
+  String get bubbleSchemeExportAll;
+  String get bubbleSchemeUserColor;
+  String get bubbleSchemeAssistantColor;
+  String get bubbleSchemeEmptyHint;
+  String get assistantEditBubbleSettingsTitle;
+  String get assistantEditBubbleFollowGlobal;
+  String get assistantEditBubbleFollowGlobalSubtitle;
+  String get assistantEditBubbleScheme;
+  String get assistantEditBubbleSchemeNone;
+
 }
 
 class _AppLocalizationsDelegate

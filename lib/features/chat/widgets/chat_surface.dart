@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:Kelivo/core/providers/settings_provider.dart';
+import 'package:Kelivo/core/providers/assistant_provider.dart';
 import 'package:Kelivo/theme/chat_bubble_style.dart';
+import 'package:Kelivo/theme/bubble_color_scheme.dart';
 
 import 'frosted/frosted_surface.dart';
 import 'package:Kelivo/shared/markdown/markdown_surface_scope.dart';
@@ -10,7 +12,7 @@ import 'package:Kelivo/shared/markdown/markdown_surface_scope.dart';
 ({ChatMessageBackgroundStyle style, ChatBubbleStyleOverrides overrides})
 _chatSurfaceStyleSelection(BuildContext context, ChatBubbleStyleTarget target) {
   try {
-    return context.select<
+    final selection = context.select<
       SettingsProvider,
       ({ChatMessageBackgroundStyle style, ChatBubbleStyleOverrides overrides})
     >(
@@ -19,6 +21,32 @@ _chatSurfaceStyleSelection(BuildContext context, ChatBubbleStyleTarget target) {
         overrides: s.chatBubbleStyleOverridesFor(target),
       ),
     );
+    // Per-assistant bubble scheme overrides the global bubble colors when the
+    // assistant opted out of "follow global".
+    String? schemeId;
+    try {
+      schemeId = context.select<AssistantProvider, String?>(
+        (p) => p.currentAssistant?.bubbleSchemeId,
+      );
+    } on ProviderNotFoundException {
+      schemeId = null;
+    }
+    if (schemeId != null && schemeId.isNotEmpty) {
+      try {
+        final settings = context.read<SettingsProvider>();
+        final scheme = settings.bubbleColorScheme(schemeId);
+        if (scheme != null) {
+          final overrides = switch (target) {
+            ChatBubbleStyleTarget.user => scheme.userOverrides,
+            _ => scheme.assistantOverrides,
+          };
+          return (style: selection.style, overrides: overrides);
+        }
+      } on ProviderNotFoundException {
+        // fall through to global
+      }
+    }
+    return selection;
   } on ProviderNotFoundException {
     return (
       style: ChatMessageBackgroundStyle.defaultStyle,

@@ -515,6 +515,91 @@ class _BasicSettingsTabState extends State<_BasicSettingsTab> {
             ],
           ),
         ),
+        const SizedBox(height: 16),
+
+        // Bubble settings (per assistant)
+        SectionCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Lucide.Brain, size: 18, color: cs.onSurface),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.assistantEditBubbleSettingsTitle,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: AppFontWeights.semibold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.assistantEditBubbleFollowGlobal,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: cs.onSurface.withValues(alpha: 0.9),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          l10n.assistantEditBubbleFollowGlobalSubtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IosSwitch(
+                    value: a.bubbleSchemeId == null,
+                    onChanged: (follow) {
+                      context.read<AssistantProvider>().updateAssistant(
+                        follow
+                            ? a.copyWith(clearBubbleScheme: true)
+                            : a.copyWith(bubbleSchemeId: ''),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              if (a.bubbleSchemeId != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.assistantEditBubbleScheme,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                BubbleSchemePicker(
+                  value: a.bubbleSchemeId,
+                  onChanged: (id) {
+                    context.read<AssistantProvider>().updateAssistant(
+                      a.copyWith(
+                        bubbleSchemeId: id?.isEmpty == true ? '' : id,
+                        clearBubbleScheme: id == null,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }

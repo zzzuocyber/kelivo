@@ -17583,4 +17583,77 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get backupMacKeychainAccessDenied =>
       'macOS denied access to the backup password. If a system prompt appears, allow Kelivo to access it. You can also check the default keychain and the password item’s permissions in Keychain Access.';
+
+  @override
+  String get messageStyleBubbleParamsTitle => 'Bubble details';
+
+  @override
+  String get bubbleSchemeSectionTitle => 'Color schemes';
+
+  @override
+  String get bubbleSchemeNew => 'New scheme';
+
+  @override
+  String get bubbleSchemeImport => 'Import scheme';
+
+  @override
+  String get bubbleSchemeNameLabel => 'Scheme name';
+
+  @override
+  String get bubbleSchemeSave => 'Save';
+
+  @override
+  String get bubbleSchemeCancel => 'Cancel';
+
+  @override
+  String get bubbleSchemeDeleteConfirm => 'Delete this scheme?';
+
+  @override
+  String get bubbleSchemeCopied => 'Color scheme copied to clipboard';
+
+  @override
+  String get bubbleSchemeCopyAction => 'Copy';
+
+  @override
+  String get bubbleSchemeEditAction => 'Edit';
+
+  @override
+  String get bubbleSchemeDeleteAction => 'Delete';
+
+  @override
+  String get bubbleSchemeRenameAction => 'Rename';
+
+  @override
+  String get bubbleSchemeImportHint => 'Paste color scheme JSON here';
+
+  @override
+  String get bubbleSchemeImportInvalid => 'Invalid color scheme JSON';
+
+  @override
+  String get bubbleSchemeExportAll => 'Export all schemes';
+
+  @override
+  String get bubbleSchemeUserColor => 'My bubble';
+
+  @override
+  String get bubbleSchemeAssistantColor => 'Assistant bubble';
+
+  @override
+  String get bubbleSchemeEmptyHint => 'No saved schemes yet. Tap + to create one.';
+
+  @override
+  String get assistantEditBubbleSettingsTitle => 'Bubble settings';
+
+  @override
+  String get assistantEditBubbleFollowGlobal => 'Follow global bubble';
+
+  @override
+  String get assistantEditBubbleFollowGlobalSubtitle => 'Turn off to pick a scheme for this assistant';
+
+  @override
+  String get assistantEditBubbleScheme => 'Bubble color scheme';
+
+  @override
+  String get assistantEditBubbleSchemeNone => 'None (follow global)';
+
 }

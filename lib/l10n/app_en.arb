@@ -12292,10 +12292,10 @@
   "@modelSelectSheetFavoritesSection": {
     "description": "Header label and tooltip for the favorites group in the model selection sheet."
   },
-
   "@modelSelectSheetFavoritesEmptyHint": {
     "description": "Hint shown in the favorites-only view of the model selection sheet when nothing has been favorited yet."
-  },  "@modelSelectSheetFollowAssistant": {
+  },
+  "@modelSelectSheetFollowAssistant": {
     "description": "Row label in the model selection sheet for inheriting the assistant's model choice."
   },
   "@modelSelectSheetFavoriteTooltip": {
@@ -19122,10 +19122,10 @@
   "@conversationSystemPromptClear": {
     "description": "Button label in the conversation system prompt editor to clear the override and revert to the assistant's system prompt."
   },
-
   "@conversationSystemPromptQuote": {
     "description": "Tooltip on the square button that inserts the assistant's system prompt into the conversation system prompt box."
-  },  "@conversationSystemPromptPlaceholder": {
+  },
+  "@conversationSystemPromptPlaceholder": {
     "description": "Placeholder text in the conversation system prompt input field."
   },
   "@conversationPromptScope": {
@@ -20196,13 +20196,13 @@
   "@browserOpenFullPage": {
     "description": "Button label to expand the browser panel into a full page view."
   },
-
   "@browserRestoreChrome": {
     "description": "Toggle immersive browser view."
   },
   "@browserMaximize": {
     "description": "Toggle immersive browser view."
-  },  "@browserClosePanel": {
+  },
+  "@browserClosePanel": {
     "description": "Button label to close the browser panel."
   },
   "@browserSearchTabs": {
@@ -22845,5 +22845,101 @@
   "backupMacKeychainAccessDenied": "macOS denied access to the backup password. If a system prompt appears, allow Kelivo to access it. You can also check the default keychain and the password item’s permissions in Keychain Access.",
   "@backupMacKeychainAccessDenied": {
     "description": "Backup password error when macOS denied access even though the default keychain was reported unlocked. Covers access denied by item permissions or an unusable login keychain without assuming that the user cancelled."
+  },
+  "messageStyleBubbleParamsTitle": "气泡详细设置",
+  "@messageStyleBubbleParamsTitle": {
+    "description": "UI text for messageStyleBubbleParamsTitle in the bubble color scheme feature."
+  },
+  "bubbleSchemeSectionTitle": "配色方案",
+  "@bubbleSchemeSectionTitle": {
+    "description": "UI text for bubbleSchemeSectionTitle in the bubble color scheme feature."
+  },
+  "bubbleSchemeNew": "新建方案",
+  "@bubbleSchemeNew": {
+    "description": "UI text for bubbleSchemeNew in the bubble color scheme feature."
+  },
+  "bubbleSchemeImport": "导入方案",
+  "@bubbleSchemeImport": {
+    "description": "UI text for bubbleSchemeImport in the bubble color scheme feature."
+  },
+  "bubbleSchemeNameLabel": "方案名称",
+  "@bubbleSchemeNameLabel": {
+    "description": "UI text for bubbleSchemeNameLabel in the bubble color scheme feature."
+  },
+  "bubbleSchemeSave": "保存",
+  "@bubbleSchemeSave": {
+    "description": "UI text for bubbleSchemeSave in the bubble color scheme feature."
+  },
+  "bubbleSchemeCancel": "取消",
+  "@bubbleSchemeCancel": {
+    "description": "UI text for bubbleSchemeCancel in the bubble color scheme feature."
+  },
+  "bubbleSchemeDeleteConfirm": "删除该方案？",
+  "@bubbleSchemeDeleteConfirm": {
+    "description": "UI text for bubbleSchemeDeleteConfirm in the bubble color scheme feature."
+  },
+  "bubbleSchemeCopied": "配色方案已复制到剪贴板",
+  "@bubbleSchemeCopied": {
+    "description": "UI text for bubbleSchemeCopied in the bubble color scheme feature."
+  },
+  "bubbleSchemeCopyAction": "复制",
+  "@bubbleSchemeCopyAction": {
+    "description": "UI text for bubbleSchemeCopyAction in the bubble color scheme feature."
+  },
+  "bubbleSchemeEditAction": "编辑",
+  "@bubbleSchemeEditAction": {
+    "description": "UI text for bubbleSchemeEditAction in the bubble color scheme feature."
+  },
+  "bubbleSchemeDeleteAction": "删除",
+  "@bubbleSchemeDeleteAction": {
+    "description": "UI text for bubbleSchemeDeleteAction in the bubble color scheme feature."
+  },
+  "bubbleSchemeRenameAction": "重命名",
+  "@bubbleSchemeRenameAction": {
+    "description": "UI text for bubbleSchemeRenameAction in the bubble color scheme feature."
+  },
+  "bubbleSchemeImportHint": "在此粘贴配色方案 JSON",
+  "@bubbleSchemeImportHint": {
+    "description": "UI text for bubbleSchemeImportHint in the bubble color scheme feature."
+  },
+  "bubbleSchemeImportInvalid": "无效的配色方案 JSON",
+  "@bubbleSchemeImportInvalid": {
+    "description": "UI text for bubbleSchemeImportInvalid in the bubble color scheme feature."
+  },
+  "bubbleSchemeExportAll": "导出全部方案",
+  "@bubbleSchemeExportAll": {
+    "description": "UI text for bubbleSchemeExportAll in the bubble color scheme feature."
+  },
+  "bubbleSchemeUserColor": "我的气泡",
+  "@bubbleSchemeUserColor": {
+    "description": "UI text for bubbleSchemeUserColor in the bubble color scheme feature."
+  },
+  "bubbleSchemeAssistantColor": "助手气泡",
+  "@bubbleSchemeAssistantColor": {
+    "description": "UI text for bubbleSchemeAssistantColor in the bubble color scheme feature."
+  },
+  "bubbleSchemeEmptyHint": "还没有保存的配色方案，点右上角 + 新建。",
+  "@bubbleSchemeEmptyHint": {
+    "description": "UI text for bubbleSchemeEmptyHint in the bubble color scheme feature."
+  },
+  "assistantEditBubbleSettingsTitle": "气泡设置",
+  "@assistantEditBubbleSettingsTitle": {
+    "description": "UI text for assistantEditBubbleSettingsTitle in the bubble color scheme feature."
+  },
+  "assistantEditBubbleFollowGlobal": "跟随全局气泡",
+  "@assistantEditBubbleFollowGlobal": {
+    "description": "UI text for assistantEditBubbleFollowGlobal in the bubble color scheme feature."
+  },
+  "assistantEditBubbleFollowGlobalSubtitle": "关闭后可为该助手单独选一套配色方案",
+  "@assistantEditBubbleFollowGlobalSubtitle": {
+    "description": "UI text for assistantEditBubbleFollowGlobalSubtitle in the bubble color scheme feature."
+  },
+  "assistantEditBubbleScheme": "气泡配色方案",
+  "@assistantEditBubbleScheme": {
+    "description": "UI text for assistantEditBubbleScheme in the bubble color scheme feature."
+  },
+  "assistantEditBubbleSchemeNone": "未选择（跟随全局）",
+  "@assistantEditBubbleSchemeNone": {
+    "description": "UI text for assistantEditBubbleSchemeNone in the bubble color scheme feature."
   }
 }

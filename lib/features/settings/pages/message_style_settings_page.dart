@@ -21,6 +21,7 @@ import '../../chat/widgets/frosted/chat_frosted_backdrop.dart';
 import '../../chat/widgets/frosted/frosted_surface.dart';
 import '../../home/pages/home_mobile_layout.dart';
 import '../widgets/custom_theme_widgets.dart';
+import '../widgets/bubble_scheme_widgets.dart';
 import 'package:Kelivo/shared/widgets/section_card.dart';
 
 class MessageStyleSettingsPage extends StatelessWidget {
@@ -462,8 +463,14 @@ class _MessageStyleSettingsBodyState extends State<MessageStyleSettingsBody> {
               )
             else ...[
               const SizedBox(height: 12),
-              params,
+              CollapsibleSectionCard(
+                title: l10n.messageStyleBubbleParamsTitle,
+                initiallyExpanded: true,
+                children: params.children ?? const <Widget>[],
+              ),
             ],
+            const SizedBox(height: 12),
+            const BubbleSchemeSection(),
           ],
         ),
       ),

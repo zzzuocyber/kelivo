@@ -66,6 +66,7 @@ final class BusinessKeyRegistry {
     'provider_ungrouped_position_v1',
     balanceRefreshIntervalKey,
     balanceRefreshOnReplyKey,
+    'bubble_color_schemes_v1',
     'assistant_tag_map_v1',
     'assistant_tag_collapsed_v1',
     'instruction_injections_active_ids_by_assistant_v1',

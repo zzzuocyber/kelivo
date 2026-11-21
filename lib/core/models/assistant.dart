@@ -74,6 +74,8 @@ class Assistant {
   /// master toggle is off so turning it back on restores the selection.
   final List<String> healthDataTypeIds;
   final String? background; // chat background (color/image ref)
+  /// null = follow global bubble style; otherwise a BubbleColorScheme id.
+  final String? bubbleSchemeId;
   final bool useGradientBackground;
   final bool gradientBackgroundAnimated;
   final double gradientBackgroundPhase;
@@ -135,6 +137,7 @@ class Assistant {
     this.gradientBackgroundPhase = defaultGradientBackgroundPhase,
     this.gradientBackgroundOffsetX = 0,
     this.gradientBackgroundOffsetY = 0,
+    this.bubbleSchemeId,
     this.customHeaders = const <Map<String, String>>[],
     this.customBody = const <Map<String, String>>[],
     this.enableMemory = false,
@@ -185,6 +188,7 @@ class Assistant {
     double? gradientBackgroundPhase,
     double? gradientBackgroundOffsetX,
     double? gradientBackgroundOffsetY,
+    String? bubbleSchemeId,
     List<Map<String, String>>? customHeaders,
     List<Map<String, String>>? customBody,
     bool? enableMemory,
@@ -209,6 +213,7 @@ class Assistant {
     bool clearReasoning = false,
     bool clearMaxTokens = false,
     bool clearBackground = false,
+    bool clearBubbleScheme = false,
   }) {
     return Assistant(
       id: id ?? this.id,
@@ -255,6 +260,9 @@ class Assistant {
       skillIds: clearSkillIds ? null : (skillIds ?? this.skillIds),
       healthDataTypeIds: healthDataTypeIds ?? this.healthDataTypeIds,
       background: clearBackground ? null : (background ?? this.background),
+      bubbleSchemeId: clearBubbleScheme
+          ? null
+          : (bubbleSchemeId ?? this.bubbleSchemeId),
       useGradientBackground:
           useGradientBackground ?? this.useGradientBackground,
       gradientBackgroundAnimated:
@@ -318,6 +326,7 @@ class Assistant {
     'skillIds': skillIds,
     'healthDataTypeIds': healthDataTypeIds,
     'background': background,
+    'bubbleSchemeId': bubbleSchemeId,
     'useGradientBackground': useGradientBackground,
     'gradientBackgroundAnimated': gradientBackgroundAnimated,
     'gradientBackgroundPhase': gradientBackgroundPhase,
@@ -395,6 +404,7 @@ class Assistant {
       json['healthDataTypeIds'],
     ),
     background: json['background'] as String?,
+    bubbleSchemeId: json['bubbleSchemeId'] as String?,
     useGradientBackground: json['useGradientBackground'] as bool? ?? false,
     gradientBackgroundAnimated:
         json['gradientBackgroundAnimated'] as bool? ?? true,
