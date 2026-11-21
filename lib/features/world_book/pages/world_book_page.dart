@@ -548,15 +548,15 @@ class _WorldBookGroupCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final colors = context.appColors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // 容器要夹在「页面」和「书卡」之间，书卡才读得出是容器里的卡片。
-    // 深色：页面到卡片只隔十来个色阶，用插值取中间；展开那组更靠近卡片。
-    // 浅色：卡片接近白色，往下压才有对比；展开那组压得更深。
+    // 容器要夹在「页面」和「书卡」之间，书卡才读得出是容器里的卡片；
+    // 展开那组再往书卡挪一截当高亮。深色页面到书卡只有十来个色阶，
+    // 用插值取中间偏下；浅色书卡接近白色，只能把页面压深。
     final Color tint;
     if (isDark) {
       tint = Color.lerp(
         cs.surface,
         colors.surfaceCard,
-        collapsed ? 0.34 : 0.62,
+        collapsed ? 0.28 : 0.55,
       )!;
     } else {
       tint = Color.alphaBlend(
