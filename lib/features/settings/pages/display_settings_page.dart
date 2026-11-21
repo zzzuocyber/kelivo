@@ -17,6 +17,7 @@ import '../../../theme/palettes.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../l10n/app_language.dart';
 import '../../../shared/widgets/ios_switch.dart';
+import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/tip_icon.dart';
 import '../../../core/services/haptics.dart';
 import 'package:file_picker/file_picker.dart';
@@ -147,6 +148,32 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
                   context,
                   target: _FontTarget.app,
                 ),
+              ),
+              _iosDivider(context),
+              _iosNavRow(
+                context,
+                icon: Lucide.CaseSensitive,
+                label: l10n.displaySettingsPageAppFontBoldTitle,
+                detailBuilder: (ctx) {
+                  final sp = ctx.watch<SettingsProvider>();
+                  final useLocal = (sp.appFontLocalAlias ?? '').isNotEmpty;
+                  final text = !useLocal
+                      ? l10n.displaySettingsPageFontBoldNeedRegular
+                      : sp.hasAppFontBold
+                      ? l10n.displaySettingsPageFontLocalFileLabel
+                      : l10n.displaySettingsPageFontBoldNotSet;
+                  return Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                      fontSize: 13,
+                    ),
+                  );
+                },
+                onTap: () => _showMobileFontBoldSheet(context),
               ),
               _iosDivider(context),
               _iosNavRow(
@@ -438,6 +465,74 @@ Widget _header(BuildContext context, String text, {bool first = false}) {
       } else {
         await settings.clearCodeFont();
       }
+    }
+  }
+
+  Future<void> _showMobileFontBoldSheet(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final settings = context.read<SettingsProvider>();
+    if ((settings.appFontLocalAlias ?? '').isEmpty) {
+      showAppSnackBar(
+        context,
+        message: l10n.displaySettingsPageFontBoldNeedRegular,
+        type: NotificationType.warning,
+      );
+      return;
+    }
+    final hasBold = settings.hasAppFontBold;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.overlaySurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _sheetOption(
+                ctx,
+                label: l10n.fontPickerChooseLocalFile,
+                onTap: () => Navigator.of(ctx).pop('local'),
+              ),
+              if (hasBold) ...[
+                _sheetDividerNoIcon(ctx),
+                _sheetOption(
+                  ctx,
+                  label: l10n.displaySettingsPageFontBoldClear,
+                  onTap: () => Navigator.of(ctx).pop('clear'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    if (choice == 'local') {
+      final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['ttf', 'otf'],
+      );
+      final path = res?.files.singleOrNull?.path;
+      if (path == null || !context.mounted) return;
+      final ok = await context.read<SettingsProvider>().setAppFontBoldFromLocal(
+        path: path,
+      );
+      if (!context.mounted) return;
+      showAppSnackBar(
+        context,
+        message: ok
+            ? l10n.displaySettingsPageFontBoldApplied
+            : l10n.displaySettingsPageFontBoldFailed,
+        type: ok ? NotificationType.success : NotificationType.error,
+      );
+      return;
+    }
+    if (choice == 'clear') {
+      await context.read<SettingsProvider>().clearAppFontBold();
     }
   }
 

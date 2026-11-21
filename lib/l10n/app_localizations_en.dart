@@ -5969,6 +5969,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get displaySettingsPageCodeFontTitle => 'Code Font';
+  String get displaySettingsPageAppFontBoldTitle => 'Bold Font';
+  String get displaySettingsPageFontBoldNeedRegular => 'Set a regular app font from a local file first';
+  String get displaySettingsPageFontBoldNotSet => 'Not set';
+  String get displaySettingsPageFontBoldClear => 'Remove bold font';
+  String get displaySettingsPageFontBoldApplied => 'Bold font applied';
+  String get displaySettingsPageFontBoldFailed => 'Failed to load bold font';
 
   @override
   String get fontPickerChooseLocalFile => 'Choose Local File';

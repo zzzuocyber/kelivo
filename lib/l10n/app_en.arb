@@ -23105,5 +23105,11 @@
   },
   "@assistantEditAvatarCropHint": {
     "description": "Hint on the crop page that output is square, not circular."
-  }
+  },
+  "displaySettingsPageAppFontBoldTitle": "Bold Font",
+  "displaySettingsPageFontBoldNeedRegular": "Set a regular app font from a local file first",
+  "displaySettingsPageFontBoldNotSet": "Not set",
+  "displaySettingsPageFontBoldClear": "Remove bold font",
+  "displaySettingsPageFontBoldApplied": "Bold font applied",
+  "displaySettingsPageFontBoldFailed": "Failed to load bold font"
 }

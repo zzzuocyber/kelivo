@@ -5164,5 +5164,11 @@
   "assistantEditAvatarNoCropChoiceSubtitle": "不裁剪，直接使用整张图片",
   "assistantEditAvatarCropPageTitle": "裁剪头像",
   "assistantEditAvatarCropConfirm": "完成",
-  "assistantEditAvatarCropHint": "圆形区域仅作预览，实际保存为 1:1 正方形图片"
+  "assistantEditAvatarCropHint": "圆形区域仅作预览，实际保存为 1:1 正方形图片",
+  "displaySettingsPageAppFontBoldTitle": "粗體字體",
+  "displaySettingsPageFontBoldNeedRegular": "請先從本機檔案設定常規應用字體",
+  "displaySettingsPageFontBoldNotSet": "未設定",
+  "displaySettingsPageFontBoldClear": "移除粗體字體",
+  "displaySettingsPageFontBoldApplied": "粗體字體已套用",
+  "displaySettingsPageFontBoldFailed": "粗體字體載入失敗"
 }

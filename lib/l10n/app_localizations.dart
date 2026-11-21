@@ -10770,6 +10770,42 @@ abstract class AppLocalizations {
   /// **'Code Font'**
   String get displaySettingsPageCodeFontTitle;
 
+  /// Label for the bold app font setting row.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold Font'**
+  String get displaySettingsPageAppFontBoldTitle;
+
+  /// Hint shown when trying to set a bold font before a regular local app font.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a regular app font from a local file first'**
+  String get displaySettingsPageFontBoldNeedRegular;
+
+  /// Detail text when no bold face is attached to the local app font.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get displaySettingsPageFontBoldNotSet;
+
+  /// Sheet option that removes the attached bold font.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove bold font'**
+  String get displaySettingsPageFontBoldClear;
+
+  /// Success message after a bold face is applied.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold font applied'**
+  String get displaySettingsPageFontBoldApplied;
+
+  /// Error message when a bold face fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load bold font'**
+  String get displaySettingsPageFontBoldFailed;
+
   /// Option in the font picker sheet that lets the user pick a font file from local storage.
   ///
   /// In en, this message translates to:

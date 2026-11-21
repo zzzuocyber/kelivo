@@ -6023,6 +6023,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get displaySettingsPageCodeFontTitle => 'Kod Yazı Tipi';
+  String get displaySettingsPageAppFontBoldTitle => 'Kalın Yazı Tipi';
+  String get displaySettingsPageFontBoldNeedRegular => 'Önce yerel bir dosyadan normal uygulama yazı tipi ayarlayın';
+  String get displaySettingsPageFontBoldNotSet => 'Ayarlanmadı';
+  String get displaySettingsPageFontBoldClear => 'Kalın yazı tipini kaldır';
+  String get displaySettingsPageFontBoldApplied => 'Kalın yazı tipi uygulandı';
+  String get displaySettingsPageFontBoldFailed => 'Kalın yazı tipi yüklenemedi';
 
   @override
   String get fontPickerChooseLocalFile => 'Yerel Dosya Seç';

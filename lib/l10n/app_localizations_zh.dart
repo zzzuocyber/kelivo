@@ -5717,6 +5717,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get displaySettingsPageFontLocalFileLabel => '本地文件';
+  String get displaySettingsPageAppFontBoldTitle => '粗体字体';
+  String get displaySettingsPageFontBoldNeedRegular => '请先从本地文件设置常规应用字体';
+  String get displaySettingsPageFontBoldNotSet => '未设置';
+  String get displaySettingsPageFontBoldClear => '移除粗体字体';
+  String get displaySettingsPageFontBoldApplied => '粗体字体已应用';
+  String get displaySettingsPageFontBoldFailed => '粗体字体加载失败';
 
   @override
   String get displaySettingsPageFontResetLabel => '恢复默认';
@@ -22373,6 +22379,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get displaySettingsPageFontLocalFileLabel => '本地文件';
+  String get displaySettingsPageAppFontBoldTitle => '粗体字体';
+  String get displaySettingsPageFontBoldNeedRegular => '请先从本地文件设置常规应用字体';
+  String get displaySettingsPageFontBoldNotSet => '未设置';
+  String get displaySettingsPageFontBoldClear => '移除粗体字体';
+  String get displaySettingsPageFontBoldApplied => '粗体字体已应用';
+  String get displaySettingsPageFontBoldFailed => '粗体字体加载失败';
 
   @override
   String get displaySettingsPageFontResetLabel => '恢复默认';
@@ -39038,6 +39050,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get displaySettingsPageFontLocalFileLabel => '本機檔案';
+  String get displaySettingsPageAppFontBoldTitle => '粗體字體';
+  String get displaySettingsPageFontBoldNeedRegular => '請先從本機檔案設定常規應用字體';
+  String get displaySettingsPageFontBoldNotSet => '未設定';
+  String get displaySettingsPageFontBoldClear => '移除粗體字體';
+  String get displaySettingsPageFontBoldApplied => '粗體字體已套用';
+  String get displaySettingsPageFontBoldFailed => '粗體字體載入失敗';
 
   @override
   String get displaySettingsPageFontResetLabel => '回復預設設定';

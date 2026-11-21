@@ -6057,6 +6057,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get displaySettingsPageCodeFontTitle => 'Шрифт кода';
+  String get displaySettingsPageAppFontBoldTitle => 'Полужирный шрифт';
+  String get displaySettingsPageFontBoldNeedRegular => 'Сначала выберите обычный шрифт приложения из локального файла';
+  String get displaySettingsPageFontBoldNotSet => 'Не задан';
+  String get displaySettingsPageFontBoldClear => 'Удалить полужирный шрифт';
+  String get displaySettingsPageFontBoldApplied => 'Полужирный шрифт применён';
+  String get displaySettingsPageFontBoldFailed => 'Не удалось загрузить полужирный шрифт';
 
   @override
   String get fontPickerChooseLocalFile => 'Выбрать локальный файл';

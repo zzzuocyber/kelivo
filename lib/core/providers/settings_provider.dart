@@ -431,6 +431,8 @@ class SettingsProvider extends ChangeNotifier {
       'display_code_font_is_google_v1';
   static const String _displayAppFontLocalPathKey =
       'display_app_font_local_path_v1';
+  static const String _displayAppFontBoldLocalPathKey =
+      'display_app_font_bold_local_path_v1';
   static const String _displayCodeFontLocalPathKey =
       'display_code_font_local_path_v1';
   static const String _displayAppFontLocalAliasKey =
@@ -1912,6 +1914,7 @@ class SettingsProvider extends ChangeNotifier {
   String? _codeFontFamily; // system font family to use for code blocks
   // Local font file selections (mobile): persisted for reload
   String? _appFontLocalPath;
+  String? _appFontBoldLocalPath; // bold face, registered at w500 in same family
   String? _codeFontLocalPath;
   // The alias family name registered via FontLoader for local fonts
   String? _appFontLocalAlias;
@@ -1921,6 +1924,8 @@ class SettingsProvider extends ChangeNotifier {
   String? get codeFontFamily => _effectiveCodeFontAlias ?? _codeFontFamily;
   String? get appFontLocalAlias => _appFontLocalAlias;
   String? get codeFontLocalAlias => _codeFontLocalAlias;
+  /// Whether a bold face is attached to the current local app font.
+  bool get hasAppFontBold => _appFontBoldLocalPath != null;
 
   // Use alias if a local font is set and successfully registered
   String? get _effectiveAppFontAlias =>
@@ -1930,17 +1935,21 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setAppFontSystemFamily(String? family) async {
     final previousPath = _appFontLocalPath;
+    final previousBoldPath = _appFontBoldLocalPath;
     _appFontFamily = (family == null || family.trim().isEmpty)
         ? null
         : family.trim();
     // Clear the local font selection when switching to a system family.
     _appFontLocalAlias = null;
     _appFontLocalPath = null;
+    _appFontBoldLocalPath = null;
     notifyListeners();
     final prefs = _preferences;
     await prefs.setString(_displayAppFontFamilyKey, _appFontFamily ?? '');
     await prefs.remove(_displayAppFontLocalAliasKey);
     await prefs.remove(_displayAppFontLocalPathKey);
+    await prefs.remove(_displayAppFontBoldLocalPathKey);
+    await _deleteManagedFontFileIfUnused(previousBoldPath);
     await _deleteManagedFontFileIfUnused(previousPath);
   }
 
@@ -1973,6 +1982,7 @@ class SettingsProvider extends ChangeNotifier {
     final fam = await _registerLocalFont(
       path: localPath,
       aliasPrefix: alias ?? 'kelivo_local_app',
+      boldPath: _appFontBoldLocalPath,
     );
     if (fam == null) {
       await _deleteManagedFontFileIfUnused(localPath);
@@ -1988,6 +1998,70 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_displayAppFontLocalPathKey, _appFontLocalPath!);
     await _deleteManagedFontFileIfUnused(previousPath);
     return true;
+  }
+
+  /// Attach a bold face to the current local app font. Requires an app font to
+  /// have been loaded from a local file first (the bold face shares its family
+  /// alias). Re-registers the family so regular (w400) + bold (w500) load once.
+  Future<bool> setAppFontBoldFromLocal({
+    required String path,
+    String? licenseText,
+  }) async {
+    if (_appFontLocalPath == null || _appFontLocalPath!.isEmpty) return false;
+    final previousBoldPath = _appFontBoldLocalPath;
+    final localBoldPath = await _importLocalFontFile(
+      path,
+      licenseText: licenseText,
+    );
+    if (localBoldPath == null) return false;
+    final alias = _appFontLocalAlias ?? 'kelivo_local_app';
+    final resolvedRegular = SandboxPathResolver.fix(_appFontLocalPath!);
+    final fam = await _registerLocalFont(
+      path: resolvedRegular,
+      aliasPrefix: alias,
+      boldPath: localBoldPath,
+    );
+    if (fam == null) {
+      await _deleteManagedFontFileIfUnused(localBoldPath);
+      return false;
+    }
+    _appFontFamily = fam;
+    _appFontLocalAlias = fam;
+    _appFontLocalPath = resolvedRegular;
+    _appFontBoldLocalPath = localBoldPath;
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setString(_displayAppFontFamilyKey, _appFontFamily!);
+    await prefs.setString(_displayAppFontLocalAliasKey, _appFontLocalAlias!);
+    await prefs.setString(_displayAppFontLocalPathKey, _appFontLocalPath!);
+    await prefs.setString(_displayAppFontBoldLocalPathKey, _appFontBoldLocalPath!);
+    await _deleteManagedFontFileIfUnused(previousBoldPath);
+    return true;
+  }
+
+  /// Remove just the bold face, keeping the regular local app font. Re-registers
+  /// the family with the regular face only (w400).
+  Future<void> clearAppFontBold() async {
+    if (_appFontBoldLocalPath == null) return;
+    final previousBoldPath = _appFontBoldLocalPath;
+    _appFontBoldLocalPath = null;
+    if (_appFontLocalPath != null && _appFontLocalPath!.isNotEmpty) {
+      final alias = _appFontLocalAlias ?? 'kelivo_local_app';
+      final resolvedRegular = SandboxPathResolver.fix(_appFontLocalPath!);
+      final fam = await _registerLocalFont(
+        path: resolvedRegular,
+        aliasPrefix: alias,
+      );
+      if (fam != null) {
+        _appFontFamily = fam;
+        _appFontLocalAlias = fam;
+        _appFontLocalPath = resolvedRegular;
+        notifyListeners();
+      }
+    }
+    final prefs = _preferences;
+    await prefs.remove(_displayAppFontBoldLocalPathKey);
+    await _deleteManagedFontFileIfUnused(previousBoldPath);
   }
 
   Future<bool> setCodeFontFromLocal({
@@ -2023,14 +2097,18 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> clearAppFont() async {
     final previousPath = _appFontLocalPath;
+    final previousBoldPath = _appFontBoldLocalPath;
     _appFontFamily = null;
     _appFontLocalAlias = null;
     _appFontLocalPath = null;
+    _appFontBoldLocalPath = null;
     notifyListeners();
     final prefs = _preferences;
     await prefs.remove(_displayAppFontFamilyKey);
     await prefs.remove(_displayAppFontLocalAliasKey);
     await prefs.remove(_displayAppFontLocalPathKey);
+    await prefs.remove(_displayAppFontBoldLocalPathKey);
+    await _deleteManagedFontFileIfUnused(previousBoldPath);
     await _deleteManagedFontFileIfUnused(previousPath);
   }
 
@@ -2053,6 +2131,9 @@ class SettingsProvider extends ChangeNotifier {
     _appFontFamily = _nonEmpty(prefs.getString(_displayAppFontFamilyKey));
     _codeFontFamily = _nonEmpty(prefs.getString(_displayCodeFontFamilyKey));
     _appFontLocalPath = _nonEmpty(prefs.getString(_displayAppFontLocalPathKey));
+    _appFontBoldLocalPath = _nonEmpty(
+      prefs.getString(_displayAppFontBoldLocalPathKey),
+    );
     _codeFontLocalPath = _nonEmpty(
       prefs.getString(_displayCodeFontLocalPathKey),
     );
@@ -2084,9 +2165,13 @@ class SettingsProvider extends ChangeNotifier {
     if (_appFontLocalPath != null && _appFontLocalPath!.isNotEmpty) {
       final alias = _appFontLocalAlias ?? 'kelivo_local_app';
       final resolvedPath = SandboxPathResolver.fix(_appFontLocalPath!);
+      final resolvedBold = _appFontBoldLocalPath == null
+          ? null
+          : SandboxPathResolver.fix(_appFontBoldLocalPath!);
       final fam = await _registerLocalFont(
         path: resolvedPath,
         aliasPrefix: alias,
+        boldPath: resolvedBold,
       );
       if (fam != null) {
         _appFontLocalAlias = fam;
@@ -2095,9 +2180,14 @@ class SettingsProvider extends ChangeNotifier {
           _appFontLocalPath = resolvedPath;
           changed = true;
         }
+        if (resolvedBold != null && _appFontBoldLocalPath != resolvedBold) {
+          _appFontBoldLocalPath = resolvedBold;
+          changed = true;
+        }
       } else if (_appFontLocalAlias != null || _appFontFamily != null) {
         _appFontLocalAlias = null;
         _appFontLocalPath = null;
+        _appFontBoldLocalPath = null;
         _appFontFamily = null;
         changed = true;
       }
@@ -2152,6 +2242,14 @@ class SettingsProvider extends ChangeNotifier {
       await prefs.remove(_displayAppFontLocalPathKey);
     } else {
       await prefs.setString(_displayAppFontLocalPathKey, _appFontLocalPath!);
+    }
+    if (_appFontBoldLocalPath == null || _appFontBoldLocalPath!.isEmpty) {
+      await prefs.remove(_displayAppFontBoldLocalPathKey);
+    } else {
+      await prefs.setString(
+        _displayAppFontBoldLocalPathKey,
+        _appFontBoldLocalPath!,
+      );
     }
 
     if (_codeFontFamily == null || _codeFontFamily!.isEmpty) {
@@ -2215,7 +2313,11 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> _deleteManagedFontFileIfUnused(String? path) async {
     if (path == null || path.isEmpty) return;
-    if (path == _appFontLocalPath || path == _codeFontLocalPath) return;
+    if (path == _appFontLocalPath ||
+        path == _appFontBoldLocalPath ||
+        path == _codeFontLocalPath) {
+      return;
+    }
     try {
       final fontsDir = await AppDirectories.getFontsDirectory();
       final root = p.normalize(Directory(fontsDir.path).absolute.path);
@@ -2233,6 +2335,7 @@ class SettingsProvider extends ChangeNotifier {
   Future<String?> _registerLocalFont({
     required String path,
     required String aliasPrefix,
+    String? boldPath,
   }) async {
     try {
       // Use a stable alias derived from file name to reduce duplicates
@@ -2242,9 +2345,25 @@ class SettingsProvider extends ChangeNotifier {
       if (!await file.exists()) return null;
       final bytes = await file.readAsBytes();
       if (!_looksLikeFontBytes(bytes)) return null;
-      final bd = bytes.buffer.asByteData();
       final loader = FontLoader(alias);
-      loader.addFont(Future.value(bd));
+      // A FontLoader family may only be load()ed once, so a bold face must be
+      // registered here in the same load as the regular face. Bold is bound to
+      // w500: AppFontWeights.normalize maps Android w500 -> w400 and w600+ ->
+      // w500, so "should be bold" requests resolve to this face; on other
+      // platforms w600/w700 requests fall back to the nearest registered w500.
+      loader.addFont(Future.value(bytes.buffer.asByteData()));
+      if (boldPath != null && boldPath.isNotEmpty) {
+        final boldFile = File(boldPath);
+        if (await boldFile.exists()) {
+          final boldBytes = await boldFile.readAsBytes();
+          if (_looksLikeFontBytes(boldBytes)) {
+            loader.addFont(
+              Future.value(boldBytes.buffer.asByteData()),
+              weight: FontWeight.w500,
+            );
+          }
+        }
+      }
       await loader.load();
       return alias;
     } catch (_) {

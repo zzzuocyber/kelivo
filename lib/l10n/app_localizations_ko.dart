@@ -5809,6 +5809,12 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get displaySettingsPageCodeFontTitle => '코드 글꼴';
+  String get displaySettingsPageAppFontBoldTitle => '굵은 글꼴';
+  String get displaySettingsPageFontBoldNeedRegular => '먼저 로컬 파일에서 일반 앱 글꼴을 설정하세요';
+  String get displaySettingsPageFontBoldNotSet => '설정 안 됨';
+  String get displaySettingsPageFontBoldClear => '굵은 글꼴 제거';
+  String get displaySettingsPageFontBoldApplied => '굵은 글꼴이 적용되었습니다';
+  String get displaySettingsPageFontBoldFailed => '굵은 글꼴을 불러오지 못했습니다';
 
   @override
   String get fontPickerChooseLocalFile => '로컬 파일 선택';

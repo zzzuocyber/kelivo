@@ -5164,5 +5164,11 @@
   "assistantEditAvatarNoCropChoiceSubtitle": "不裁剪，直接使用整张图片",
   "assistantEditAvatarCropPageTitle": "裁剪头像",
   "assistantEditAvatarCropConfirm": "完成",
-  "assistantEditAvatarCropHint": "圆形区域仅作预览，实际保存为 1:1 正方形图片"
+  "assistantEditAvatarCropHint": "圆形区域仅作预览，实际保存为 1:1 正方形图片",
+  "displaySettingsPageAppFontBoldTitle": "굵은 글꼴",
+  "displaySettingsPageFontBoldNeedRegular": "먼저 로컬 파일에서 일반 앱 글꼴을 설정하세요",
+  "displaySettingsPageFontBoldNotSet": "설정 안 됨",
+  "displaySettingsPageFontBoldClear": "굵은 글꼴 제거",
+  "displaySettingsPageFontBoldApplied": "굵은 글꼴이 적용되었습니다",
+  "displaySettingsPageFontBoldFailed": "굵은 글꼴을 불러오지 못했습니다"
 }
