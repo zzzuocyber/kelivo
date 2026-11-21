@@ -11,16 +11,26 @@ import '../../../core/models/chat_input_data.dart';
 import '../../../core/services/api/chat_api_helpers.dart' show mimeFromPath;
 import '../../../core/services/chat/chat_service.dart';
 import '../../../core/services/haptics.dart';
+import '../../../core/services/storage/storage_attachment_usage.dart'
+    show StorageImageKind;
+import '../../../core/services/storage/storage_usage_service.dart'
+    show StorageFileEntry, StorageUsageService;
 import '../../../icons/lucide_adapter.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
+import '../../../utils/app_directories.dart';
+import '../../../utils/sandbox_path_resolver.dart';
 
 enum _AssetKind { images, files }
 
-/// Picker over attachments that earlier messages already used, so they can be
-/// sent again without uploading a second copy. Files pasted as text
-/// (`pasted_*.txt`) and anything the AI wrote outside the chat upload folder are
-/// deliberately absent.
+/// Picker over chat attachments and locally available upload images/files.
+///
+/// Sources are merged:
+/// - asset index (every conversation, resolved through [SandboxPathResolver])
+/// - upload/images directory scan, which also surfaces files that were never
+///   sent in a message (shown as 未使用)
+///
+/// `pasted_*.txt`, avatars, backgrounds and 小手机 images stay out.
 Future<void> showComposerAssetPicker(
   BuildContext context, {
   required String conversationId,
@@ -44,12 +54,15 @@ Future<void> showComposerAssetPicker(
 
 class _AssetItem {
   _AssetItem({
-    required this.entry,
+    required this.path,
     required this.title,
     required this.subtitle,
+    this.previewPath,
   });
 
-  final ComposerAssetEntry entry;
+  /// Real filesystem path used for preview and for inserting into the composer.
+  final String path;
+  final String? previewPath;
   final String title;
   final String subtitle;
 }
@@ -90,39 +103,95 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
     if (_items.containsKey(kind) || _loading.contains(kind)) return;
     setState(() => _loading.add(kind));
     final chat = context.read<ChatService>();
-    List<_AssetItem> loaded = const [];
+    final isImages = kind == _AssetKind.images;
+    final byKey = <String, _AssetItem>{};
+
+    void put(_AssetItem item) {
+      byKey.putIfAbsent(SandboxPathResolver.dedupeKey(item.path), () => item);
+    }
+
     try {
+      // 1) Referenced assets from every conversation. Stored paths are
+      // canonical kelivo-file URIs, so resolve them before any File I/O.
       final entries = await chat.listComposerAssets(
-        kind: kind == _AssetKind.images ? 'image' : 'file',
+        kind: isImages ? 'image' : 'file',
         limit: _limit,
       );
-      final items = <_AssetItem>[];
-      for (final entry in entries) {
-        final name = p.basename(entry.path);
+      for (final ComposerAssetEntry entry in entries) {
+        final path = SandboxPathResolver.resolveForIo(entry.path);
+        if (path == null || path.isEmpty) continue;
+        final name = p.basename(path);
         if (name.isEmpty) continue;
-        if (kind == _AssetKind.files && name.startsWith('pasted_')) continue;
-        if (!await File(entry.path).exists()) continue;
+        if (!isImages && name.startsWith('pasted_')) continue;
+        if (!await File(path).exists()) continue;
         final conversationId = entry.conversationId;
         final title = conversationId == null
             ? ''
             : (chat.getConversation(conversationId)?.title.trim() ?? '');
-        items.add(
+        final thumb = entry.thumbnailPath == null
+            ? null
+            : SandboxPathResolver.resolveForIo(entry.thumbnailPath!);
+        put(
           _AssetItem(
-            entry: entry,
+            path: path,
+            previewPath: thumb,
             title: name,
             subtitle: title.isEmpty ? '对话已删除' : title,
           ),
         );
       }
-      loaded = items;
     } catch (_) {
-      loaded = const [];
+      // A partially broken asset index must not hide the filesystem sources.
     }
+
+    try {
+      // 2) Files that are physically present, including ones never sent.
+      final fsEntries = await StorageUsageService.listUploadEntries(
+        images: isImages,
+      );
+      final uploadDir = await AppDirectories.getUploadDirectory();
+      for (final StorageFileEntry item in fsEntries) {
+        final name = item.name;
+        if (name.isEmpty) continue;
+        if (!isImages) {
+          if (name.startsWith('pasted_')) continue;
+          // Only files the user uploaded are chat files; images/ and avatars/
+          // hold generated pictures and appearance assets.
+          if (!p.isWithin(uploadDir.path, item.path)) continue;
+        } else {
+          final imageKind = item.imageKind;
+          if (imageKind == StorageImageKind.avatar ||
+              imageKind == StorageImageKind.temporaryBackground ||
+              imageKind == StorageImageKind.phone) {
+            continue;
+          }
+        }
+        put(
+          _AssetItem(
+            path: item.path,
+            previewPath: isImages ? item.path : null,
+            title: name,
+            subtitle: _fileSubtitle(item),
+          ),
+        );
+      }
+    } catch (_) {
+      // Keep the asset-index results if the storage scan fails.
+    }
+
+    final loaded = byKey.values.toList(growable: false);
     if (!mounted) return;
     setState(() {
       _items[kind] = loaded;
       _loading.remove(kind);
     });
+  }
+
+  String _fileSubtitle(StorageFileEntry item) {
+    for (final title in item.conversations.values) {
+      if (title.trim().isNotEmpty) return title.trim();
+    }
+    return item.isInUse ? '对话已删除' : '未使用';
   }
 
   void _switchTab(_AssetKind kind) {
@@ -136,7 +205,7 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
     Haptics.light();
     final set = _selected[_tab]!;
     setState(() {
-      if (!set.remove(item.entry.path)) set.add(item.entry.path);
+      if (!set.remove(item.path)) set.add(item.path);
     });
   }
 
@@ -258,7 +327,7 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
                         itemBuilder: (context, index) {
                           final item = items[index];
                           final selected = _selected[_tab]!.contains(
-                            item.entry.path,
+                            item.path,
                           );
                           return _AssetRow(
                             item: item,
@@ -344,9 +413,7 @@ class _AssetRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final preview = isImage
-        ? (item.entry.thumbnailPath ?? item.entry.path)
-        : null;
+    final preview = isImage ? item.previewPath : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
