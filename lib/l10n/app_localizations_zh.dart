@@ -4943,6 +4943,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchServicesEditDialogRegionOptional => '地区（可选，默认 us-en）';
 
   @override
+  String get searchServicesFourGetUrlInvalid => '请输入 HTTP 或 HTTPS 实例地址。';
+
+  @override
+  String get searchServicesFourGetScraperOptional => '上游搜索引擎（可选）';
+
+  @override
+  String get searchServicesFourGetPassOptional => 'pass Cookie（可选）';
+
+  @override
+  String get searchServicesFourGetPassHelp =>
+      '如果实例要求验证码，请完成验证并粘贴 pass Cookie 的值。';
+
+  @override
   String get searchServiceEditorProviderTypeTitle => '搜索提供商';
 
   @override
@@ -6258,6 +6271,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchProviderSearXNGDescription => '注重隐私的元搜索引擎。需自建实例，无跟踪。';
 
   @override
+  String get searchProviderFourGetDescription =>
+      '通过已启用 API 的公开或自建 4get 实例搜索网页。';
+
+  @override
   String get searchProviderTavilyDescription =>
       '为大型语言模型（LLMs）优化的 AI 搜索 API，提供高质量、相关的搜索结果。';
 
@@ -6296,6 +6313,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchServiceNameSearXNG => 'SearXNG';
+
+  @override
+  String get searchServiceNameFourGet => '4get';
 
   @override
   String get searchServiceNameLinkUp => 'LinkUp';
@@ -21411,6 +21431,19 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get searchServicesEditDialogRegionOptional => '地区（可选，默认 us-en）';
 
   @override
+  String get searchServicesFourGetUrlInvalid => '请输入 HTTP 或 HTTPS 实例地址。';
+
+  @override
+  String get searchServicesFourGetScraperOptional => '上游搜索引擎（可选）';
+
+  @override
+  String get searchServicesFourGetPassOptional => 'pass Cookie（可选）';
+
+  @override
+  String get searchServicesFourGetPassHelp =>
+      '如果实例要求验证码，请完成验证并粘贴 pass Cookie 的值。';
+
+  @override
   String get searchServiceEditorProviderTypeTitle => '搜索提供商';
 
   @override
@@ -22726,6 +22759,10 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get searchProviderSearXNGDescription => '注重隐私的元搜索引擎。需自建实例，无跟踪。';
 
   @override
+  String get searchProviderFourGetDescription =>
+      '通过已启用 API 的公开或自建 4get 实例搜索网页。';
+
+  @override
   String get searchProviderTavilyDescription =>
       '为大型语言模型（LLMs）优化的 AI 搜索 API，提供高质量、相关的搜索结果。';
 
@@ -22764,6 +22801,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get searchServiceNameSearXNG => 'SearXNG';
+
+  @override
+  String get searchServiceNameFourGet => '4get';
 
   @override
   String get searchServiceNameLinkUp => 'LinkUp';
@@ -37883,6 +37923,19 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get searchServicesEditDialogRegionOptional => '地區（可選，預設 us-en）';
 
   @override
+  String get searchServicesFourGetUrlInvalid => '請輸入 HTTP 或 HTTPS 執行個體位址。';
+
+  @override
+  String get searchServicesFourGetScraperOptional => '上游搜尋引擎（選填）';
+
+  @override
+  String get searchServicesFourGetPassOptional => 'pass Cookie（選填）';
+
+  @override
+  String get searchServicesFourGetPassHelp =>
+      '如果執行個體要求驗證碼，請完成驗證並貼上 pass Cookie 的值。';
+
+  @override
   String get searchServiceEditorProviderTypeTitle => '搜尋提供商';
 
   @override
@@ -39198,6 +39251,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get searchProviderSearXNGDescription => '重視隱私的元搜尋引擎。需自建實例，無追蹤。';
 
   @override
+  String get searchProviderFourGetDescription =>
+      '透過已啟用 API 的公開或自架 4get 執行個體搜尋網頁。';
+
+  @override
   String get searchProviderTavilyDescription =>
       '為大型語言模型（LLM）優化的 AI 搜尋 API，提供高品質、相關的搜尋結果。';
 
@@ -39237,6 +39294,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get searchServiceNameSearXNG => 'SearXNG';
+
+  @override
+  String get searchServiceNameFourGet => '4get';
 
   @override
   String get searchServiceNameLinkUp => 'LinkUp';

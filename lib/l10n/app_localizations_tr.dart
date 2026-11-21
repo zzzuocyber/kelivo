@@ -5168,6 +5168,21 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bölge (isteğe bağlı, varsayılan: us-en)';
 
   @override
+  String get searchServicesFourGetUrlInvalid =>
+      'Bir HTTP veya HTTPS temel URL\'si girin.';
+
+  @override
+  String get searchServicesFourGetScraperOptional =>
+      'Üst kaynak motoru (isteğe bağlı)';
+
+  @override
+  String get searchServicesFourGetPassOptional => 'pass çerezi (isteğe bağlı)';
+
+  @override
+  String get searchServicesFourGetPassHelp =>
+      'Örnek bir CAPTCHA gerektiriyorsa, CAPTCHA\'yı tamamlayın ve pass çerezinin değerini yapıştırın.';
+
+  @override
   String get searchServiceEditorProviderTypeTitle => 'Arama sağlayıcısı';
 
   @override
@@ -6589,6 +6604,10 @@ class AppLocalizationsTr extends AppLocalizations {
       'Gizliliğe saygılı meta arama motoru. Kendi barındırdığınız bir örnek gerekir; izleme yok.';
 
   @override
+  String get searchProviderFourGetDescription =>
+      'API\'si etkinleştirilmiş genel veya kendi barındırdığınız bir 4get örneği üzerinden web araması yapın.';
+
+  @override
   String get searchProviderTavilyDescription =>
       'LLM\'ler için optimize edilmiş AI arama API\'si. Yüksek kaliteli, ilgili sonuçlar sağlar.';
 
@@ -6628,6 +6647,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get searchServiceNameSearXNG => 'SearXNG';
+
+  @override
+  String get searchServiceNameFourGet => '4get';
 
   @override
   String get searchServiceNameLinkUp => 'LinkUp';
