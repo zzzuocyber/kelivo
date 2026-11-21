@@ -1705,6 +1705,8 @@
   "displaySettingsPageSendShortcutEnter": "Enter",
   "displaySettingsPageSendShortcutCtrlEnter": "Ctrl/Cmd + Enter",
   "displaySettingsPageAutoSwitchTopicsTitle": "Otomatik olarak Konulara geç",
+  "desktopDisplaySettingsFullWidthChatTitle": "Tam genişlikte sohbet",
+  "desktopDisplaySettingsFullWidthChatSubtitle": "Mesajları ve giriş kutusunu sohbet alanını dolduracak şekilde genişlet.",
   "desktopDisplaySettingsTopicPositionTitle": "Konu konumu",
   "desktopDisplaySettingsTopicPositionLeft": "Sol",
   "desktopDisplaySettingsTopicPositionRight": "Sağ",

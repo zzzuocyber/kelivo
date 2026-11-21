@@ -5758,6 +5758,14 @@ class AppLocalizationsTr extends AppLocalizations {
       'Otomatik olarak Konulara geç';
 
   @override
+  String get desktopDisplaySettingsFullWidthChatTitle =>
+      'Tam genişlikte sohbet';
+
+  @override
+  String get desktopDisplaySettingsFullWidthChatSubtitle =>
+      'Mesajları ve giriş kutusunu sohbet alanını dolduracak şekilde genişlet.';
+
+  @override
   String get desktopDisplaySettingsTopicPositionTitle => 'Konu konumu';
 
   @override
