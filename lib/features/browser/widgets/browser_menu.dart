@@ -102,12 +102,13 @@ Future<T?> showBrowserMenu<T>(
   VoidCallback? onOpened,
   int? heldPointer,
   Offset? pressPosition,
+  bool noAnimation = false,
 }) {
   final themes = InheritedTheme.capture(
     from: context,
     to: Navigator.of(context, rootNavigator: true).context,
   );
-  final reduced = MediaQuery.disableAnimationsOf(context);
+  final reduced = MediaQuery.disableAnimationsOf(context) || noAnimation;
   final contact = !desktop && heldPointer != null
       ? _HeldMenuPointer(heldPointer, pressPosition ?? anchorRect.center)
       : null;
@@ -157,6 +158,7 @@ Future<T?> showBrowserMenu<T>(
             contact: contact,
             onReady: onReady,
             transitionStarted: transitionStarted,
+            noAnimation: noAnimation,
             sourceSize: () => currentAnchor(animation).size,
             alignBottom:
                 !_MenuPosition(
@@ -611,6 +613,7 @@ class _BrowserMenuPanel<T> extends StatefulWidget {
     this.contact,
     this.onReady,
     this.transitionStarted = true,
+    this.noAnimation = false,
   });
 
   final Animation<double> animation;
@@ -624,6 +627,7 @@ class _BrowserMenuPanel<T> extends StatefulWidget {
   final _HeldMenuPointer? contact;
   final VoidCallback? onReady;
   final bool transitionStarted;
+  final bool noAnimation;
 
   @override
   State<_BrowserMenuPanel<T>> createState() => _BrowserMenuPanelState<T>();
@@ -1069,7 +1073,8 @@ class _BrowserMenuPanelState<T> extends State<_BrowserMenuPanel<T>>
     final colors = Theme.of(context).colorScheme;
     final appTextStyle = Theme.of(context).textTheme.bodyMedium!;
     final l = AppLocalizations.of(context)!;
-    final reduced = MediaQuery.disableAnimationsOf(context);
+    final reduced =
+        MediaQuery.disableAnimationsOf(context) || widget.noAnimation;
     Widget row({
       required Object id,
       required String label,
@@ -1317,7 +1322,8 @@ class _BrowserMenuPanelState<T> extends State<_BrowserMenuPanel<T>>
   );
 
   Widget _primarySurface(BuildContext context) {
-    final reduced = MediaQuery.disableAnimationsOf(context);
+    final reduced =
+        MediaQuery.disableAnimationsOf(context) || widget.noAnimation;
     final colors = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {

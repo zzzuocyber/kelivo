@@ -45,6 +45,7 @@ import 'browser_desktop_layout.dart';
 import 'browser_mobile_layout.dart';
 import 'browser_management_page.dart';
 import 'package:Kelivo/theme/app_font_weights.dart';
+import 'package:Kelivo/theme/theme_factory.dart';
 
 enum _BrowserMenu {
   newTab,
@@ -756,12 +757,21 @@ class BrowserPageViewState extends State<BrowserPage>
           // Edge 风格：浏览器外观锁纯色浅色，不再跟随「表面样式」设置。
           style: BrowserSurfaceStyle.solid,
           child: Theme(
-            data: Theme.of(context).copyWith(
-              splashFactory: NoSplash.splashFactory,
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              hoverColor: Colors.transparent,
-            ),
+            // 手机端浏览器锁浅色（Edge 那种浅灰）：起始页、标签列表、菜单、
+            // 书签、历史记录都读同一个 colorScheme/appColors，一处锁浅就全变。
+            // 桌面端保持原样（第八节约定：桌面不管），仍跟随 App 主题。
+            data: (_desktop
+                    ? Theme.of(context)
+                    : buildLightTheme(null).copyWith(
+                        // 沿用当前 App 的字体，避免字体在浏览器里突变。
+                        textTheme: Theme.of(context).textTheme,
+                      ))
+                .copyWith(
+                  splashFactory: NoSplash.splashFactory,
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                ),
             child: BrowserGlassBackdrop(
               native: widget.sidePanel == null && (_desktop || !_blank),
               child: BrowserMenuHost(child: Builder(builder: _buildBrowser)),
@@ -2449,7 +2459,8 @@ class BrowserPageViewState extends State<BrowserPage>
       BrowserTabsRoute(
         transition: motion,
         onReturnStarted: () => _holdTabReturnCover(motion),
-        reduceMotion: MediaQuery.disableAnimationsOf(context),
+        // 用户不要标签页放大/缩小动画：手机端强制关，直接切换。
+        reduceMotion: true,
         builder: (panelContext) => themes.wrap(
           BrowserGlassBackdrop(
             native: false,
@@ -2572,6 +2583,8 @@ class BrowserPageViewState extends State<BrowserPage>
       },
       heldPointer: heldPointer,
       pressPosition: pressPosition,
+      // 用户不要 ☰ 菜单的弹出动画：手机端强制无动画，桌面端保持原样。
+      noAnimation: !_desktop,
       items: [
         BrowserMenuEntry(
           value: _BrowserMenu.newTab,
