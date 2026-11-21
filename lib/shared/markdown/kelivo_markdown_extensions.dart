@@ -19,6 +19,7 @@ import 'markdown_image_sources.dart';
 import 'markdown_actions.dart';
 import 'link_image_handlers.dart';
 import 'math_adapter.dart';
+import 'scroll_directive_block.dart';
 
 // Stable registration identity preserves the parser and completed prefix trees.
 final kelivoMarkdownExtensions = _extensions();
@@ -56,6 +57,9 @@ MarkstreamExtensions _extensions({LiteralSpanBuilder? literalSpanBuilder}) =>
         'raw_html': _diagram,
         'plantuml': _plantUml,
         'layers': _layers,
+      },
+      directiveBuilders: {
+        'scroll': buildScrollDirectiveBlock,
       },
       actionButtonBuilder: markdownActionButton,
       codeExtraActions: markdownCodeActions,

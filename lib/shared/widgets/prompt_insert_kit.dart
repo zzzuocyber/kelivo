@@ -61,6 +61,13 @@ const List<_MdSnippet> _markdownSnippets = <_MdSnippet>[
     placeholder: '标题',
     block: true,
   ),
+  _MdSnippet(
+    '滚动容器',
+    _SnippetKind.plain,
+    template: ':::scroll[标题]\n内容\n:::',
+    placeholder: '标题',
+    block: true,
+  ),
   _MdSnippet('字体颜色', _SnippetKind.fontColor),
   _MdSnippet('文字高亮', _SnippetKind.plain, template: '==文字==', placeholder: '文字'),
   _MdSnippet('文字背景', _SnippetKind.backgroundColor),
