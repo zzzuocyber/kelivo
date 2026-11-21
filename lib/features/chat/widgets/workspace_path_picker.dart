@@ -1,14 +1,20 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/models/workspace.dart';
+import '../../../core/services/path_picker_store.dart';
+import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/custom_bottom_sheet.dart';
+import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../workspace/widgets/files/file_browser.dart';
-import 'local_path_picker.dart' show LocalPathKind, isLocalImagePath;
+import 'local_path_picker.dart'
+    show LocalPathKind, PathPickerDisposeGuard, isLocalImagePath;
+import 'path_favorites_sheet.dart' show showPathFavoritesSheet;
 
 /// Picks a path inside a bound workspace and returns it in the model's
 /// vocabulary: a path relative to the workspace root, e.g. `素材库/图.png`.
@@ -61,42 +67,83 @@ Future<String?> pickWorkspacePath(
     LocalPathKind.file => '选择工作区文件',
     LocalPathKind.folder => '选择工作区文件夹',
   };
+  final scope = PathPickerStore.workspaceScope(workspace.id);
+  final store = PathPickerStore.instance;
+  final lastRel = await store.lastDir(scope);
+  final currentDir = ValueNotifier<String>(lastRel ?? '');
+  final browserKey = GlobalKey<FileBrowserState>();
+
   return showCustomBottomSheet<String>(
     context: context,
     title: title,
     partialHeightFactor: 0.9,
     expandedHeightFactor: 0.9,
     closeSemanticLabel: l10n.workspacePreviewBack,
+    headerActions: [
+      Builder(
+        builder: (ctx) => SizedBox(
+          width: 24,
+          height: 24,
+          child: Tooltip(
+            message: '收藏夹',
+            child: IosIconButton(
+              icon: Lucide.Bookmark,
+              size: 18,
+              padding: EdgeInsets.zero,
+              color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.62),
+              semanticLabel: '收藏夹',
+              onTap: () => showPathFavoritesSheet(
+                context: ctx,
+                scope: scope,
+                root: root,
+                rootLabel: workspace.name,
+                currentDir: currentDir,
+                browserKey: browserKey,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
     builder: (sheetCtx, scrollController) {
       final pickingFolder = kind == LocalPathKind.folder;
-      return FileBrowser(
-        root: root,
-        rootLabel: workspace.name,
-        // Return the model-visible path (relative to the workspace root), not
-        // the host path, so callers can build /workspace and kelivo links.
-        modelPathOf: (host) => _relativeToWorkspace(host, hostPath),
-        readOnly: true,
-        scrollController: scrollController,
-        pickDirectoryMode: pickingFolder,
-        onPickDirectory: pickingFolder
-            ? (relative) => Navigator.of(sheetCtx).pop(relative)
-            : null,
-        onOpenFile: pickingFolder
-            ? null
-            : (file) async {
-                if (kind == LocalPathKind.image &&
-                    !isLocalImagePath(file.path)) {
-                  showAppSnackBar(
+      return PathPickerDisposeGuard(
+        onDispose: currentDir.dispose,
+        child: FileBrowser(
+          key: browserKey,
+          root: root,
+          rootLabel: workspace.name,
+          // Return the model-visible path (relative to the workspace root), not
+          // the host path, so callers can build /workspace and kelivo links.
+          modelPathOf: (host) => _relativeToWorkspace(host, hostPath),
+          readOnly: true,
+          scrollController: scrollController,
+          pickDirectoryMode: pickingFolder,
+          initialRelativePath: lastRel,
+          onDirectoryChanged: (relative) {
+            currentDir.value = relative;
+            unawaited(store.setLastDir(scope, relative));
+          },
+          onPickDirectory: pickingFolder
+              ? (relative) => Navigator.of(sheetCtx).pop(relative)
+              : null,
+          onOpenFile: pickingFolder
+              ? null
+              : (file) async {
+                  if (kind == LocalPathKind.image &&
+                      !isLocalImagePath(file.path)) {
+                    showAppSnackBar(
+                      sheetCtx,
+                      message: '这不是图片文件，请重新选择',
+                      type: NotificationType.warning,
+                    );
+                    return;
+                  }
+                  Navigator.of(
                     sheetCtx,
-                    message: '这不是图片文件，请重新选择',
-                    type: NotificationType.warning,
-                  );
-                  return;
-                }
-                Navigator.of(
-                  sheetCtx,
-                ).pop(_relativeToWorkspace(file.path, hostPath));
-              },
+                  ).pop(_relativeToWorkspace(file.path, hostPath));
+                },
+        ),
       );
     },
   );

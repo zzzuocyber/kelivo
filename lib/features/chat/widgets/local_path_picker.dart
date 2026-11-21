@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../core/services/path_picker_store.dart';
+import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/custom_bottom_sheet.dart';
+import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../workspace/widgets/files/file_browser.dart';
+import 'path_favorites_sheet.dart' show showPathFavoritesSheet;
 
 /// Root shown by the local path pickers. Android exposes shared storage here;
 /// the app holds MANAGE_EXTERNAL_STORAGE, so dart:io can walk it directly.
@@ -74,41 +79,106 @@ Future<String?> pickLocalPath(
     LocalPathKind.file => '选择文件',
     LocalPathKind.folder => '选择文件夹',
   };
+  const rootLabel = '手机存储';
+  final scope = PathPickerStore.localScope(kLocalPathBrowseRoot);
+  final store = PathPickerStore.instance;
+  // 上次停留的目录，作为这次打开的起点；失效目录 FileBrowser 会自己忽略。
+  final lastRel = await store.lastDir(scope);
+  final currentDir = ValueNotifier<String>(lastRel ?? '');
+  final browserKey = GlobalKey<FileBrowserState>();
+
   return showCustomBottomSheet<String>(
     context: context,
     title: title,
     partialHeightFactor: 0.9,
     expandedHeightFactor: 0.9,
     closeSemanticLabel: l10n.workspacePreviewBack,
+    headerActions: [
+      Builder(
+        builder: (ctx) => SizedBox(
+          width: 24,
+          height: 24,
+          child: Tooltip(
+            message: '收藏夹',
+            child: IosIconButton(
+              icon: Lucide.Bookmark,
+              size: 18,
+              padding: EdgeInsets.zero,
+              color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.62),
+              semanticLabel: '收藏夹',
+              onTap: () => showPathFavoritesSheet(
+                context: ctx,
+                scope: scope,
+                root: root,
+                rootLabel: rootLabel,
+                currentDir: currentDir,
+                browserKey: browserKey,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
     builder: (sheetCtx, scrollController) {
       final pickingFolder = kind == LocalPathKind.folder;
-      return FileBrowser(
-        root: root,
-        rootLabel: '手机存储',
-        modelPathOf: (host) => host,
-        readOnly: true,
-        scrollController: scrollController,
-        pickDirectoryMode: pickingFolder,
-        onPickDirectory: pickingFolder
-            ? (relative) => Navigator.of(
-                sheetCtx,
-              ).pop(p.posix.join(kLocalPathBrowseRoot, relative))
-            : null,
-        onOpenFile: pickingFolder
-            ? null
-            : (file) async {
-                if (kind == LocalPathKind.image &&
-                    !isLocalImagePath(file.path)) {
-                  showAppSnackBar(
-                    sheetCtx,
-                    message: '这不是图片文件，请重新选择',
-                    type: NotificationType.warning,
-                  );
-                  return;
-                }
-                Navigator.of(sheetCtx).pop(file.path);
-              },
+      return PathPickerDisposeGuard(
+        onDispose: currentDir.dispose,
+        child: FileBrowser(
+          key: browserKey,
+          root: root,
+          rootLabel: rootLabel,
+          modelPathOf: (host) => host,
+          readOnly: true,
+          scrollController: scrollController,
+          pickDirectoryMode: pickingFolder,
+          initialRelativePath: lastRel,
+          onDirectoryChanged: (relative) {
+            currentDir.value = relative;
+            unawaited(store.setLastDir(scope, relative));
+          },
+          onPickDirectory: pickingFolder
+              ? (relative) => Navigator.of(
+                  sheetCtx,
+                ).pop(p.posix.join(kLocalPathBrowseRoot, relative))
+              : null,
+          onOpenFile: pickingFolder
+              ? null
+              : (file) async {
+                  if (kind == LocalPathKind.image &&
+                      !isLocalImagePath(file.path)) {
+                    showAppSnackBar(
+                      sheetCtx,
+                      message: '这不是图片文件，请重新选择',
+                      type: NotificationType.warning,
+                    );
+                    return;
+                  }
+                  Navigator.of(sheetCtx).pop(file.path);
+                },
+        ),
       );
     },
   );
+}
+
+/// sheet 关闭时释放函数作用域里创建的 notifier，避免每次选择都泄漏一个。
+class PathPickerDisposeGuard extends StatefulWidget {
+  const PathPickerDisposeGuard({required this.onDispose, required this.child});
+
+  final VoidCallback onDispose;
+  final Widget child;
+
+  @override
+  State<PathPickerDisposeGuard> createState() => PathPickerDisposeGuardState();
+}
+
+class PathPickerDisposeGuardState extends State<PathPickerDisposeGuard> {
+  @override
+  void dispose() {
+    widget.onDispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

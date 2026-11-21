@@ -18,6 +18,7 @@ Future<T?> showCustomBottomSheet<T>({
   required CustomBottomSheetBuilder builder,
   int? count,
   String? closeSemanticLabel,
+  List<Widget>? headerActions,
   double partialHeightFactor = 0.60,
   double expandedHeightFactor = 0.90,
 }) {
@@ -32,6 +33,7 @@ Future<T?> showCustomBottomSheet<T>({
         title: title,
         count: count,
         closeSemanticLabel: closeSemanticLabel,
+        headerActions: headerActions,
         partialHeightFactor: partialHeightFactor,
         expandedHeightFactor: expandedHeightFactor,
         onDismiss: () => _closeSheetRoute(dialogContext),
@@ -59,6 +61,7 @@ class CustomBottomSheet extends StatefulWidget {
     required this.onDismiss,
     this.count,
     this.closeSemanticLabel,
+    this.headerActions,
     this.child,
     this.builder,
     this.partialHeightFactor = 0.60,
@@ -75,6 +78,9 @@ class CustomBottomSheet extends StatefulWidget {
   final String title;
   final int? count;
   final String? closeSemanticLabel;
+
+  /// 标题行里、关闭按钮左边的一排自定义操作按钮。
+  final List<Widget>? headerActions;
   final VoidCallback onDismiss;
   final Widget? child;
   final CustomBottomSheetBuilder? builder;
@@ -271,6 +277,7 @@ class _CustomBottomSheetState extends State<CustomBottomSheet>
                 title: widget.title,
                 count: widget.count,
                 closeSemanticLabel: widget.closeSemanticLabel,
+                headerActions: widget.headerActions,
                 onClose: _dismiss,
               ),
               Expanded(
@@ -593,11 +600,13 @@ class _SheetHeader extends StatelessWidget {
     required this.onClose,
     this.count,
     this.closeSemanticLabel,
+    this.headerActions,
   });
 
   final String title;
   final int? count;
   final String? closeSemanticLabel;
+  final List<Widget>? headerActions;
   final VoidCallback onClose;
 
   @override
@@ -639,6 +648,10 @@ class _SheetHeader extends StatelessWidget {
               ],
             ),
           ),
+          if (headerActions != null) ...[
+            ...headerActions!,
+            const SizedBox(width: 8),
+          ],
           SizedBox(
             key: CustomBottomSheet.closeButtonKey,
             width: 24,

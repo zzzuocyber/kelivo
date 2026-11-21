@@ -119,6 +119,7 @@ class FileBrowser extends StatefulWidget {
     this.onOpenFile,
     this.scrollController,
     this.afterDirectoryRead,
+    this.onDirectoryChanged,
   });
 
   final Directory root;
@@ -145,6 +146,10 @@ class FileBrowser extends StatefulWidget {
   /// Allows tests to pause a directory read before its results are published.
   @visibleForTesting
   final Future<void> Function(Directory directory)? afterDirectoryRead;
+
+  /// 当前目录（相对 root 的 posix 路径，根目录为空串）变化时回调。
+  /// 路径选择器用它记住上次目录、刷新收藏按钮状态。
+  final ValueChanged<String>? onDirectoryChanged;
 
   static const Key emptyKey = ValueKey<String>('file-browser-empty');
   static const Key errorKey = ValueKey<String>('file-browser-error');
@@ -380,6 +385,7 @@ class FileBrowserState extends State<FileBrowser> {
         _error = null;
         _loading = false;
       });
+      widget.onDirectoryChanged?.call(currentRelPath);
     } catch (e) {
       if (!isCurrent()) return;
       setState(() {
@@ -388,6 +394,22 @@ class FileBrowserState extends State<FileBrowser> {
         _loading = false;
       });
     }
+  }
+
+  /// 跳到相对 root 的某个目录（收藏夹点击跳转用）。
+  /// 路径越界或目录不存在就安静忽略，不让坏收藏把界面搞崩。
+  void jumpToRelative(String relative) {
+    if (!mounted) return;
+    final resolved = FileBrowserOps.joinInsideRoot(_rootPath, relative);
+    if (resolved == null || !Directory(resolved).existsSync()) return;
+    final rel = FileBrowserOps.posixRelative(_rootPath, resolved);
+    if (rel == null) return;
+    setState(() {
+      _segments
+        ..clear()
+        ..addAll(rel.split('/').where((part) => part.isNotEmpty));
+    });
+    unawaited(_reload());
   }
 
   void _jumpTo(int depth) {
