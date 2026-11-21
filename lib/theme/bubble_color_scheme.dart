@@ -11,24 +11,28 @@ class BubbleColorScheme {
     required this.name,
     this.userOverrides = const ChatBubbleStyleOverrides(),
     this.assistantOverrides = const ChatBubbleStyleOverrides(),
+    this.thinkingToolOverrides = const ChatBubbleStyleOverrides(),
   });
 
   final String id;
   final String name;
   final ChatBubbleStyleOverrides userOverrides;
   final ChatBubbleStyleOverrides assistantOverrides;
+  final ChatBubbleStyleOverrides thinkingToolOverrides;
 
   BubbleColorScheme copyWith({
     String? id,
     String? name,
     ChatBubbleStyleOverrides? userOverrides,
     ChatBubbleStyleOverrides? assistantOverrides,
+    ChatBubbleStyleOverrides? thinkingToolOverrides,
   }) {
     return BubbleColorScheme(
       id: id ?? this.id,
       name: name ?? this.name,
       userOverrides: userOverrides ?? this.userOverrides,
       assistantOverrides: assistantOverrides ?? this.assistantOverrides,
+      thinkingToolOverrides: thinkingToolOverrides ?? this.thinkingToolOverrides,
     );
   }
 
@@ -37,6 +41,7 @@ class BubbleColorScheme {
     'name': name,
     'user': userOverrides.toJson(),
     'assistant': assistantOverrides.toJson(),
+    'thinkingTool': thinkingToolOverrides.toJson(),
   };
 
   factory BubbleColorScheme.fromJson(Map<String, dynamic> json) {
@@ -45,6 +50,7 @@ class BubbleColorScheme {
       name: (json['name'] ?? '').toString(),
       userOverrides: _readOverrides(json['user']),
       assistantOverrides: _readOverrides(json['assistant']),
+      thinkingToolOverrides: _readOverrides(json['thinkingTool']),
     );
   }
 

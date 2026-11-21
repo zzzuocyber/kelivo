@@ -17754,4 +17754,14 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get assistantEditBubbleSchemeNone => '未选择（跟随全局）';
 
+
+  @override
+  String get messageStyleSetupCustomBubble => '设置自定义气泡';
+
+  @override
+  String get bubbleSchemeExitDebug => '退出编辑';
+
+  @override
+  String get bubbleSchemeDebugHint => '正在编辑方案，改动只影响该方案，不影响全局气泡。';
+
 }

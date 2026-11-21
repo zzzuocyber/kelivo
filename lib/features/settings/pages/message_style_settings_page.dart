@@ -120,8 +120,95 @@ class _MessageStyleSettingsBodyState extends State<MessageStyleSettingsBody> {
   ThemeData? _cachedDarkTheme;
   String? _previewThemeKey;
 
+  // Debug mode: editing a saved scheme's colors without touching the global bubble.
+  // null = editing the global bubble; non-null = editing that scheme's draft.
+  String? _editingSchemeId;
+  ChatBubbleStyleOverrides _draftUser = const ChatBubbleStyleOverrides();
+  ChatBubbleStyleOverrides _draftAssistant = const ChatBubbleStyleOverrides();
+  ChatBubbleStyleOverrides _draftThinkingTool =
+      const ChatBubbleStyleOverrides();
+  bool get _isDebuggingScheme => _editingSchemeId != null;
+
   bool get _isEditingDark =>
       _editingDark ?? Theme.of(context).brightness == Brightness.dark;
+
+  /// Load a scheme's values into the bubble-detail panel for editing.
+  void loadSchemeForEditing(BubbleColorScheme scheme) {
+    setState(() {
+      _editingSchemeId = scheme.id;
+      _draftUser = scheme.userOverrides;
+      _draftAssistant = scheme.assistantOverrides;
+      _draftThinkingTool = scheme.thinkingToolOverrides;
+      _editingDark = false;
+    });
+  }
+
+  /// Start a brand-new scheme draft seeded with the current global values.
+  void startNewSchemeDraft(SettingsProvider settings) {
+    setState(() {
+      _editingSchemeId = '__new__';
+      _draftUser = settings.userChatBubbleStyleOverrides;
+      _draftAssistant = settings.assistantChatBubbleStyleOverrides;
+      _draftThinkingTool = settings.customizeThinkingToolCards
+          ? settings.chatBubbleStyleOverridesFor(
+              ChatBubbleStyleTarget.thinkingToolCard,
+            )
+          : settings.assistantChatBubbleStyleOverrides;
+      _editingDark = false;
+    });
+  }
+
+  void exitSchemeEditing() {
+    setState(() => _editingSchemeId = null);
+  }
+
+  Future<void> saveSchemeDraft(SettingsProvider settings) async {
+    final id = _editingSchemeId;
+    if (id == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    String name;
+    if (id == '__new__') {
+      final nameCtrl = TextEditingController();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.bubbleSchemeNew),
+          content: TextField(
+            controller: nameCtrl,
+            autofocus: true,
+            decoration: InputDecoration(labelText: l10n.bubbleSchemeNameLabel),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(l10n.bubbleSchemeCancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(l10n.bubbleSchemeSave),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      name = nameCtrl.text.trim();
+    } else {
+      name = settings.bubbleColorScheme(id)?.name ?? '';
+    }
+    final scheme = BubbleColorScheme(
+      id: id == '__new__' ? '' : id,
+      name: name,
+      userOverrides: _draftUser,
+      assistantOverrides: _draftAssistant,
+      thinkingToolOverrides: _draftThinkingTool,
+    );
+    if (id == '__new__') {
+      await settings.addBubbleColorScheme(scheme);
+    } else {
+      await settings.updateBubbleColorScheme(scheme);
+    }
+    if (mounted) setState(() => _editingSchemeId = null);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,9 +223,30 @@ class _MessageStyleSettingsBodyState extends State<MessageStyleSettingsBody> {
         !customCards && _editingTarget == ChatBubbleStyleTarget.thinkingToolCard
         ? ChatBubbleStyleTarget.assistant
         : _editingTarget;
-    final overrides = settings.chatBubbleStyleOverridesFor(editingTarget);
-    Future<void> updateOverrides(ChatBubbleStyleOverrides value) =>
-        settings.setChatBubbleStyleOverridesFor(editingTarget, value);
+    final bool debugScheme = _isDebuggingScheme;
+    final ChatBubbleStyleOverrides overrides = debugScheme
+        ? switch (editingTarget) {
+            ChatBubbleStyleTarget.user => _draftUser,
+            ChatBubbleStyleTarget.thinkingToolCard => _draftThinkingTool,
+            _ => _draftAssistant,
+          }
+        : settings.chatBubbleStyleOverridesFor(editingTarget);
+    Future<void> updateOverrides(ChatBubbleStyleOverrides value) async {
+      if (debugScheme) {
+        setState(() {
+          switch (editingTarget) {
+            case ChatBubbleStyleTarget.user:
+              _draftUser = value;
+            case ChatBubbleStyleTarget.thinkingToolCard:
+              _draftThinkingTool = value;
+            default:
+              _draftAssistant = value;
+          }
+        });
+        return;
+      }
+      await settings.setChatBubbleStyleOverridesFor(editingTarget, value);
+    }
     final editingDark = _isEditingDark;
     final isDefault = style == ChatMessageBackgroundStyle.defaultStyle;
     final previewThemes = _previewThemes(context);
@@ -238,13 +346,19 @@ class _MessageStyleSettingsBodyState extends State<MessageStyleSettingsBody> {
       editingDark: editingDark,
       editingTarget: editingTarget,
       style: style,
-      userOverrides: settings.userChatBubbleStyleOverrides,
-      assistantOverrides: settings.assistantChatBubbleStyleOverrides,
-      thinkingToolOverrides: customCards
-          ? settings.chatBubbleStyleOverridesFor(
-              ChatBubbleStyleTarget.thinkingToolCard,
-            )
-          : null,
+      userOverrides: debugScheme
+          ? _draftUser
+          : settings.userChatBubbleStyleOverrides,
+      assistantOverrides: debugScheme
+          ? _draftAssistant
+          : settings.assistantChatBubbleStyleOverrides,
+      thinkingToolOverrides: debugScheme
+          ? _draftThinkingTool
+          : (customCards
+              ? settings.chatBubbleStyleOverridesFor(
+                  ChatBubbleStyleTarget.thinkingToolCard,
+                )
+              : null),
     );
 
     final params = SectionCard(
@@ -464,13 +578,38 @@ class _MessageStyleSettingsBodyState extends State<MessageStyleSettingsBody> {
             else ...[
               const SizedBox(height: 12),
               CollapsibleSectionCard(
-                title: l10n.messageStyleBubbleParamsTitle,
+                title: debugScheme
+                    ? l10n.bubbleSchemeDebugHint
+                    : l10n.messageStyleBubbleParamsTitle,
                 initiallyExpanded: true,
+                trailing: debugScheme
+                    ? [
+                        IosIconButton(
+                          icon: Lucide.Check,
+                          tooltip: l10n.bubbleSchemeSave,
+                          color: cs.primary,
+                          onTap: () => saveSchemeDraft(settings),
+                        ),
+                        IosIconButton(
+                          icon: Lucide.X,
+                          tooltip: l10n.bubbleSchemeExitDebug,
+                          onTap: exitSchemeEditing,
+                        ),
+                      ]
+                    : [
+                        IosIconButton(
+                          icon: Lucide.Plus,
+                          tooltip: l10n.messageStyleSetupCustomBubble,
+                          onTap: () => startNewSchemeDraft(settings),
+                        ),
+                      ],
                 children: params.children ?? const <Widget>[],
               ),
             ],
             const SizedBox(height: 12),
-            const BubbleSchemeSection(),
+            BubbleSchemeSection(
+              onEditScheme: (scheme) => loadSchemeForEditing(scheme),
+            ),
           ],
         ),
       ),

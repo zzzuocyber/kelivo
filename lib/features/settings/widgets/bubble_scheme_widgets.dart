@@ -20,11 +20,13 @@ class CollapsibleSectionCard extends StatefulWidget {
     super.key,
     required this.title,
     this.initiallyExpanded = false,
+    this.trailing,
     required this.children,
   });
 
   final String title;
   final bool initiallyExpanded;
+  final List<Widget>? trailing;
   final List<Widget> children;
 
   @override
@@ -41,35 +43,42 @@ class _CollapsibleSectionCardState extends State<CollapsibleSectionCard> {
     return SectionCard(
       padding: EdgeInsets.zero,
       children: [
-        IosCardPress(
-          baseColor: Colors.transparent,
-          borderRadius: BorderRadius.zero,
-          pressedBlendStrength: 0,
-          pressedScale: 1,
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                Icon(Lucide.SlidersHorizontal, size: 18, color: cs.onSurface),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: AppFontWeights.semibold,
-                      color: cs.onSurface.withValues(alpha: 0.9),
-                    ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: IosCardPress(
+                  baseColor: Colors.transparent,
+                  borderRadius: BorderRadius.zero,
+                  pressedBlendStrength: 0,
+                  pressedScale: 1,
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Row(
+                    children: [
+                      Icon(Lucide.SlidersHorizontal, size: 18, color: cs.onSurface),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: AppFontWeights.semibold,
+                            color: cs.onSurface.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        _expanded ? Lucide.ChevronUp : Lucide.ChevronDown,
+                        size: 18,
+                        color: cs.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ],
                   ),
                 ),
-                Icon(
-                  _expanded ? Lucide.ChevronUp : Lucide.ChevronDown,
-                  size: 18,
-                  color: cs.onSurface.withValues(alpha: 0.6),
-                ),
-              ],
-            ),
+              ),
+              if (widget.trailing != null) ...widget.trailing!,
+            ],
           ),
         ),
         if (_expanded) ...widget.children,
@@ -80,7 +89,11 @@ class _CollapsibleSectionCardState extends State<CollapsibleSectionCard> {
 
 /// Saved bubble color schemes library, styled after the custom themes section.
 class BubbleSchemeSection extends StatelessWidget {
-  const BubbleSchemeSection({super.key});
+  const BubbleSchemeSection({super.key, this.onEditScheme});
+
+  /// Called when the pencil action is tapped: load the scheme's values into
+  /// the bubble-detail panel for editing.
+  final void Function(BubbleColorScheme scheme)? onEditScheme;
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +217,7 @@ class BubbleSchemeSection extends StatelessWidget {
       borderRadius: BorderRadius.zero,
       pressedBlendStrength: 0,
       pressedScale: 1,
-      onTap: () => showBubbleSchemeEditor(context, initial: scheme),
+      onTap: () => showBubbleSchemeRenameDialog(context, scheme),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
@@ -234,7 +247,7 @@ class BubbleSchemeSection extends StatelessWidget {
               context,
               icon: Lucide.Pencil,
               tooltip: l10n.bubbleSchemeEditAction,
-              onTap: () => showBubbleSchemeEditor(context, initial: scheme),
+              onTap: () => onEditScheme?.call(scheme),
             ),
             _rowAction(
               context,
@@ -323,168 +336,81 @@ class BubbleSchemeSection extends StatelessWidget {
   }
 }
 
-/// Editor for a bubble color scheme (create / rename / edit).
+/// Rename dialog for an existing scheme. Colors are edited in the bubble-detail
+/// panel instead (via the pencil action), never here.
+Future<void> showBubbleSchemeRenameDialog(
+  BuildContext context,
+  BubbleColorScheme scheme,
+) async {
+  final l10n = AppLocalizations.of(context)!;
+  final settings = context.read<SettingsProvider>();
+  final nameCtrl = TextEditingController(text: scheme.name);
+
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(l10n.bubbleSchemeRenameAction),
+      content: TextField(
+        controller: nameCtrl,
+        autofocus: true,
+        decoration: InputDecoration(labelText: l10n.bubbleSchemeNameLabel),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(l10n.bubbleSchemeCancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(l10n.bubbleSchemeSave),
+        ),
+      ],
+    ),
+  );
+  if (saved != true) return;
+  await settings.updateBubbleColorScheme(
+    scheme.copyWith(name: nameCtrl.text.trim()),
+  );
+}
+
+/// Create an empty scheme with just a name. Colors are adjusted afterwards in
+/// the bubble-detail panel.
 Future<void> showBubbleSchemeEditor(
   BuildContext context, {
   BubbleColorScheme? initial,
 }) async {
   final l10n = AppLocalizations.of(context)!;
   final settings = context.read<SettingsProvider>();
-  final isNew = initial == null;
   final nameCtrl = TextEditingController(text: initial?.name ?? '');
-  ChatBubbleStyleOverrides user = initial?.userOverrides ?? const ChatBubbleStyleOverrides();
-  ChatBubbleStyleOverrides assistant = initial?.assistantOverrides ?? const ChatBubbleStyleOverrides();
-
   final saved = await showDialog<bool>(
     context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => AlertDialog(
-        title: Text(
-          isNew
-              ? l10n.bubbleSchemeNew
-              : l10n.bubbleSchemeEditAction,
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.bubbleSchemeNameLabel,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _schemeColorRow(
-                ctx,
-                label: l10n.bubbleSchemeUserColor,
-                overrides: user,
-                onChanged: (v) => setState(() => user = v),
-              ),
-              const SizedBox(height: 8),
-              _schemeColorRow(
-                ctx,
-                label: l10n.bubbleSchemeAssistantColor,
-                overrides: assistant,
-                onChanged: (v) => setState(() => assistant = v),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.bubbleSchemeCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.bubbleSchemeSave),
-          ),
-        ],
+    builder: (ctx) => AlertDialog(
+      title: Text(l10n.bubbleSchemeNew),
+      content: TextField(
+        controller: nameCtrl,
+        autofocus: true,
+        decoration: InputDecoration(labelText: l10n.bubbleSchemeNameLabel),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(l10n.bubbleSchemeCancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(l10n.bubbleSchemeSave),
+        ),
+      ],
     ),
   );
-
   if (saved != true) return;
-  final name = nameCtrl.text.trim();
-  final scheme = BubbleColorScheme(
-    id: initial?.id ?? '',
-    name: name,
-    userOverrides: user,
-    assistantOverrides: assistant,
-  );
-  if (isNew) {
-    await settings.addBubbleColorScheme(scheme);
-  } else {
-    await settings.updateBubbleColorScheme(scheme);
-  }
-}
-
-Widget _schemeColorRow(
-  BuildContext context, {
-  required String label,
-  required ChatBubbleStyleOverrides overrides,
-  required ValueChanged<ChatBubbleStyleOverrides> onChanged,
-}) {
-  final cs = Theme.of(context).colorScheme;
-  Future<void> pick(bool dark, bool background) async {
-    final currentArgb = background
-        ? (dark ? overrides.backgroundArgbDark : overrides.backgroundArgbLight)
-        : (dark ? overrides.textArgbDark : overrides.textArgbLight);
-    final initial = currentArgb == null ? cs.surface : Color(currentArgb);
-    final picked = await showAppColorPicker(
-      context,
-      title: label,
-      initial: initial,
-    );
-    if (picked == null) return;
-    final argb = picked.toARGB32();
-    if (background) {
-      onChanged(
-        dark
-            ? overrides.copyWith(backgroundArgbDark: () => argb)
-            : overrides.copyWith(backgroundArgbLight: () => argb),
-      );
-    } else {
-      onChanged(
-        dark
-            ? overrides.copyWith(textArgbDark: () => argb)
-            : overrides.copyWith(textArgbLight: () => argb),
-      );
-    }
-  }
-
-  Color swatch(int? argb) => argb == null ? cs.surface : Color(argb);
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label, style: TextStyle(fontSize: 14, color: cs.onSurface.withValues(alpha: 0.85))),
-      const SizedBox(height: 6),
-      Row(
-        children: [
-          _swatchButton(context, '浅·背景', swatch(overrides.backgroundArgbLight), () => pick(false, true)),
-          const SizedBox(width: 8),
-          _swatchButton(context, '深·背景', swatch(overrides.backgroundArgbDark), () => pick(true, true)),
-          const SizedBox(width: 8),
-          _swatchButton(context, '浅·文字', swatch(overrides.textArgbLight), () => pick(false, false)),
-          const SizedBox(width: 8),
-          _swatchButton(context, '深·文字', swatch(overrides.textArgbDark), () => pick(true, false)),
-        ],
-      ),
-    ],
-  );
-}
-
-Widget _swatchButton(BuildContext context, String label, Color color, VoidCallback onTap) {
-  return Expanded(
-    child: IosCardPress(
-      baseColor: Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
-      pressedScale: 0.97,
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            height: 28,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade500, width: 1),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
-          ),
-        ],
-      ),
+  await settings.addBubbleColorScheme(
+    BubbleColorScheme(
+      id: '',
+      name: nameCtrl.text.trim(),
+      userOverrides: initial?.userOverrides ?? const ChatBubbleStyleOverrides(),
+      assistantOverrides:
+          initial?.assistantOverrides ?? const ChatBubbleStyleOverrides(),
     ),
   );
 }

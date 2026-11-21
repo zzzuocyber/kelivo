@@ -6373,5 +6373,8 @@
   "assistantEditBubbleFollowGlobal": "跟随全局气泡",
   "assistantEditBubbleFollowGlobalSubtitle": "关闭后可为该助手单独选一套配色方案",
   "assistantEditBubbleScheme": "气泡配色方案",
-  "assistantEditBubbleSchemeNone": "未选择（跟随全局）"
+  "assistantEditBubbleSchemeNone": "未选择（跟随全局）",
+  "messageStyleSetupCustomBubble": "设置自定义气泡",
+  "bubbleSchemeExitDebug": "退出编辑",
+  "bubbleSchemeDebugHint": "正在编辑方案，改动只影响该方案，不影响全局气泡。"
 }

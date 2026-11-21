@@ -30796,6 +30796,10 @@ abstract class AppLocalizations {
   String get assistantEditBubbleScheme;
   String get assistantEditBubbleSchemeNone;
 
+  String get messageStyleSetupCustomBubble;
+  String get bubbleSchemeExitDebug;
+  String get bubbleSchemeDebugHint;
+
 }
 
 class _AppLocalizationsDelegate

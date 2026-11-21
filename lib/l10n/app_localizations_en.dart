@@ -17656,4 +17656,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get assistantEditBubbleSchemeNone => 'None (follow global)';
 
+
+  @override
+  String get messageStyleSetupCustomBubble => 'Set up custom bubble';
+
+  @override
+  String get bubbleSchemeExitDebug => 'Exit editing';
+
+  @override
+  String get bubbleSchemeDebugHint => 'Editing a scheme. Changes affect this scheme only, not the global bubble.';
+
 }

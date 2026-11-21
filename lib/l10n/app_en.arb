@@ -22941,5 +22941,17 @@
   "assistantEditBubbleSchemeNone": "未选择（跟随全局）",
   "@assistantEditBubbleSchemeNone": {
     "description": "UI text for assistantEditBubbleSchemeNone in the bubble color scheme feature."
+  },
+  "messageStyleSetupCustomBubble": "Set up custom bubble",
+  "@messageStyleSetupCustomBubble": {
+    "description": "UI text for messageStyleSetupCustomBubble in the bubble scheme debug editor."
+  },
+  "bubbleSchemeExitDebug": "Exit editing",
+  "@bubbleSchemeExitDebug": {
+    "description": "UI text for bubbleSchemeExitDebug in the bubble scheme debug editor."
+  },
+  "bubbleSchemeDebugHint": "Editing a scheme. Changes affect this scheme only, not the global bubble.",
+  "@bubbleSchemeDebugHint": {
+    "description": "UI text for bubbleSchemeDebugHint in the bubble scheme debug editor."
   }
 }
