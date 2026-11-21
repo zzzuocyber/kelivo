@@ -138,6 +138,8 @@ class ChatService extends ChangeNotifier {
   Future<void>? _assetReferenceMaintenanceFuture;
   Future<void>? _postStartupAssetMaintenanceFuture;
   Future<void>? _deferredAssetMaintenance;
+  Object? _queuedPostDeleteAssetMaintenance;
+  Future<void>? _activePostDeleteAssetMaintenance;
   bool _assetCleanupClosing = false;
   String? _currentConversationId;
   final Map<String, List<ChatMessage>> _messagesCache = {};
@@ -572,6 +574,9 @@ class ChatService extends ChangeNotifier {
 
   Future<void> close() async {
     _assetCleanupClosing = true;
+    // A backup may hold the file lock through exit. Startup maintenance finds
+    // the unreferenced assets left by a committed deletion.
+    _queuedPostDeleteAssetMaintenance = null;
     final initialization = _initFuture;
     if (initialization != null) {
       try {
@@ -589,6 +594,7 @@ class ChatService extends ChangeNotifier {
       } catch (_) {}
     }
     await _deferredAssetMaintenance;
+    await _activePostDeleteAssetMaintenance;
     final assetMaintenance = _assetReferenceMaintenanceFuture;
     if (assetMaintenance != null) {
       try {
@@ -2252,10 +2258,11 @@ class ChatService extends ChangeNotifier {
         await _deletePersistedConversation(id);
     if (!deleted) return;
 
+    // Our conversation background lives outside the generic asset GC, so it
+    // must be removed explicitly; upstream's async maintenance handles the
+    // rest of the orphaned uploads without blocking deletion.
     await ConversationBackground.deleteManagedFile(conversationBackground);
-
-    // Delete orphaned files (not referenced by any remaining conversation)
-    await _cleanupOrphanUploads();
+    _scheduleAssetMaintenanceAfterConversationDeletion();
 
     notifyListeners();
   }
@@ -2362,7 +2369,7 @@ class ChatService extends ChangeNotifier {
     }
 
     if (!deleted) return;
-    await _cleanupOrphanUploads();
+    _scheduleAssetMaintenanceAfterConversationDeletion();
     _bumpConversationListRevision();
     notifyListeners();
   }
@@ -2382,7 +2389,7 @@ class ChatService extends ChangeNotifier {
       }
     }
     if (count == 0) return 0;
-    await _cleanupOrphanUploads();
+    _scheduleAssetMaintenanceAfterConversationDeletion();
     _bumpConversationListRevision();
     notifyListeners();
     return count;
@@ -2715,10 +2722,38 @@ class ChatService extends ChangeNotifier {
     return references;
   }
 
+  void _scheduleAssetMaintenanceAfterConversationDeletion() {
+    if (_assetCleanupClosing || _queuedPostDeleteAssetMaintenance != null) {
+      return;
+    }
+
+    // A queued pass sees all deletions made before it acquires the file lock.
+    // A deletion during the pass can queue another to find new orphans.
+    final queued = Object();
+    _queuedPostDeleteAssetMaintenance = queued;
+    unawaited(
+      AttachmentFileLock.synchronized(() async {
+        if (!identical(_queuedPostDeleteAssetMaintenance, queued)) return;
+        _queuedPostDeleteAssetMaintenance = null;
+        final maintenance = _runAssetMaintenance(stopOnClose: true);
+        _activePostDeleteAssetMaintenance = maintenance;
+        try {
+          await maintenance;
+        } finally {
+          _activePostDeleteAssetMaintenance = null;
+        }
+      }),
+    );
+  }
+
   Future<void> runAssetMaintenance({DateTime? now}) =>
       AttachmentFileLock.synchronized(() => _runAssetMaintenance(now: now));
 
-  Future<void> _runAssetMaintenance({DateTime? now}) async {
+  Future<void> _runAssetMaintenance({
+    DateTime? now,
+    bool stopOnClose = false,
+  }) async {
+    bool stopping() => stopOnClose && _assetCleanupClosing;
     final effectiveNow = (now ?? DateTime.now()).toUtc();
     try {
       final retentionDays = await _repo.getAttachmentRetentionDays();
@@ -2727,7 +2762,7 @@ class ChatService extends ChangeNotifier {
         notBefore: effectiveNow.add(Duration(days: retentionDays)),
       );
       final deletedPaths = <String>{};
-      while (true) {
+      while (!stopping()) {
         final candidates = await _repo.claimAssetGc(
           now: effectiveNow,
           generationActive: AttachmentFileLock.hasActiveTransientGeneration,
@@ -2739,18 +2774,22 @@ class ChatService extends ChangeNotifier {
             ],
           },
         );
-        if (candidates.isEmpty) break;
+        if (candidates.isEmpty || stopping()) break;
         final imageUsage = (await StorageAttachmentUsage.load())
           ..includeConversations(
             AttachmentFileLock.transientReferences,
             generationActive: AttachmentFileLock.hasActiveTransientGeneration,
           );
+
         final appDataDir = await AppDirectories.getContentDirectory();
         final allowedRoots = [
           p.normalize(p.join(appDataDir.absolute.path, 'upload')),
           p.normalize(p.join(appDataDir.absolute.path, 'images')),
         ];
         for (final candidate in candidates) {
+          // Let an in-flight file operation finish, including its rollback.
+          // Unprocessed claims stay due for the next pass.
+          if (stopping()) break;
           final paths = [
             candidate.path,
             candidate.thumbnailPath,
@@ -2877,15 +2916,16 @@ class ChatService extends ChangeNotifier {
           generationActive: AttachmentFileLock.hasActiveTransientGeneration,
         );
       }
-      await StorageAttachmentUsage.cleanSessions(
-        protectedPaths: AttachmentFileLock.transientReferences.keys.toSet(),
-      );
+      if (!stopping()) {
+        await StorageAttachmentUsage.cleanSessions(
+          protectedPaths: AttachmentFileLock.transientReferences.keys.toSet(),
+        );
+      }
+
     } catch (error) {
       debugPrint('Asset maintenance failed: $error');
     }
   }
-
-  Future<void> _cleanupOrphanUploads() => runAssetMaintenance();
 
   Future<void> restoreConversation(
     Conversation conversation,
@@ -5251,7 +5291,7 @@ class ChatService extends ChangeNotifier {
     _messageOrderIds.remove(conversationId);
     _firstGroupIndicesCache.remove(conversationId);
     await _loadMessageOrder(conversationId);
-    await _cleanupOrphanUploads();
+    await runAssetMaintenance();
     _bumpConversationListRevision();
     _bumpContextRevision(conversationId);
     await loadContextOperations(conversationId, refresh: true);
