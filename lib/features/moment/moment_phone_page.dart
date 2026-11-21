@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/chat/chat_service.dart';
-import '../../icons/lucide_adapter.dart';
 import '../../utils/sandbox_path_resolver.dart';
 import '../wechat/wechat_page.dart';
 import 'moment_page.dart';
@@ -47,6 +46,75 @@ class _MomentPhonePageState extends State<MomentPhonePage> {
     );
     if (!mounted) return;
     setState(() => _theme = _themeStore.read());
+  }
+
+  /// 占位图标点了只提示，不跳页。
+  void _toast(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(text), duration: const Duration(seconds: 2)),
+      );
+  }
+
+  /// 16 个图标按文件名顺序摆。只有朋友圈/微信/设置是能点的真入口，
+  /// 其余都是占位，点了给一句提示。
+  List<Widget> _buildIcons(Color labelColor, List<Shadow> labelShadow) {
+    // 顺序即 icon 文件命名顺序：1朋友圈 … 16设置。
+    const labels = <String>[
+      '朋友圈',
+      '微信',
+      '相机',
+      '浏览器',
+      'QQ',
+      '微博',
+      '电话',
+      '短信',
+      '哔哩哔哩',
+      '知乎',
+      '淘宝',
+      '抖音',
+      '日记',
+      '起点小说',
+      '相册',
+      '设置',
+    ];
+    final icons = <Widget>[];
+    for (var i = 0; i < labels.length; i++) {
+      final index = i + 1;
+      final label = labels[i];
+      final asset = 'assets/icons/phone_${index.toString().padLeft(2, '0')}.webp';
+      final VoidCallback onTap;
+      switch (index) {
+        case 1: // 朋友圈：召唤名单 + 首字母索引
+          onTap = () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const MomentPage(),
+                ),
+              );
+          break;
+        case 2: // 微信：群聊 @ + 私聊已读不回都在里面
+          onTap = () => openWechat(context);
+          break;
+        case 16: // 设置：小手机自己的主题/壁纸页
+          onTap = _openSettings;
+          break;
+        default: // 占位
+          onTap = () => _toast('$label 还没做');
+          break;
+      }
+      icons.add(
+        _AppIcon(
+          label: label,
+          asset: asset,
+          labelColor: labelColor,
+          labelShadow: labelShadow,
+          onTap: onTap,
+        ),
+      );
+    }
+    return icons;
   }
 
   bool get _hasWallpaper {
@@ -117,34 +185,7 @@ class _MomentPhonePageState extends State<MomentPhonePage> {
                   mainAxisSpacing: 22,
                   crossAxisSpacing: 18,
                   childAspectRatio: 0.82,
-                  children: <Widget>[
-                    _AppIcon(
-                      label: '朋友圈',
-                      icon: Lucide.Sparkles,
-                      labelColor: labelColor,
-                      labelShadow: labelShadow,
-                      onTap: () => Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const MomentPage(),
-                        ),
-                      ),
-                    ),
-                    _AppIcon(
-                      label: '微信',
-                      icon: Lucide.MessagesSquare,
-                      tint: const Color(0xFF07C160),
-                      labelColor: labelColor,
-                      labelShadow: labelShadow,
-                      onTap: () => openWechat(context),
-                    ),
-                    _AppIcon(
-                      label: '设置',
-                      icon: Lucide.Settings2,
-                      labelColor: labelColor,
-                      labelShadow: labelShadow,
-                      onTap: _openSettings,
-                    ),
-                  ],
+                  children: _buildIcons(labelColor, labelShadow),
                 ),
               ),
             ),
@@ -158,21 +199,19 @@ class _MomentPhonePageState extends State<MomentPhonePage> {
 class _AppIcon extends StatelessWidget {
   const _AppIcon({
     required this.label,
-    required this.icon,
+    required this.asset,
     required this.onTap,
     required this.labelColor,
     required this.labelShadow,
-    this.tint,
   });
 
   final String label;
-  final IconData icon;
+
+  /// 系统图标资源（assets 里的 webp），不进沙盒扫描，不会出现在资产面板。
+  final String asset;
   final VoidCallback onTap;
   final Color labelColor;
   final List<Shadow> labelShadow;
-
-  /// 图标颜色，不传就跟朋友圈那个一致。
-  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
@@ -182,23 +221,16 @@ class _AppIcon extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Container(
-            width: 58,
-            height: 58,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: MomentColors.hairline),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x14000000),
-                  blurRadius: 10,
-                  offset: Offset(0, 2),
-                ),
-              ],
+          // 图本身是透明底彩色 iOS 图标，直接铺开，不再套白底容器。
+          Image.asset(
+            asset,
+            width: 56,
+            height: 56,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const SizedBox(
+              width: 56,
+              height: 56,
             ),
-            child: Icon(icon, size: 26, color: tint ?? MomentColors.name),
           ),
           const SizedBox(height: 6),
           Text(
