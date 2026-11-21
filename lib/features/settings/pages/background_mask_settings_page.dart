@@ -35,10 +35,20 @@ class BackgroundMaskSettingsPage extends StatelessWidget {
           // Live preview using the assistant's current chat background.
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 200,
-              width: double.infinity,
-              child: ChatAssistantBackground(desktop: desktop),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // A portrait, phone-screen-sized preview: height ~= 2x width.
+                // The radial vignette derives its radius/center from the box
+                // size, so matching a real chat surface's aspect ratio is what
+                // makes this preview truthful. Clamp keeps wide desktop sane.
+                final previewHeight =
+                    (constraints.maxWidth * 2).clamp(240.0, 720.0);
+                return SizedBox(
+                  height: previewHeight,
+                  width: double.infinity,
+                  child: ChatAssistantBackground(desktop: desktop),
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),
