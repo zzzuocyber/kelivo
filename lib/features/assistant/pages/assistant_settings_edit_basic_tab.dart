@@ -2167,7 +2167,7 @@ extension _AssistantAvatarActions on _BasicSettingsTabState {
       var avatarPath = file.path;
       if (withCrop) {
         final cropped = await Navigator.of(context).push<String>(
-          MaterialPageRoute<void>(
+          MaterialPageRoute<String>(
             builder: (_) => AvatarCropPage(imagePath: file.path),
           ),
         );

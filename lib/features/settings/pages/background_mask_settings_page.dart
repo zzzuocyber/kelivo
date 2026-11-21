@@ -248,7 +248,7 @@ class _ParamSlider extends StatelessWidget {
               min: min,
               max: max,
               stepSize: step,
-              onChanged: onChanged,
+              onChanged: (dynamic v) => onChanged((v as num).toDouble()),
             ),
           ),
         ],
