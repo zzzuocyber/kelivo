@@ -271,6 +271,8 @@ class _ConversationNoteSheetState extends State<_ConversationNoteSheet> {
   ];
   late final List<String> _saved = List<String>.from(widget.initialSlots);
   late bool _follow = widget.followAssistant;
+  // builder 给的是内容滚动控制器；面板伸缩要单独建一个。
+  final _sheetController = DraggableScrollableController();
   late int _slot = _firstFilledSlot(widget.initialSlots);
   bool _switching = false;
   Timer? _timer;
@@ -285,6 +287,7 @@ class _ConversationNoteSheetState extends State<_ConversationNoteSheet> {
 
   @override
   void dispose() {
+    _sheetController.dispose();
     _timer?.cancel();
     _commit(_slot, _controllers[_slot].text);
     for (final c in _controllers) {
@@ -445,17 +448,18 @@ class _ConversationNoteSheetState extends State<_ConversationNoteSheet> {
       child: SafeArea(
         top: false,
         child: DraggableScrollableSheet(
+          controller: _sheetController,
           expand: false,
           initialChildSize: 0.5,
           minChildSize: minSize,
           maxChildSize: _maxSize,
-          builder: (ctx, controller) => Padding(
+          builder: (ctx, _) => Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SheetDragRegion(
-                  controller: controller,
+                  controller: _sheetController,
                   height: available,
                   minSize: minSize,
                   maxSize: _maxSize,

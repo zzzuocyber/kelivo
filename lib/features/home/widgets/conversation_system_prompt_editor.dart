@@ -116,7 +116,9 @@ class _ConversationSystemPromptEditorState
 
   late final _controller = TextEditingController(text: widget.initial);
   final _focus = FocusNode(debugLabel: 'conversationSystemPrompt');
-  DraggableScrollableController? _sheetController;
+  // 注意：builder 给的是 ScrollController（内容滚动用），面板伸缩要自己
+  // 建一个 DraggableScrollableController 传进 controller: 参数。
+  final _sheetController = DraggableScrollableController();
 
   bool get _hasAssistantPrompt => widget.assistantPrompt.trim().isNotEmpty;
 
@@ -131,7 +133,7 @@ class _ConversationSystemPromptEditorState
   void _onFocusChanged() {
     if (!_focus.hasFocus) return;
     final controller = _sheetController;
-    if (controller == null || !controller.isAttached) return;
+    if (!controller.isAttached) return;
     if (controller.size < 0.7) {
       controller
           .animateTo(
@@ -147,6 +149,7 @@ class _ConversationSystemPromptEditorState
   void dispose() {
     _focus.removeListener(_onFocusChanged);
     _focus.dispose();
+    _sheetController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -304,19 +307,19 @@ class _ConversationSystemPromptEditorState
       child: SafeArea(
         top: false,
         child: DraggableScrollableSheet(
+          controller: _sheetController,
           expand: false,
           initialChildSize: 0.52,
           minChildSize: minSize,
           maxChildSize: _maxSize,
-          builder: (ctx, controller) {
-            _sheetController = controller;
+          builder: (ctx, _) {
             return Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SheetDragRegion(
-                    controller: controller,
+                    controller: _sheetController,
                     height: available,
                     minSize: minSize,
                     maxSize: _maxSize,
