@@ -13,6 +13,7 @@ import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/ios_tile_button.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
+import '../../../theme/bubble_color_scheme.dart';
 import '../../../theme/chat_bubble_style.dart';
 import '../../../theme/custom_theme.dart';
 import '../../../theme/palettes.dart';
