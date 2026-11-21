@@ -937,34 +937,81 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                                 alpha: _isLoading ? 0.35 : 0.6,
                               ),
                             ),
-                            // Use IconButton for reliable alignment at the far right
-                            // 心形常驻：没有收藏时也能点进去看提示，
-                            // 不至于「有收藏才出现」而让人找不到入口。
-                            suffixIcon: widget.limitProviderKey == null
-                                ? ExcludeSemantics(
-                                    child: IconButton(
-                                      icon: Icon(
-                                        _favoritesOnly
-                                            ? Icons.favorite
-                                            : Icons.favorite_border,
-                                        size: 18,
-                                        color: _favoritesOnly
-                                            ? cs.primary
-                                            : cs.onSurface.withValues(
-                                                alpha: _isLoading ? 0.35 : 0.7,
+                            // 右侧两个小图标：跟随助手、收藏。都只留图形，
+                            // 不再占一整行——「跟随助手」原来是钉在搜索框下方
+                            // 的整行按钮，太占地方。
+                            suffixIcon:
+                                (widget.allowInherit ||
+                                    widget.limitProviderKey == null)
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (widget.allowInherit)
+                                        ExcludeSemantics(
+                                          child: IconButton(
+                                            icon: Icon(
+                                              Lucide.RotateCcw,
+                                              size: 18,
+                                              color: cs.onSurface.withValues(
+                                                alpha: 0.7,
                                               ),
-                                      ),
-                                      onPressed: _isLoading
-                                          ? null
-                                          : () => _setFavoritesOnly(
-                                              !_favoritesOnly,
                                             ),
-                                      splashColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      tooltip:
-                                          l10n.modelSelectSheetFavoritesSection,
-                                    ),
+                                            padding: EdgeInsets.zero,
+                                            constraints:
+                                                const BoxConstraints.tightFor(
+                                                  width: 38,
+                                                  height: 40,
+                                                ),
+                                            onPressed: () =>
+                                                Navigator.of(context).pop(
+                                                  const ModelSelection.inherit(),
+                                                ),
+                                            splashColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            hoverColor: Colors.transparent,
+                                            tooltip:
+                                                widget.inheritLabel ??
+                                                l10n
+                                                    .modelSelectSheetFollowAssistant,
+                                          ),
+                                        ),
+                                      // 心形常驻：没有收藏时也能点进去看提示，
+                                      // 不至于「有收藏才出现」而让人找不到入口。
+                                      if (widget.limitProviderKey == null)
+                                        ExcludeSemantics(
+                                          child: IconButton(
+                                            icon: Icon(
+                                              _favoritesOnly
+                                                  ? Icons.favorite
+                                                  : Icons.favorite_border,
+                                              size: 18,
+                                              color: _favoritesOnly
+                                                  ? cs.primary
+                                                  : cs.onSurface.withValues(
+                                                      alpha: _isLoading
+                                                          ? 0.35
+                                                          : 0.7,
+                                                    ),
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                            constraints:
+                                                const BoxConstraints.tightFor(
+                                                  width: 38,
+                                                  height: 40,
+                                                ),
+                                            onPressed: _isLoading
+                                                ? null
+                                                : () => _setFavoritesOnly(
+                                                    !_favoritesOnly,
+                                                  ),
+                                            splashColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            hoverColor: Colors.transparent,
+                                            tooltip: l10n
+                                                .modelSelectSheetFavoritesSection,
+                                          ),
+                                        ),
+                                    ],
                                   )
                                 : null,
                             suffixIconConstraints: const BoxConstraints(
@@ -1131,24 +1178,14 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
       }
     }
 
-    // 「跟随助手」不再是列表里的一行，改成钉在列表上方：收藏、任何服务商分类、
-    // 甚至搜索时都在，不用滚回顶部找。
-    final inheritRow = widget.allowInherit
-        ? _inheritTile(
-            context,
-            _InheritRow(
-              widget.inheritLabel ?? l10n.modelSelectSheetFollowAssistant,
-            ),
-          )
-        : null;
-
+    // 「跟随助手」已经收进搜索框右侧的小图标（见 suffixIcon），
+    // 不再占一整行，列表直接从第一行开始。
     if (_rows.isEmpty) {
       // 空收藏：给一行灰字说明怎么收藏，而不是一片空白。
       // 搜索筛空时不显示这句，免得说成「没有收藏」。
       final showFavoritesHint = favoritesOnly && query.isEmpty;
       return Column(
         children: [
-          if (inheritRow != null) inheritRow,
           Expanded(
             child: showFavoritesHint
                 ? Center(
@@ -1175,7 +1212,6 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 
     return Column(
       children: [
-        if (inheritRow != null) inheritRow,
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -1189,9 +1225,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                     padding: const EdgeInsets.only(bottom: 12),
                     itemBuilder: (context, index) {
                       final row = _rows[index];
-                      if (row is _InheritRow) {
-                        return _inheritTile(context, row);
-                      } else if (row is _HeaderRow) {
+                      if (row is _HeaderRow) {
                         return _sectionHeader(
                           context,
                           row.title,
@@ -1401,51 +1435,6 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   /// Styled as a button rather than a list row: an outlined, accent-tinted
   /// strip with no checkmark, so it never competes with the model rows for
   /// "which one am I on".
-  Widget _inheritTile(BuildContext context, _InheritRow row) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-      child: RepaintBoundary(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: cs.primary.withValues(alpha: 0.32)),
-          ),
-          child: IosCardPress(
-            baseColor: cs.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(14),
-            pressedBlendStrength: 0.10,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            onTap: () =>
-                Navigator.of(context).pop(const ModelSelection.inherit()),
-            child: SizedBox(
-              width: double.infinity,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Lucide.RotateCcw, size: 18, color: cs.primary),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      row.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: cs.primary,
-                        fontWeight: AppFontWeights.semibold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _modelTile(
     BuildContext context,
     _ModelItem m, {
@@ -2358,7 +2347,8 @@ class _DesktopModelSelectDialogBodyState
     }
   }
 
-  /// Desktop twin of [_ModelSelectSheetState._inheritTile].
+  /// 桌面端的「跟随助手」整行条目。手机端已收进搜索框的小图标，
+  /// 桌面保留整行（宽屏下单行更好认），只按需求改手机。
   Widget _desktopInheritTile(BuildContext context, _InheritRow row) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
