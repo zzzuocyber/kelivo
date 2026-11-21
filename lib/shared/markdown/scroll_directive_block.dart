@@ -45,6 +45,53 @@ String? _resolveTitle(NamedBlockNode node) {
   return null;
 }
 
+/// 右侧细滚动条。不用内置 Scrollbar：它挂在 ConstrainedBox(maxHeight) 里的
+/// SingleChildScrollView 上时，首次布局拿到的 extent 是 0，会把 thumb 画在中间。
+/// 这里直接按 controller 的实时 pixels/extent 算，顶部就是 pixels == 0。
+class _ScrollThumb extends StatelessWidget {
+  const _ScrollThumb({required this.controller, required this.color});
+
+  final ScrollController controller;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) {
+      if (!controller.hasClients) return const SizedBox.shrink();
+      final position = controller.position;
+      final viewport = position.viewportDimension;
+      final total = position.extentTotal;
+      if (viewport <= 0 || total <= viewport + 1) {
+        return const SizedBox.shrink();
+      }
+      // Stack 的高度就是滚动视口高度，把它们当同一条轨道算比例。
+      final thumbHeight =
+          (viewport / total * viewport).clamp(24.0, viewport).toDouble();
+      final maxScroll = total - viewport;
+      final progress = maxScroll <= 0
+          ? 0.0
+          : (position.pixels / maxScroll).clamp(0.0, 1.0);
+      final top =
+          (progress * (viewport - thumbHeight)).clamp(0.0, viewport - thumbHeight).toDouble();
+      return Align(
+        alignment: AlignmentDirectional.topEnd,
+        child: Padding(
+          padding: EdgeInsetsDirectional.only(end: 2, top: top),
+          child: Container(
+            width: 4,
+            height: thumbHeight,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class _ScrollDirectiveCard extends StatefulWidget {
   const _ScrollDirectiveCard({required this.title, required this.text});
 
@@ -127,16 +174,9 @@ class _ScrollDirectiveCardState extends State<_ScrollDirectiveCard> {
                 constraints: BoxConstraints(
                   maxHeight: scrollDirectiveBlockHeight - 44,
                 ),
-                child: ScrollbarTheme(
-                  data: const ScrollbarThemeData(
-                    thumbColor: WidgetStatePropertyAll(_mutedInk),
-                    thickness: WidgetStatePropertyAll(4.0),
-                    radius: Radius.circular(2),
-                  ),
-                  child: Scrollbar(
-                    controller: _controller,
-                    thumbVisibility: true,
-                    child: SingleChildScrollView(
+                child: Stack(
+                  children: [
+                    SingleChildScrollView(
                       controller: _controller,
                       primary: false,
                       physics: const ClampingScrollPhysics(),
@@ -149,7 +189,13 @@ class _ScrollDirectiveCardState extends State<_ScrollDirectiveCard> {
                         ),
                       ),
                     ),
-                  ),
+                    Positioned.fill(
+                      child: _ScrollThumb(
+                        controller: _controller,
+                        color: _mutedInk,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
