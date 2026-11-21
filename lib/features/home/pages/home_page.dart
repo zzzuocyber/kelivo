@@ -46,6 +46,7 @@ import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/quick_phrase_provider.dart';
 import '../../../core/providers/instruction_injection_provider.dart';
 import '../../../core/providers/world_book_provider.dart';
+import '../../../core/models/chat_message.dart';
 import '../../../core/models/quick_phrase.dart';
 import '../../../core/models/chat_input_data.dart';
 import '../../../core/models/compress_context_options.dart';

@@ -741,7 +741,7 @@ Future<void> showContextOperations(
         final sourceConversation = operation.nativeSourceConversationId;
         if (sourceConversation != null &&
             chat.getConversation(sourceConversation) != null) {
-          await onOpenConversation(sourceConversation);
+          onOpenConversation(sourceConversation);
         }
         return;
       }
