@@ -1306,6 +1306,7 @@
   "modelSpecFormAdvancedSection": "請求",
   "modelSelectSheetSearchHint": "搜尋模型或供應商",
   "modelSelectSheetFavoritesSection": "收藏",
+  "modelSelectSheetFavoritesEmptyHint": "還沒有收藏的模型。在任意模型右側點心形即可收藏。",
   "modelSelectSheetFollowAssistant": "跟隨助手",
   "modelSelectSheetFavoriteTooltip": "收藏",
   "modelSelectSheetChatType": "聊天",

@@ -468,6 +468,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
           _orderedKeys = result.orderedKeys;
           _isLoading = false;
           _activeProviderKey = null;
+          _initFavoritesOnOpen(settings);
         });
         _scheduleAutoScrollToCurrent();
       }
@@ -523,8 +524,18 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
       _orderedKeys = result.orderedKeys;
       _isLoading = false;
       _activeProviderKey = null;
+      _initFavoritesOnOpen(settings);
     });
     _scheduleAutoScrollToCurrent();
+  }
+
+  /// 打开面板就落在收藏分类：有收藏直接进收藏；没有收藏则留在全部分类，
+  /// 交给 _scheduleAutoScrollToCurrent 滚到正在用的模型。
+  void _initFavoritesOnOpen(SettingsProvider settings) {
+    if (widget.limitProviderKey != null) return;
+    _favoritesOnly = _favoritesAvailable(settings);
+    // 收藏列表通常很短，进来就是顶部；不自动定位，免得动画扫一遍。
+    if (_favoritesOnly) _autoScrolled = true;
   }
 
   void _scheduleAutoScrollToCurrent() {
@@ -927,12 +938,9 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                               ),
                             ),
                             // Use IconButton for reliable alignment at the far right
-                            suffixIcon:
-                                (widget.limitProviderKey == null &&
-                                    context
-                                        .watch<SettingsProvider>()
-                                        .pinnedModels
-                                        .isNotEmpty)
+                            // 心形常驻：没有收藏时也能点进去看提示，
+                            // 不至于「有收藏才出现」而让人找不到入口。
+                            suffixIcon: widget.limitProviderKey == null
                                 ? ExcludeSemantics(
                                     child: IconButton(
                                       icon: Icon(
@@ -1032,22 +1040,11 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     final l10n = AppLocalizations.of(context)!;
     final query = _search.text.trim();
     final settings = context.watch<SettingsProvider>();
+    final cs = Theme.of(context).colorScheme;
     // 收藏是独立模块：打开后只列收藏，不掺任何服务商分类。
-    final favoritesOnly =
-        _favoritesOnly &&
-        widget.limitProviderKey == null &&
-        _hasDisplayableFavorites(context);
-    if (_favoritesOnly && !favoritesOnly) {
-      // 收藏被清空时自动退出，免得下次加收藏又莫名回到这里。
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _favoritesOnly) {
-          setState(() {
-            _favoritesOnly = false;
-            _activeProviderKey = null;
-          });
-        }
-      });
-    }
+    // 空收藏不再偷偷退回全部分类（那样「收藏」这一栏看起来像凭空消失），
+    // 而是保留分类并显示一行灰色提示。
+    final favoritesOnly = _favoritesOnly && widget.limitProviderKey == null;
     // Build flattened rows and index maps for precise positioning
     _rows.clear();
     _headerIndexMap.clear();
@@ -1146,10 +1143,30 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
         : null;
 
     if (_rows.isEmpty) {
+      // 空收藏：给一行灰字说明怎么收藏，而不是一片空白。
+      // 搜索筛空时不显示这句，免得说成「没有收藏」。
+      final showFavoritesHint = favoritesOnly && query.isEmpty;
       return Column(
         children: [
           if (inheritRow != null) inheritRow,
-          const Expanded(child: SizedBox.shrink()),
+          Expanded(
+            child: showFavoritesHint
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 36),
+                      child: Text(
+                        l10n.modelSelectSheetFavoritesEmptyHint,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.45,
+                          color: cs.onSurface.withValues(alpha: 0.42),
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       );
     }
@@ -1224,11 +1241,10 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
         }
       });
       _providerTabKeys.removeWhere((key, _) => !_orderedKeys.contains(key));
-      // Favorites tab sits first, ahead of the provider categories — but only
-      // while it actually has something in it (mirrors the section above).
-      if (_hasDisplayableFavorites(context)) {
-        providerTabs.add(_favoritesTab(context));
-      }
+      // Favorites tab sits first, ahead of the provider categories. Always
+      // present, even while empty — tapping it shows a hint instead of an
+      // empty list, so the category never appears to come and go.
+      providerTabs.add(_favoritesTab(context));
       for (final k in _orderedKeys) {
         final g = _groups[k];
         if (g != null) {
@@ -1598,12 +1614,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 
   /// True when the favorites section would actually render: at least one
   /// pinned model whose provider is still around and whose model isn't
-  /// disabled. Same rule the section itself uses, so the tab never points at
-  /// a section that isn't there.
-  bool _hasDisplayableFavorites(BuildContext context) =>
-      widget.limitProviderKey == null &&
-      _favoritesAvailable(context.watch<SettingsProvider>());
-
+  /// disabled. Shared by the section and the always-visible favorites tab.
   bool _favoritesAvailable(SettingsProvider settings) {
     for (final k in settings.pinnedModels) {
       final parts = k.split('::');
@@ -1641,8 +1652,11 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   /// heart tab and the search-bar icon drive this same state.
   Future<void> _setFavoritesOnly(bool value) async {
     if (widget.limitProviderKey != null || _favoritesOnly == value) return;
-    if (value && !_favoritesAvailable(context.read<SettingsProvider>())) return;
-    if (value) await _expandSheetIfNeeded(_maxSize);
+    // 空收藏也允许进入：列表显示一行提示，分类本身保持常驻。
+    // 空的时候不撑满面板，免得一行灰字占满整屏。
+    if (value && _favoritesAvailable(context.read<SettingsProvider>())) {
+      await _expandSheetIfNeeded(_maxSize);
+    }
     if (!mounted) return;
     // 进入收藏时清掉搜索词，免得搜索把收藏也筛没了、看起来像空的。
     if (value && _search.text.isNotEmpty) _search.clear();

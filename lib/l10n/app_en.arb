@@ -2055,6 +2055,7 @@
   "modelSpecFormAdvancedSection": "Request",
   "modelSelectSheetSearchHint": "Search models or providers",
   "modelSelectSheetFavoritesSection": "Favorites",
+  "modelSelectSheetFavoritesEmptyHint": "No favorites yet. Tap the heart next to any model to add it.",
   "modelSelectSheetFollowAssistant": "Follow assistant",
   "modelSelectSheetFavoriteTooltip": "Favorite",
   "modelSelectSheetChatType": "Chat",
@@ -12081,7 +12082,10 @@
   "@modelSelectSheetFavoritesSection": {
     "description": "Header label and tooltip for the favorites group in the model selection sheet."
   },
-  "@modelSelectSheetFollowAssistant": {
+
+  "@modelSelectSheetFavoritesEmptyHint": {
+    "description": "Hint shown in the favorites-only view of the model selection sheet when nothing has been favorited yet."
+  },  "@modelSelectSheetFollowAssistant": {
     "description": "Row label in the model selection sheet for inheriting the assistant's model choice."
   },
   "@modelSelectSheetFavoriteTooltip": {

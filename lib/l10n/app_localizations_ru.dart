@@ -4418,6 +4418,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get modelSelectSheetFavoritesSection => 'Избранное';
 
   @override
+  String get modelSelectSheetFavoritesEmptyHint => 'Пока нет избранных моделей. Нажмите на сердце рядом с моделью, чтобы добавить её.';
+
+  @override
   String get modelSelectSheetFollowAssistant => 'Следовать за ассистентом';
 
   @override

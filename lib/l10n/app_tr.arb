@@ -1306,6 +1306,7 @@
   "modelSpecFormAdvancedSection": "İstek",
   "modelSelectSheetSearchHint": "Model veya sağlayıcı ara",
   "modelSelectSheetFavoritesSection": "Favoriler",
+  "modelSelectSheetFavoritesEmptyHint": "Henüz favori model yok. Eklemek için bir modelin yanındaki kalbe dokunun.",
   "modelSelectSheetFollowAssistant": "Asistanı takip et",
   "modelSelectSheetFavoriteTooltip": "Favori",
   "modelSelectSheetChatType": "Sohbet",

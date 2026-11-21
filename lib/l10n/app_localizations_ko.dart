@@ -4258,6 +4258,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get modelSelectSheetFavoritesSection => '즐겨찾기';
 
   @override
+  String get modelSelectSheetFavoritesEmptyHint => '아직 즐겨찾기한 모델이 없습니다. 모델 오른쪽의 하트를 눌러 추가하세요.';
+
+  @override
   String get modelSelectSheetFollowAssistant => '어시스턴트 따르기';
 
   @override

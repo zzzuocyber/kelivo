@@ -1306,6 +1306,7 @@
   "modelSpecFormAdvancedSection": "Запрос",
   "modelSelectSheetSearchHint": "Поиск моделей или провайдеров",
   "modelSelectSheetFavoritesSection": "Избранное",
+  "modelSelectSheetFavoritesEmptyHint": "Пока нет избранных моделей. Нажмите на сердце рядом с моделью, чтобы добавить её.",
   "modelSelectSheetFollowAssistant": "Следовать за ассистентом",
   "modelSelectSheetFavoriteTooltip": "В избранное",
   "modelSelectSheetChatType": "Чат",

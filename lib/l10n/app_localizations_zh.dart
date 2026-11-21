@@ -4188,6 +4188,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelSelectSheetFavoritesSection => '收藏';
 
   @override
+  String get modelSelectSheetFavoritesEmptyHint => '还没有收藏的模型。在任意模型右侧点心形即可收藏。';
+
+  @override
   String get modelSelectSheetFollowAssistant => '跟随助手';
 
   @override
@@ -20610,6 +20613,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get modelSelectSheetFavoritesSection => '收藏';
+
+  @override
+  String get modelSelectSheetFavoritesEmptyHint => '还没有收藏的模型。在任意模型右侧点心形即可收藏。';
 
   @override
   String get modelSelectSheetFollowAssistant => '跟随助手';
@@ -37039,6 +37045,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get modelSelectSheetFavoritesSection => '收藏';
+
+  @override
+  String get modelSelectSheetFavoritesEmptyHint => '還沒有收藏的模型。在任意模型右側點心形即可收藏。';
 
   @override
   String get modelSelectSheetFollowAssistant => '跟隨助手';

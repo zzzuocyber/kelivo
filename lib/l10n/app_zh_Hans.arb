@@ -1487,6 +1487,7 @@
   "modelSpecFormAdvancedSection": "请求",
   "modelSelectSheetSearchHint": "搜索模型或服务商",
   "modelSelectSheetFavoritesSection": "收藏",
+  "modelSelectSheetFavoritesEmptyHint": "还没有收藏的模型。在任意模型右侧点心形即可收藏。",
   "modelSelectSheetFollowAssistant": "跟随助手",
   "modelSelectSheetFavoriteTooltip": "收藏",
   "modelSelectSheetChatType": "聊天",

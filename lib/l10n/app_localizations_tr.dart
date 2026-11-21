@@ -4387,6 +4387,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get modelSelectSheetFavoritesSection => 'Favoriler';
 
   @override
+  String get modelSelectSheetFavoritesEmptyHint => 'Henüz favori model yok. Eklemek için bir modelin yanındaki kalbe dokunun.';
+
+  @override
   String get modelSelectSheetFollowAssistant => 'Asistanı takip et';
 
   @override

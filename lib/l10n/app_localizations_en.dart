@@ -4362,6 +4362,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelSelectSheetFavoritesSection => 'Favorites';
 
   @override
+  String get modelSelectSheetFavoritesEmptyHint => 'No favorites yet. Tap the heart next to any model to add it.';
+
+  @override
   String get modelSelectSheetFollowAssistant => 'Follow assistant';
 
   @override

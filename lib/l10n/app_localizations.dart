@@ -7957,6 +7957,12 @@ abstract class AppLocalizations {
   /// **'Favorites'**
   String get modelSelectSheetFavoritesSection;
 
+  /// Hint shown in the favorites-only view of the model selection sheet when
+  /// nothing has been favorited yet.
+  ///
+  /// In en, this message translates to:/n  /// **'No favorites yet. Tap the heart next to any model to add it.'**
+  String get modelSelectSheetFavoritesEmptyHint;
+
   /// Row label in the model selection sheet for inheriting the assistant's model choice.
   ///
   /// In en, this message translates to:

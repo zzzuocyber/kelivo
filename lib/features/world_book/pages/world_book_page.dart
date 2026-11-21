@@ -363,68 +363,68 @@ class _WorldBookPageState extends State<WorldBookPage> {
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                   children: [
-                    for (final groupName in groupNames) ...[
-                      _WorldBookGroupHeader(
-                        title: groupName.isEmpty
-                            ? l10n.instructionInjectionUngroupedGroup
-                            : groupName,
-                        collapsed: groupUi.isCollapsed(groupName),
-                        onToggle: () {
-                          Haptics.light();
-                          listCtx
-                              .read<WorldBookGroupProvider>()
-                              .toggleCollapsed(groupName);
-                        },
-                      ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 260),
-                        curve: Curves.easeInOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: groupUi.isCollapsed(groupName)
-                            ? const SizedBox.shrink()
-                            : ReorderableListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: grouped[groupName]?.length ?? 0,
-                                buildDefaultDragHandles: false,
-                                proxyDecorator: (child, index, animation) {
-                                  // No elevation/shadow; just subtle scale.
-                                  return AnimatedBuilder(
-                                    animation: animation,
-                                    builder: (context, _) {
-                                      final t = Curves.easeOutCubic.transform(
-                                        animation.value,
-                                      );
-                                      return Transform.scale(
-                                        scale: 0.985 + 0.015 * t,
-                                        child: child,
-                                      );
-                                    },
+                    // 一组 = 一张容器（组头 + 这组的书）。组间距照抄助手分组：
+                    // 上 7、下 2，所以收起状态下两组相距 9。
+                    for (var i = 0; i < groupNames.length; i++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: i == 0 ? 0 : 7,
+                          bottom: i == groupNames.length - 1 ? 0 : 2,
+                        ),
+                        child: _WorldBookGroupCard(
+                          title: groupNames[i].isEmpty
+                              ? l10n.instructionInjectionUngroupedGroup
+                              : groupNames[i],
+                          collapsed: groupUi.isCollapsed(groupNames[i]),
+                          onToggle: () {
+                            Haptics.light();
+                            listCtx
+                                .read<WorldBookGroupProvider>()
+                                .toggleCollapsed(groupNames[i]);
+                          },
+                          body: ReorderableListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: grouped[groupNames[i]]?.length ?? 0,
+                            buildDefaultDragHandles: false,
+                            proxyDecorator: (child, index, animation) {
+                              // No elevation/shadow; just subtle scale.
+                              return AnimatedBuilder(
+                                animation: animation,
+                                builder: (context, _) {
+                                  final t = Curves.easeOutCubic.transform(
+                                    animation.value,
+                                  );
+                                  return Transform.scale(
+                                    scale: 0.985 + 0.015 * t,
+                                    child: child,
                                   );
                                 },
-                                onReorderItem: (oldIndex, newIndex) async {
-                                  Haptics.light();
-                                  await listCtx
-                                      .read<WorldBookProvider>()
-                                      .reorderBooksWithinGroup(
-                                        group: groupName,
-                                        oldIndex: oldIndex,
-                                        newIndex: newIndex,
-                                      );
-                                },
-                                itemBuilder: (context, index) {
-                                  final groupBooks = grouped[groupName]!;
-                                  return _buildBookTile(
-                                    book: groupBooks[index],
-                                    index: index,
-                                    groupCount: groupBooks.length,
-                                    isDesktop: isDesktop,
-                                    l10n: l10n,
+                              );
+                            },
+                            onReorderItem: (oldIndex, newIndex) async {
+                              Haptics.light();
+                              await listCtx
+                                  .read<WorldBookProvider>()
+                                  .reorderBooksWithinGroup(
+                                    group: groupNames[i],
+                                    oldIndex: oldIndex,
+                                    newIndex: newIndex,
                                   );
-                                },
-                              ),
+                            },
+                            itemBuilder: (context, index) {
+                              final groupBooks = grouped[groupNames[i]]!;
+                              return _buildBookTile(
+                                book: groupBooks[index],
+                                index: index,
+                                groupCount: groupBooks.length,
+                                isDesktop: isDesktop,
+                                l10n: l10n,
+                              );
+                            },
+                          ),
+                        ),
                       ),
-                    ],
                   ],
                 );
               },
@@ -443,7 +443,7 @@ class _WorldBookPageState extends State<WorldBookPage> {
     return KeyedSubtree(
       key: ValueKey('world-book-${book.id}'),
       child: Padding(
-        padding: EdgeInsets.only(bottom: index == groupCount - 1 ? 0 : 10),
+        padding: EdgeInsets.only(bottom: index == groupCount - 1 ? 0 : 6),
         child: _WorldBookSection(
           book: book,
           bookIndex: index,
@@ -526,68 +526,117 @@ class _WorldBookPageState extends State<WorldBookPage> {
   }
 }
 
-class _WorldBookGroupHeader extends StatelessWidget {
-  const _WorldBookGroupHeader({
+/// 一组 = 一个容器：组头 + 这组的所有书。
+///
+/// 展开的那组容器底色提亮一档、标题加深变重，跟旁边收起的组一眼分开；
+/// 收起时容器塌缩成只有组头那一条，形状还是同一个圆角容器。
+class _WorldBookGroupCard extends StatelessWidget {
+  const _WorldBookGroupCard({
     required this.title,
     required this.collapsed,
     required this.onToggle,
+    required this.body,
   });
 
   final String title;
   final bool collapsed;
   final VoidCallback onToggle;
+  final Widget body;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onToggle,
-      child: Padding(
-        // A section band: one card step above the books, so the group reads as
-        // a container while each book keeps its own card below it.
-        padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: context.appColors.surfaceCardFill,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: Center(
-                  child: AnimatedRotation(
-                    turns: collapsed ? 0.0 : 0.25, // right -> down
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(
-                      Lucide.ChevronRight,
-                      size: 15,
-                      color: cs.onSurface.withValues(alpha: 0.6),
+    final colors = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // 容器要夹在「页面」和「书卡」之间，书卡才读得出是容器里的卡片。
+    // 深色：页面到卡片只隔十来个色阶，用插值取中间；展开那组更靠近卡片。
+    // 浅色：卡片接近白色，往下压才有对比；展开那组压得更深。
+    final Color tint;
+    if (isDark) {
+      tint = Color.lerp(
+        cs.surface,
+        colors.surfaceCard,
+        collapsed ? 0.34 : 0.62,
+      )!;
+    } else {
+      tint = Color.alphaBlend(
+        Colors.black.withValues(alpha: collapsed ? 0.06 : 0.10),
+        cs.surface,
+      );
+    }
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      // 收起时也留着这圈细描边，跟展开时视觉统一。
+      decoration: BoxDecoration(
+        color: tint,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.appColors.hairline, width: 0.6),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onToggle,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(12, 9, 12, collapsed ? 9 : 6),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: Center(
+                      child: AnimatedRotation(
+                        turns: collapsed ? 0.0 : 0.25, // right -> down
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        child: Icon(
+                          Lucide.ChevronRight,
+                          size: 15,
+                          color: cs.onSurface.withValues(
+                            alpha: collapsed ? 0.45 : 0.72,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    letterSpacing: 0.2,
-                    fontWeight: AppFontWeights.semibold,
-                    color: cs.onSurface.withValues(alpha: 0.9),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        // 比书名（15）只小一号：分组是容器标题，不该比内容还弱。
+                        fontSize: 14,
+                        letterSpacing: 0.2,
+                        fontWeight: collapsed
+                            ? AppFontWeights.medium
+                            : AppFontWeights.semibold,
+                        color: cs.onSurface.withValues(
+                          alpha: collapsed ? 0.62 : 1.0,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: collapsed
+                ? const SizedBox(width: double.infinity, height: 0)
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    child: body,
+                  ),
+          ),
+        ],
       ),
     );
   }

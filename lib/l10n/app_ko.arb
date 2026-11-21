@@ -1306,6 +1306,7 @@
   "modelSpecFormAdvancedSection": "요청",
   "modelSelectSheetSearchHint": "모델 또는 공급자 검색",
   "modelSelectSheetFavoritesSection": "즐겨찾기",
+  "modelSelectSheetFavoritesEmptyHint": "아직 즐겨찾기한 모델이 없습니다. 모델 오른쪽의 하트를 눌러 추가하세요.",
   "modelSelectSheetFollowAssistant": "어시스턴트 따르기",
   "modelSelectSheetFavoriteTooltip": "즐겨찾기",
   "modelSelectSheetChatType": "채팅",
