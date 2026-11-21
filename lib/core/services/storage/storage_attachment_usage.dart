@@ -18,7 +18,7 @@ import '../../../utils/app_directories.dart';
 import '../../../utils/kelivo_file_uri.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 
-enum StorageImageKind { chat, tool, avatar, temporaryBackground }
+enum StorageImageKind { chat, tool, avatar, temporaryBackground, phone }
 
 /// One persisted snapshot for association labels and deletion protection.
 /// Message parts cover references whose asset-index backfill is still pending.
@@ -28,6 +28,7 @@ class StorageAttachmentUsage {
     _tools = _resolveSet(_references.tools);
     _chat = _resolveSet(_references.chat);
     _temporaryBackground = _resolveSet(_references.temporaryBackgrounds);
+    _phone = _resolveSet(_references.phone);
     _protected = _resolveSet(_references.protected);
     for (final entry in _references.conversations.entries) {
       for (final path in _paths(entry.key, _root)) {
@@ -47,6 +48,7 @@ class StorageAttachmentUsage {
       _tools,
       _chat,
       _temporaryBackground,
+      _phone,
       _protected;
   final _conversations = <String, Map<String, String>>{};
   final _pending = <String, DateTime>{};
@@ -114,6 +116,7 @@ class StorageAttachmentUsage {
     }
     return _appearance.contains(normalized) ||
         _temporaryBackground.contains(normalized) ||
+        _phone.contains(normalized) ||
         _protected.contains(normalized) ||
         _conversations.containsKey(normalized);
   }
@@ -121,6 +124,7 @@ class StorageAttachmentUsage {
   bool hasReferencesWithin(String directory) => {
     ..._appearance,
     ..._temporaryBackground,
+    ..._phone,
     ..._protected,
     ..._conversations.keys,
   }.any((path) => p.equals(directory, path) || p.isWithin(directory, path));
@@ -189,8 +193,7 @@ class StorageAttachmentUsage {
           }
           final real = File(normalized).resolveSymbolicLinksSync();
           if (!realRoots.any((dir) => p.isWithin(dir, real))) continue;
-          if ((!force &&
-                  (usage.isInUse(normalized) || usage.isInUse(real))) ||
+          if ((!force && (usage.isInUse(normalized) || usage.isInUse(real))) ||
               protected.contains(normalized) ||
               protected.contains(real)) {
             continue;
@@ -320,6 +323,9 @@ class StorageAttachmentUsage {
         return StorageImageKind.temporaryBackground;
       }
     }
+    // 小手机（朋友圈 / 微信）的图也落在 avatars 目录，必须抢在头像规则前面，
+    // 否则会被按目录判成「头像与背景」。
+    if (contains(_phone)) return StorageImageKind.phone;
     if (contains(_appearance) ||
         p.isWithin(p.join(_root, 'avatars'), normalized)) {
       return StorageImageKind.avatar;
@@ -377,6 +383,9 @@ class _AttachmentReferences {
   final tools = <String>{};
   final chat = <String>{};
   final temporaryBackgrounds = <String>{};
+
+  /// 小手机（朋友圈 / 微信，以及以后同类功能）用的图。
+  final phone = <String>{};
   final protected = <String>{};
   final conversations = <String, Map<String, String>>{};
   final pending = <String, int>{};
@@ -416,6 +425,42 @@ String resolveStorageSessionReference(
     );
   }
   return uri;
+}
+
+const _imageFileExtensions = {
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+  '.bmp',
+  '.heic',
+  '.heif',
+};
+
+/// Collects every string inside a stored extras payload that looks like an
+/// image path. Used by the 小手机 scan, where features keep their own key names
+/// (moment.assets, wechat.*, …) and only the value shape is shared.
+Iterable<String> _imageReferencesIn(Object? value) sync* {
+  if (value is String) {
+    final text = value.trim();
+    if (text.isEmpty) return;
+    final lower = text.toLowerCase();
+    if (!_imageFileExtensions.any(lower.endsWith)) return;
+    yield text;
+    return;
+  }
+  if (value is Map) {
+    for (final entry in value.values) {
+      yield* _imageReferencesIn(entry);
+    }
+    return;
+  }
+  if (value is Iterable) {
+    for (final item in value) {
+      yield* _imageReferencesIn(item);
+    }
+  }
 }
 
 Iterable<String> _paths(String uri, String root) sync* {
@@ -632,6 +677,31 @@ _AttachmentReferences _readReferences(
       if (path.isEmpty) continue;
       result.temporaryBackgrounds.add(path);
       associate(path, row['id'] as String, row['title'] as String);
+    }
+
+    // 小手机：朋友圈回、微信用两条隐藏对话的 extras 存图片路径（moment.assets 等）。
+    // 这些图落在 avatars 目录，只按目录判会归成「头像与背景」，引用表里也没有它们，
+    // 会被当成未使用清掉。这里把这类对话存档里所有像图片路径的值都收进「小手机」，
+    // 以后新加的小手机功能只要复用这两条对话，就自动算进来。
+    // 只扫带 moment./wechat. 键的对话，普通对话的临时背景不在此列。
+    for (final row in database.select(
+      'SELECT id, title, extras_json FROM conversation_rows '
+      "WHERE instr(extras_json, '\"moment.') > 0 "
+      "OR instr(extras_json, '\"wechat.') > 0",
+    )) {
+      Object? decoded;
+      try {
+        decoded = jsonDecode(row['extras_json'] as String);
+      } on FormatException {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      final id = row['id'] as String;
+      final title = (row['title'] as String?) ?? '';
+      for (final path in _imageReferencesIn(decoded)) {
+        result.phone.add(path);
+        associate(path, id, title);
+      }
     }
 
     // Read every version and fork one row at a time. Tool payloads can be large.

@@ -2086,7 +2086,7 @@ class _UploadManager extends StatefulWidget {
   State<_UploadManager> createState() => _UploadManagerState();
 }
 
-enum _StorageImageFilter { all, chat, tool, avatar, temporaryBackground }
+enum _StorageImageFilter { all, chat, tool, avatar, temporaryBackground, phone }
 
 enum _StorageEntrySort { newest, oldest, largest, smallest }
 
@@ -2198,6 +2198,7 @@ class _UploadManagerState extends State<_UploadManager> {
           entry.imageKind == StorageImageKind.avatar,
         _StorageImageFilter.temporaryBackground =>
           entry.imageKind == StorageImageKind.temporaryBackground,
+        _StorageImageFilter.phone => entry.imageKind == StorageImageKind.phone,
       };
     }).toList();
 
@@ -2620,6 +2621,7 @@ class _StorageImageOrganizer extends StatelessWidget {
             (_StorageImageFilter.tool, l10n.storageSpaceImageTypeTool),
             (_StorageImageFilter.avatar, l10n.storageSpaceImageTypeAvatar),
             (_StorageImageFilter.temporaryBackground, '临时背景'),
+            (_StorageImageFilter.phone, '小手机'),
           ],
           onChanged: onImageChanged,
         ),
