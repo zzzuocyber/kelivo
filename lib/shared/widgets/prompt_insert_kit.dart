@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
