@@ -11,6 +11,7 @@ class IosFormTextField extends StatelessWidget {
     this.hintText,
     this.suffix,
     this.prefix,
+    this.labelTrailing,
     this.maxLines = 1,
     this.minLines,
     this.scrollPhysics,
@@ -46,6 +47,7 @@ class IosFormTextField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final String? hintText;
+  final Widget? labelTrailing;
   final Widget? suffix, prefix;
   final int? maxLines;
   final int? minLines;
@@ -305,14 +307,31 @@ class IosFormTextField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (label.isNotEmpty) ...[
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: AppFontWeights.semibold,
-                color: labelColor,
+            if (labelTrailing == null)
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: AppFontWeights.semibold,
+                  color: labelColor,
+                ),
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: AppFontWeights.semibold,
+                        color: labelColor,
+                      ),
+                    ),
+                  ),
+                  labelTrailing!,
+                ],
               ),
-            ),
             const SizedBox(height: 6),
           ],
           fieldBox,

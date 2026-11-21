@@ -51,20 +51,53 @@ class _PromptTabState extends State<_PromptTab> {
     super.dispose();
   }
 
-  void _insertAtCursor(TextEditingController controller, String toInsert) {
-    final text = controller.text;
-    final sel = controller.selection;
-    final start = (sel.start >= 0 && sel.start <= text.length)
-        ? sel.start
-        : text.length;
-    final end = (sel.end >= 0 && sel.end <= text.length && sel.end >= start)
-        ? sel.end
-        : start;
-    final nextText = text.replaceRange(start, end, toInsert);
-    controller.value = controller.value.copyWith(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: start + toInsert.length),
-      composing: TextRange.empty,
+  List<PromptVariable> _systemPromptVariables(AppLocalizations l10n) => [
+    PromptVariable(l10n.assistantEditVariableDate, '{cur_date}'),
+    PromptVariable(l10n.assistantEditVariableTime, '{cur_time}'),
+    PromptVariable(l10n.assistantEditVariableDatetime, '{cur_datetime}'),
+    PromptVariable(l10n.assistantEditVariableModelId, '{model_id}'),
+    PromptVariable(l10n.assistantEditVariableModelName, '{model_name}'),
+    PromptVariable(l10n.assistantEditVariableLocale, '{locale}'),
+    PromptVariable(l10n.assistantEditVariableTimezone, '{timezone}'),
+    PromptVariable(l10n.assistantEditVariableSystemVersion, '{system_version}'),
+    PromptVariable(l10n.assistantEditVariableDeviceInfo, '{device_info}'),
+    PromptVariable(l10n.assistantEditVariableBatteryLevel, '{battery_level}'),
+    PromptVariable(l10n.assistantEditVariableNickname, '{nickname}'),
+    PromptVariable(l10n.assistantEditVariableAssistantName, '{assistant_name}'),
+  ];
+
+  List<PromptVariable> _messageTemplateVariables(AppLocalizations l10n) => [
+    PromptVariable(l10n.assistantEditVariableRole, '{{ role }}'),
+    PromptVariable(l10n.assistantEditVariableMessage, '{{ message }}'),
+    PromptVariable(l10n.assistantEditVariableTime, '{{ time }}'),
+    PromptVariable(l10n.assistantEditVariableDate, '{{ date }}'),
+  ];
+
+  Widget _timeVarWarningBanner(BuildContext context, AppLocalizations l10n) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.errorContainer.withValues(alpha: 0.30),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Lucide.TriangleAlert, size: 18, color: cs.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.assistantEditPromptTimeVarWarning,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: cs.onSurface.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -148,6 +181,8 @@ class _PromptTabState extends State<_PromptTab> {
   }
 
   Future<String?> _showSystemPromptMobileSheet(String initial) {
+    final l10n = AppLocalizations.of(context)!;
+    final hits = MemoryPrompts.detectTimeVariablesInSystemPrompt(initial);
     return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -156,7 +191,18 @@ class _PromptTabState extends State<_PromptTab> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) => _SystemPromptMobileSheet(initial: initial),
+      builder: (_) => PromptFullScreenEditor(
+        initial: initial,
+        hintText: l10n.assistantEditSystemPromptHint,
+        variables: _systemPromptVariables(l10n),
+        cacheWarningValues: const {
+          '{cur_date}',
+          '{cur_time}',
+          '{cur_datetime}',
+        },
+        cacheWarningTooltip: l10n.assistantEditPromptTimeVarWarning,
+        warning: hits.isEmpty ? null : _timeVarWarningBanner(context, l10n),
+      ),
     );
   }
 
@@ -379,83 +425,26 @@ class _PromptTabState extends State<_PromptTab> {
                 contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.assistantEditAvailableVariables,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: AppFontWeights.semibold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            _VarExplainList(
-              items: [
-                (l10n.assistantEditVariableDate, '{cur_date}'),
-                (l10n.assistantEditVariableTime, '{cur_time}'),
-                (l10n.assistantEditVariableDatetime, '{cur_datetime}'),
-                (l10n.assistantEditVariableModelId, '{model_id}'),
-                (l10n.assistantEditVariableModelName, '{model_name}'),
-                (l10n.assistantEditVariableLocale, '{locale}'),
-                (l10n.assistantEditVariableTimezone, '{timezone}'),
-                (l10n.assistantEditVariableSystemVersion, '{system_version}'),
-                (l10n.assistantEditVariableDeviceInfo, '{device_info}'),
-                (l10n.assistantEditVariableBatteryLevel, '{battery_level}'),
-                (l10n.assistantEditVariableNickname, '{nickname}'),
-                (l10n.assistantEditVariableAssistantName, '{assistant_name}'),
-              ],
-              cacheWarningVars: const {
+            const SizedBox(height: 10),
+            PromptInsertBar(
+              controller: _sysCtrl,
+              focusNode: _sysFocus,
+              onChanged: (v) {
+                setState(() {});
+                context.read<AssistantProvider>().updateAssistant(
+                  a.copyWith(systemPrompt: v),
+                );
+              },
+              variables: _systemPromptVariables(l10n),
+              cacheWarningValues: const {
                 '{cur_date}',
                 '{cur_time}',
                 '{cur_datetime}',
               },
               cacheWarningTooltip: l10n.assistantEditPromptTimeVarWarning,
-              onTapVar: (v) {
-                _insertAtCursor(_sysCtrl, v);
-                setState(() {});
-                context.read<AssistantProvider>().updateAssistant(
-                  a.copyWith(systemPrompt: _sysCtrl.text),
-                );
-                // Restore focus to the input to keep cursor active
-                Future.microtask(() => _sysFocus.requestFocus());
-              },
-            ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: timeVarsInPrompt.isEmpty
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Material(
-                        color: cs.errorContainer.withValues(alpha: 0.30),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Lucide.TriangleAlert,
-                                size: 18,
-                                color: cs.error,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.assistantEditPromptTimeVarWarning,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    height: 1.35,
-                                    color: cs.onSurface.withValues(alpha: 0.8),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+              warning: timeVarsInPrompt.isEmpty
+                  ? null
+                  : _timeVarWarningBanner(context, l10n),
             ),
           ],
         ),
@@ -533,30 +522,14 @@ class _PromptTabState extends State<_PromptTab> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.assistantEditAvailableVariables,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: AppFontWeights.semibold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            _VarExplainList(
-              items: [
-                (l10n.assistantEditVariableRole, '{{ role }}'),
-                (l10n.assistantEditVariableMessage, '{{ message }}'),
-                (l10n.assistantEditVariableTime, '{{ time }}'),
-                (l10n.assistantEditVariableDate, '{{ date }}'),
-              ],
-              onTapVar: (v) {
-                _insertAtCursor(_tmplCtrl, v);
-                context.read<AssistantProvider>().updateAssistant(
-                  a.copyWith(messageTemplate: _tmplCtrl.text),
-                );
-                // Restore focus to the input to keep cursor active
-                Future.microtask(() => _tmplFocus.requestFocus());
-              },
+            const SizedBox(height: 10),
+            PromptInsertBar(
+              controller: _tmplCtrl,
+              focusNode: _tmplFocus,
+              onChanged: (v) => context
+                  .read<AssistantProvider>()
+                  .updateAssistant(a.copyWith(messageTemplate: v)),
+              variables: _messageTemplateVariables(l10n),
             ),
 
             const SizedBox(height: 12),
@@ -1229,90 +1202,6 @@ class _HoverTextButtonState extends State<_HoverTextButton> {
   }
 }
 
-class _SystemPromptMobileSheet extends StatefulWidget {
-  const _SystemPromptMobileSheet({required this.initial});
-  final String initial;
-
-  @override
-  State<_SystemPromptMobileSheet> createState() =>
-      _SystemPromptMobileSheetState();
-}
-
-class _SystemPromptMobileSheetState extends State<_SystemPromptMobileSheet> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initial,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final cs = Theme.of(context).colorScheme;
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.96,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 10, 16, bottom + 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                _HoverTextButton(
-                  label: MaterialLocalizations.of(context).closeButtonLabel,
-                  color: cs.onSurface,
-                  onTap: () => Navigator.of(context).maybePop(),
-                  dense: true,
-                  enableHover: false,
-                ),
-                const Spacer(),
-                _HoverTextButton(
-                  label: l10n.assistantEditEmojiDialogSave,
-                  color: cs.primary,
-                  onTap: () => Navigator.of(context).pop(_controller.text),
-                  dense: true,
-                  enableHover: false,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: context.appColors.surfaceFill,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: cs.outlineVariant.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  expands: true,
-                  maxLines: null,
-                  minLines: null,
-                  keyboardType: TextInputType.multiline,
-                  textAlignVertical: TextAlignVertical.top,
-                  decoration: InputDecoration(
-                    hintText: l10n.assistantEditSystemPromptHint,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SystemPromptDesktopDialog extends StatefulWidget {
   const _SystemPromptDesktopDialog({required this.initial});
   final String initial;
@@ -1712,62 +1601,6 @@ Future<void> _showEditPresetDialog(
       );
     },
   );
-}
-
-class _VarExplainList extends StatelessWidget {
-  const _VarExplainList({
-    required this.items,
-    required this.onTapVar,
-    this.cacheWarningVars = const <String>{},
-    this.cacheWarningTooltip,
-  });
-  final List<(String, String)> items; // (label, var)
-  final ValueChanged<String> onTapVar;
-  final Set<String> cacheWarningVars;
-  final String? cacheWarningTooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Wrap(
-      spacing: 16,
-      runSpacing: 8,
-      children: [
-        for (final it in items)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${it.$1}: ',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurface.withValues(alpha: 0.75),
-                ),
-              ),
-              InkWell(
-                onTap: () => onTapVar(it.$2),
-                child: Text(
-                  it.$2,
-                  style: TextStyle(
-                    color: cs.primary,
-                    decoration: TextDecoration.underline,
-                    fontSize: 12,
-                    fontWeight: AppFontWeights.semibold,
-                  ),
-                ),
-              ),
-              if (cacheWarningVars.contains(it.$2)) ...[
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: cacheWarningTooltip ?? '',
-                  child: Icon(Lucide.TriangleAlert, size: 14, color: cs.error),
-                ),
-              ],
-            ],
-          ),
-      ],
-    );
-  }
 }
 
 class _ConversationPromptOption extends StatelessWidget {

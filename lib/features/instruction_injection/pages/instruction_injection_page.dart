@@ -14,6 +14,8 @@ import '../../../core/providers/instruction_injection_group_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/services/haptics.dart';
 import '../../../shared/widgets/snackbar.dart';
+import '../../../shared/widgets/ios_tactile.dart';
+import '../../../shared/widgets/prompt_insert_kit.dart';
 import '../../../theme/app_font_weights.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 
@@ -578,6 +580,30 @@ class _InstructionInjectionEditSheetState
     super.dispose();
   }
 
+  Future<void> _openPromptEditor() async {
+    final l10n = AppLocalizations.of(context)!;
+    final next = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: context.overlaySurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => PromptFullScreenEditor(
+        initial: _promptController.text,
+        hintText: l10n.instructionInjectionPromptLabel,
+      ),
+    );
+    if (!mounted || next == null || next == _promptController.text) return;
+    setState(() {
+      _promptController.value = TextEditingValue(
+        text: next,
+        selection: TextSelection.collapsed(offset: next.length),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -675,14 +701,37 @@ class _InstructionInjectionEditSheetState
               ),
             ),
             const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.instructionInjectionPromptLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: AppFontWeights.semibold,
+                      color: cs.onSurface.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ),
+                IosIconButton(
+                  icon: Lucide.Maximize2,
+                  size: 18,
+                  padding: const EdgeInsets.all(4),
+                  color: cs.primary,
+                  onTap: _openPromptEditor,
+                  semanticLabel: l10n.instructionInjectionPromptLabel,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
             TextField(
               controller: _promptController,
               maxLines: 8,
+              minLines: 8,
               decoration: InputDecoration(
-                labelText: l10n.instructionInjectionPromptLabel,
-                alignLabelWithHint: true,
                 filled: true,
                 fillColor: context.appColors.surfaceFill,
+                contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(

@@ -19,6 +19,7 @@ import '../../../shared/widgets/ios_form_text_field.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../../shared/widgets/ios_tactile.dart';
+import '../../../shared/widgets/prompt_insert_kit.dart';
 import '../../../shared/widgets/selection_back_scope.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/section_card.dart';
@@ -1608,6 +1609,30 @@ class _WorldBookEntryEditSheetState extends State<_WorldBookEntryEditSheet> {
     return <String>[k];
   }
 
+  Future<void> _openContentEditor() async {
+    final l10n = AppLocalizations.of(context)!;
+    final next = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: context.overlaySurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => PromptFullScreenEditor(
+        initial: _contentController.text,
+        hintText: l10n.worldBookEntryContentLabel,
+      ),
+    );
+    if (!mounted || next == null || next == _contentController.text) return;
+    setState(() {
+      _contentController.value = TextEditingValue(
+        text: next,
+        selection: TextSelection.collapsed(offset: next.length),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -2049,6 +2074,14 @@ class _WorldBookEntryEditSheetState extends State<_WorldBookEntryEditSheet> {
                           inlineLabel: false,
                           textAlign: TextAlign.start,
                           textInputAction: TextInputAction.newline,
+                          labelTrailing: IosIconButton(
+                            icon: Lucide.Maximize2,
+                            size: 18,
+                            padding: const EdgeInsets.all(4),
+                            color: cs.primary,
+                            onTap: _openContentEditor,
+                            semanticLabel: l10n.worldBookEntryContentLabel,
+                          ),
                         ),
                       ],
                     ),
