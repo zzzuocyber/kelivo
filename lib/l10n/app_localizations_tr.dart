@@ -1730,6 +1730,20 @@ class AppLocalizationsTr extends AppLocalizations {
       'iCloud Drive\'ı veya \"iPhone\'um > Kelivo\" dışında bir klasör seçin. Kelivo klasöründeki dosyalar uygulamayla birlikte silinir. Yedek kaydedilmedi.';
 
   @override
+  String get backupPageChooseNewFile =>
+      'Yedeğinizi kaydetmek için yeni bir dosya adı veya başka bir klasör seçin.';
+
+  @override
+  String backupArchiveFileSizeLimit(String name, String limit) {
+    return '“$name” yedek dosyası, dosya başına $limit sınırını aşıyor.';
+  }
+
+  @override
+  String backupArchiveTotalSizeLimit(String limit) {
+    return 'Sıkıştırılmamış yedek, $limit sınırını aşıyor.';
+  }
+
+  @override
   String get backupPageFilesLabel => 'Dosyalar ve Görseller';
 
   @override
@@ -1860,7 +1874,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get restoreProgressStageInstallingBackup => 'Yedek yükleniyor';
 
   @override
-  String get restoreProgressStageVerifying => 'Doğrulanıyor';
+  String get restoreProgressStageVerifying =>
+      'Geri yüklenen veriler kontrol ediliyor';
 
   @override
   String get restoreProgressStageRollingBack =>
@@ -2175,6 +2190,35 @@ class AppLocalizationsTr extends AppLocalizations {
   String get backupProgressPreparing => 'Hazırlanıyor';
 
   @override
+  String get backupProgressScanning => 'Yedek dosyaları taranıyor';
+
+  @override
+  String backupProgressDiscoveredFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dosya bulundu',
+      one: '$count dosya bulundu',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get backupProgressCheckingDatabase => 'Veritabanı kontrol ediliyor';
+
+  @override
+  String get backupProgressChoosingDestination =>
+      'Kaydedilecek konum seçiliyor';
+
+  @override
+  String get backupProgressSavingFile => 'Yedek dosyası kaydediliyor';
+
+  @override
+  String backupProgressElapsed(String time) {
+    return 'Geçen süre $time';
+  }
+
+  @override
   String get backupProgressSnapshotting =>
       'Veritabanı anlık görüntüsü oluşturuluyor';
 
@@ -2182,7 +2226,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get backupProgressPacking => 'Paketleniyor';
 
   @override
-  String get backupProgressVerifying => 'Doğrulanıyor';
+  String get backupProgressVerifying => 'Yedek arşivi kontrol ediliyor';
 
   @override
   String get backupProgressUploading => 'Yükleniyor';
@@ -2194,13 +2238,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get backupProgressExtracting => 'Çıkarılıyor';
 
   @override
-  String get backupProgressValidating => 'Geçerliliği kontrol ediliyor';
+  String get backupProgressValidating =>
+      'Geri yükleme dosyaları kontrol ediliyor';
 
   @override
   String get backupProgressReadingSettings => 'Ayarlar okunuyor';
 
   @override
-  String get backupProgressStaging => 'Hazırlanıyor';
+  String get backupProgressStaging => 'Geri yükleme dosyaları hazırlanıyor';
 
   @override
   String get backupProgressCommitting => 'Kaydediliyor';
