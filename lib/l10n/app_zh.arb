@@ -4574,6 +4574,7 @@
   "conversationSystemPromptTitle": "对话系统提示词",
   "conversationSystemPromptHint": "仅对当前对话生效，留空时使用助手的系统提示词。",
   "conversationSystemPromptClear": "恢复助手提示词",
+  "conversationSystemPromptQuote": "引用助手提示词",
   "conversationSystemPromptPlaceholder": "为这个对话编写系统提示词…",
   "conversationPromptScope": "仅当前对话",
   "@worldBookEnabledCount": {

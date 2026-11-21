@@ -3754,6 +3754,7 @@
   "conversationSystemPromptTitle": "Sohbet sistem istemi",
   "conversationSystemPromptHint": "Yalnızca bu sohbet için geçerlidir. Asistanın sistem istemini kullanmak için boş bırakın.",
   "conversationSystemPromptClear": "Asistan istemini kullan",
+  "conversationSystemPromptQuote": "Asistan istemini alıntıla",
   "conversationSystemPromptPlaceholder": "Bu sohbet için bir sistem istemi yazın…",
   "conversationPromptScope": "Bu sohbet",
   "oauthAccountsTab": "Hesaplar",

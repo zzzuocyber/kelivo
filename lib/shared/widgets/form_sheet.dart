@@ -121,6 +121,9 @@ class FormSheet extends StatelessWidget {
 
 /// Equal-width cancel / confirm row matching World Book
 /// `_IosOutlineButton` / `_IosFilledButton` (h44, r12, gap 12).
+///
+/// [leading] 是可选的方形动作（比例 1:3:3），比如「引用助手提示词」这种
+/// 只放一个图标的按钮。
 class FormSheetActions extends StatelessWidget {
   const FormSheetActions({
     super.key,
@@ -128,6 +131,8 @@ class FormSheetActions extends StatelessWidget {
     required this.confirmLabel,
     required this.onCancel,
     this.onConfirm,
+    this.leading,
+    this.leadingFlex = 1,
     this.destructive = false,
     this.busy = false,
   });
@@ -136,6 +141,8 @@ class FormSheetActions extends StatelessWidget {
   final String confirmLabel;
   final VoidCallback onCancel;
   final VoidCallback? onConfirm;
+  final Widget? leading;
+  final int leadingFlex;
   final bool destructive;
   final bool busy;
 
@@ -143,11 +150,17 @@ class FormSheetActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        if (leading != null) ...[
+          Expanded(flex: leadingFlex, child: leading!),
+          const SizedBox(width: 12),
+        ],
         Expanded(
+          flex: 3,
           child: _FormSheetOutlineButton(label: cancelLabel, onTap: onCancel),
         ),
         const SizedBox(width: 12),
         Expanded(
+          flex: 3,
           child: _FormSheetFilledButton(
             label: confirmLabel,
             onTap: onConfirm,

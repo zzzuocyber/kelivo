@@ -6032,6 +6032,7 @@
   "conversationSystemPromptTitle": "Conversation system prompt",
   "conversationSystemPromptHint": "Applies only to this conversation. Leave blank to use the assistant’s system prompt.",
   "conversationSystemPromptClear": "Use assistant prompt",
+  "conversationSystemPromptQuote": "Quote assistant prompt",
   "conversationSystemPromptPlaceholder": "Write a system prompt for this conversation…",
   "conversationPromptScope": "This conversation",
   "@worldBookEnabledCount": {
@@ -18870,7 +18871,10 @@
   "@conversationSystemPromptClear": {
     "description": "Button label in the conversation system prompt editor to clear the override and revert to the assistant's system prompt."
   },
-  "@conversationSystemPromptPlaceholder": {
+
+  "@conversationSystemPromptQuote": {
+    "description": "Tooltip on the square button that inserts the assistant's system prompt into the conversation system prompt box."
+  },  "@conversationSystemPromptPlaceholder": {
     "description": "Placeholder text in the conversation system prompt input field."
   },
   "@conversationPromptScope": {

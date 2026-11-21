@@ -9,6 +9,12 @@ class _PromptTab extends StatefulWidget {
 }
 
 class _PromptTabState extends State<_PromptTab> {
+  // 系统提示词输入框可以拖右下角改高度，改完记住，下次进来还是这个高度。
+  static const _promptHeightKey = 'assistant_prompt_height_v1';
+  static const double _defaultPromptHeight = 252;
+  static const double _minPromptHeight = 120;
+  static const double _maxPromptHeight = 560;
+
   late final TextEditingController _sysCtrl;
   late final TextEditingController _tmplCtrl;
   late final FocusNode _sysFocus;
@@ -16,6 +22,7 @@ class _PromptTabState extends State<_PromptTab> {
   late final TextEditingController _presetCtrl;
   bool _showPresetInput = false;
   String _presetRole = 'user';
+  double _sysFieldHeight = _defaultPromptHeight;
   final GlobalKey _presetHeaderKey = GlobalKey(debugLabel: 'presetHeader');
 
   @override
@@ -28,6 +35,21 @@ class _PromptTabState extends State<_PromptTab> {
     _sysFocus = FocusNode(debugLabel: 'systemPromptFocus');
     _tmplFocus = FocusNode(debugLabel: 'messageTemplateFocus');
     _presetCtrl = TextEditingController();
+    final stored = context
+        .read<BusinessPreferences>()
+        .getDouble(_promptHeightKey);
+    if (stored != null) {
+      _sysFieldHeight = stored
+          .clamp(_minPromptHeight, _maxPromptHeight)
+          .toDouble();
+    }
+  }
+
+  void _persistSysFieldHeight() {
+    context
+        .read<BusinessPreferences>()
+        .setDouble(_promptHeightKey, _sysFieldHeight)
+        .ignore();
   }
 
   @override
@@ -391,38 +413,68 @@ class _PromptTabState extends State<_PromptTab> {
               ],
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _sysCtrl,
-              focusNode: _sysFocus,
-              onChanged: (v) {
-                setState(() {});
-                context.read<AssistantProvider>().updateAssistant(
-                  a.copyWith(systemPrompt: v),
-                );
-              },
-              // minLines: 1,
-              maxLines: 8,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              enableInteractiveSelection: true,
-              decoration: InputDecoration(
-                hintText: l10n.assistantEditSystemPromptHint,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: cs.outlineVariant.withValues(alpha: 0.35),
+            // 高度由右下角的小把手拖着改，改完记住。
+            SizedBox(
+              height: _sysFieldHeight,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: TextField(
+                      controller: _sysCtrl,
+                      focusNode: _sysFocus,
+                      onChanged: (v) {
+                        setState(() {});
+                        context.read<AssistantProvider>().updateAssistant(
+                          a.copyWith(systemPrompt: v),
+                        );
+                      },
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      textAlignVertical: TextAlignVertical.top,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      enableInteractiveSelection: true,
+                      decoration: InputDecoration(
+                        hintText: l10n.assistantEditSystemPromptHint,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: cs.outlineVariant.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: cs.primary.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        // 右边留出把手的宽度，长行不会压在把手上。
+                        contentPadding: const EdgeInsets.fromLTRB(
+                          12,
+                          12,
+                          28,
+                          12,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: cs.primary.withValues(alpha: 0.5),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: _ResizeGrip(
+                      onDrag: (dy) => setState(() {
+                        _sysFieldHeight = (_sysFieldHeight + dy)
+                            .clamp(_minPromptHeight, _maxPromptHeight)
+                            .toDouble();
+                      }),
+                      onDragEnd: _persistSysFieldHeight,
+                    ),
                   ),
-                ),
-                contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                ],
               ),
             ),
             const SizedBox(height: 10),
@@ -1668,4 +1720,34 @@ class _ConversationPromptOption extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// 输入框右下角的小把手：上下拖改高度，松手时把高度记下来。
+class _ResizeGrip extends StatelessWidget {
+  const _ResizeGrip({required this.onDrag, required this.onDragEnd});
+
+  final ValueChanged<double> onDrag;
+  final VoidCallback onDragEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) => onDrag(details.delta.dy),
+      onVerticalDragEnd: (_) => onDragEnd(),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Transform.rotate(
+          // 竖排的三个点转 45°，就成了右下角的斜向把手。
+          angle: math.pi / 4,
+          child: Icon(
+            Lucide.GripVertical,
+            size: 14,
+            color: cs.onSurface.withValues(alpha: 0.35),
+          ),
+        ),
+      ),
+    );
+  }
 }

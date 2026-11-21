@@ -12118,6 +12118,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get conversationSystemPromptClear => '恢复助手提示词';
 
   @override
+  String get conversationSystemPromptQuote => '引用助手提示词';
+
+  @override
   String get conversationSystemPromptPlaceholder => '为这个对话编写系统提示词…';
 
   @override
@@ -28543,6 +28546,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get conversationSystemPromptClear => '恢复助手提示词';
+
+  @override
+  String get conversationSystemPromptQuote => '引用助手提示词';
 
   @override
   String get conversationSystemPromptPlaceholder => '为这个对话编写系统提示词…';
@@ -44979,6 +44985,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get conversationSystemPromptClear => '恢復助理提示詞';
+
+  @override
+  String get conversationSystemPromptQuote => '引用助手提示詞';
 
   @override
   String get conversationSystemPromptPlaceholder => '為這個對話編寫系統提示詞…';

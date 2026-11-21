@@ -12867,6 +12867,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get conversationSystemPromptClear => 'Использовать промпт ассистента';
 
   @override
+  String get conversationSystemPromptQuote => 'Вставить промпт ассистента';
+
+  @override
   String get conversationSystemPromptPlaceholder =>
       'Напишите системный промпт для этого чата…';
 

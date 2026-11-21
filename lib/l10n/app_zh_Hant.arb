@@ -3754,6 +3754,7 @@
   "conversationSystemPromptTitle": "對話系統提示詞",
   "conversationSystemPromptHint": "僅對目前對話生效，留空時使用助理的系統提示詞。",
   "conversationSystemPromptClear": "恢復助理提示詞",
+  "conversationSystemPromptQuote": "引用助手提示詞",
   "conversationSystemPromptPlaceholder": "為這個對話編寫系統提示詞…",
   "conversationPromptScope": "僅目前對話",
   "oauthAccountsTab": "帳號登入",

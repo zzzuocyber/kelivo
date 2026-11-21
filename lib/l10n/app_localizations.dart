@@ -22653,6 +22653,12 @@ abstract class AppLocalizations {
   /// **'Use assistant prompt'**
   String get conversationSystemPromptClear;
 
+  /// Tooltip on the square button that inserts the assistant's system
+  /// prompt into the conversation system prompt box.
+  ///
+  /// In en, this message translates to:/n  /// **'Quote assistant prompt'**
+  String get conversationSystemPromptQuote;
+
   /// Placeholder text in the conversation system prompt input field.
   ///
   /// In en, this message translates to:

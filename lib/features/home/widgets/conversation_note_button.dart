@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/database/business_preferences.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../shared/widgets/ios_tactile.dart';
@@ -24,11 +25,20 @@ class ConversationNoteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasNote = context.select<ChatService, bool>(
-      (chat) => conversationNoteText(
-        chat.getConversation(conversationId ?? '')?.extras ?? const {},
-      ).trim().isNotEmpty,
-    );
+    final prefs = context.read<BusinessPreferences>();
+    final hasNote = context.select<ChatService, bool>((chat) {
+      final extras =
+          chat.getConversation(conversationId ?? '')?.extras ?? const {};
+      if (conversationNoteText(extras).trim().isNotEmpty) return true;
+      // 跟随助手时笔记存在助手那边，这个对话自己是空的。
+      if (!conversationNoteFollowsAssistant(extras)) return false;
+      final id = assistantId ?? '';
+      if (id.isEmpty) return false;
+      return readAssistantNotes(
+        prefs,
+        id,
+      ).any((text) => text.trim().isNotEmpty);
+    });
     final cs = Theme.of(context).colorScheme;
     final color = hasNote ? cs.primary : cs.onSurfaceVariant;
     const borderRadius = BorderRadius.all(Radius.circular(10));

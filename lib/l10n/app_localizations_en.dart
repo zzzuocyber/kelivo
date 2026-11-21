@@ -12692,6 +12692,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conversationSystemPromptClear => 'Use assistant prompt';
 
   @override
+  String get conversationSystemPromptQuote => 'Quote assistant prompt';
+
+  @override
   String get conversationSystemPromptPlaceholder =>
       'Write a system prompt for this conversation…';
 

@@ -12765,6 +12765,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get conversationSystemPromptClear => 'Asistan istemini kullan';
 
   @override
+  String get conversationSystemPromptQuote => 'Asistan istemini alıntıla';
+
+  @override
   String get conversationSystemPromptPlaceholder =>
       'Bu sohbet için bir sistem istemi yazın…';
 

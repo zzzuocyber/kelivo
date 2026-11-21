@@ -12326,6 +12326,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get conversationSystemPromptClear => '어시스턴트 프롬프트 사용';
 
   @override
+  String get conversationSystemPromptQuote => '어시스턴트 프롬프트 인용';
+
+  @override
   String get conversationSystemPromptPlaceholder => '이 대화의 시스템 프롬프트를 작성하세요…';
 
   @override

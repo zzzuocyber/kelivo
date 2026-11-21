@@ -3754,6 +3754,7 @@
   "conversationSystemPromptTitle": "Системный промпт чата",
   "conversationSystemPromptHint": "Действует только для этого чата. Оставьте пустым, чтобы использовать системный промпт ассистента.",
   "conversationSystemPromptClear": "Использовать промпт ассистента",
+  "conversationSystemPromptQuote": "Вставить промпт ассистента",
   "conversationSystemPromptPlaceholder": "Напишите системный промпт для этого чата…",
   "conversationPromptScope": "Этот чат",
   "oauthAccountsTab": "Аккаунты",
