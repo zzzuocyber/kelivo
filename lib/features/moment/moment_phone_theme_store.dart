@@ -36,7 +36,7 @@ class PhoneTheme {
       wallpaperPath: rawPath.trim(),
       dark: rawMode is bool ? rawMode : _defaultDark,
       dim: rawDim is num
-          ? rawDim.toDouble().clamp(0.0, maxPhoneWallpaperDim)
+          ? rawDim.toDouble().clamp(0.0, maxPhoneWallpaperDim).toDouble()
           : defaultPhoneWallpaperDim,
     );
   }
@@ -47,7 +47,8 @@ class PhoneThemeStore {
   PhoneThemeStore(this.chat);
 
   final ChatService chat;
-  final MomentStore _moment = MomentStore(chat);
+  // 不能在字段初始化器里引用构造参数 chat（那等于访问 this），改成 getter 现用现建。
+  MomentStore get _moment => MomentStore(chat);
 
   PhoneTheme read() => PhoneTheme.fromExtras(_moment.findConversation()?.extras);
 

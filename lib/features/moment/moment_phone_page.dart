@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/services/chat/chat_service.dart';
 import '../../icons/lucide_adapter.dart';
