@@ -327,6 +327,7 @@ class HomeViewModel extends ChangeNotifier {
 
   /// Called when streaming finishes (UI may show notification).
   void Function(String conversationId)? onStreamFinished;
+  VoidCallback? onConversationIdle;
 
   /// Completes once downstream work has taken over background execution.
   FutureOr<void> Function(ChatMessage message)? onAssistantMessageFinished;
@@ -402,6 +403,7 @@ class HomeViewModel extends ChangeNotifier {
   void _onLoadingChanged(String conversationId, bool loading) {
     notifyListeners();
     if (!loading) {
+      onConversationIdle?.call();
       _chatService.contextCompression.resumeIfReady(conversationId);
       unawaited(_drainQueuedInputIfReady(conversationId));
     }
