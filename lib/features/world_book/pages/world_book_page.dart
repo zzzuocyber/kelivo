@@ -23,8 +23,8 @@ import '../../../shared/widgets/selection_back_scope.dart';
 import '../../../shared/widgets/snackbar.dart';
 import '../../../shared/widgets/section_card.dart';
 import '../../../theme/app_font_weights.dart';
+import '../../../theme/app_semantic_colors.dart';
 import '../widgets/world_book_entry_actions.dart';
-import 'package:Kelivo/theme/app_semantic_colors.dart';
 
 class WorldBookPage extends StatefulWidget {
   const WorldBookPage({super.key});
@@ -543,42 +543,49 @@ class _WorldBookGroupHeader extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onToggle,
       child: Padding(
-        // A section label, not a row: small, muted, and given more air so the
-        // cards below it read as one group.
-        padding: const EdgeInsets.fromLTRB(10, 20, 10, 8),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: Center(
-                child: AnimatedRotation(
-                  turns: collapsed ? 0.0 : 0.25, // right -> down
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  child: Icon(
-                    Lucide.ChevronRight,
-                    size: 14,
-                    color: cs.onSurface.withValues(alpha: 0.45),
+        // A section band: one card step above the books, so the group reads as
+        // a container while each book keeps its own card below it.
+        padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: context.appColors.surfaceCardFill,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: Center(
+                  child: AnimatedRotation(
+                    turns: collapsed ? 0.0 : 0.25, // right -> down
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(
+                      Lucide.ChevronRight,
+                      size: 15,
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  letterSpacing: 0.4,
-                  fontWeight: AppFontWeights.semibold,
-                  color: cs.onSurface.withValues(alpha: 0.5),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    letterSpacing: 0.2,
+                    fontWeight: AppFontWeights.semibold,
+                    color: cs.onSurface.withValues(alpha: 0.9),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

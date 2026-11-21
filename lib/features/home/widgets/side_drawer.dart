@@ -4065,7 +4065,6 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
             ),
           for (final t in tags)
             if ((groupedByTag[t.id] ?? const <Assistant>[]).isNotEmpty) ...[
-              const SizedBox(height: 4),
               _GroupHeader(
                 title: t.name,
                 collapsed: tp.isCollapsed(t.id),
@@ -4654,9 +4653,9 @@ class _GroupHeader extends StatelessWidget {
       child: Padding(
         // Extra air above each group: the band plus this gap is what separates
         // one group from the next — no divider line needed.
-        padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+        padding: const EdgeInsets.fromLTRB(4, 7, 4, 2),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
             color: textBase.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(10),
