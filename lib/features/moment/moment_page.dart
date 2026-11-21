@@ -451,10 +451,20 @@ class _MomentPageState extends State<MomentPage> {
     await _rewriteComment(post, index, comment);
   }
 
+  /// 点评论气泡：不用先选评论，直接挑人。有评论就回最新那条，没评论就回帖子本身。
+  Future<void> _pickSummonForPost(MomentPost post) async {
+    final comment = post.comments.isEmpty
+        ? MomentComment(
+            author: post.author,
+            text: post.text.trim().isEmpty ? '这条动态' : post.text,
+          )
+        : post.comments.last;
+    await _pickSummon(post, comment);
+  }
+
   /// 召唤：挑一个人，让他去回这条评论。名单里排掉评论作者自己。
   ///
-  /// 名单分两段：**收藏**在上，**全部**在下按首字母排。
-  /// 顺序固定下来，就不会每次点开看到的人不一样。
+  /// 名单只按首字母分组，右侧给一条 A～Z 索引；收藏那套没用，已经去掉。
   Future<void> _pickSummon(MomentPost post, MomentComment comment) async {
     // 作者本人也在名单里：他可以接着自己这条往下说（补充、改口都行）。
     final pool = sortedByPinyin(<MomentCharacter>[
@@ -472,13 +482,7 @@ class _MomentPageState extends State<MomentPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
-      builder: (sheetCtx) => _SummonSheet(
-        pool: pool,
-        avatars: _assets,
-        favorites: _store.summonFavorites(),
-        favoritesOf: _store.summonFavorites,
-        onToggleFavorite: _store.toggleSummonFavorite,
-      ),
+      builder: (sheetCtx) => _SummonSheet(pool: pool, avatars: _assets),
     );
     if (!mounted || picked == null) return;
     await _summon(post, comment, picked);
@@ -987,7 +991,7 @@ class _MomentPageState extends State<MomentPage> {
             likedByMe: post.likes.contains(acting),
             onTapAvatar: () => _openAuthor(post.author),
             onTapLike: () => _toggleLike(post),
-            onTapComment: () => _openComposer(post),
+            onTapComment: () => _pickSummonForPost(post),
             onTapCommentLine: (comment) =>
                 _openComposer(post, replyTo: comment.author),
             onLongPressPost: _rewritingPostId == post.id
@@ -1048,13 +1052,12 @@ class _Hint extends StatelessWidget {
 
 /// 让页面在别的地方也能直接跳到朋友圈。
 Future<void> openMomentPage(BuildContext context) {
-  return Navigator.of(
-    context,
-  ).push<void>(MaterialPageRoute<void>(builder: (_) => const MomentPage()));
+  return Navigator.of(context)
+      .push<void>(MaterialPageRoute<void>(builder: (_) => const MomentPage()));
 }
 
 // ============================================================
-// 召唤列表：收藏在上，全部在下按首字母排
+// 召唤列表：按名字首字母分组，右侧一条 A～Z 索引
 // ============================================================
 
 /// 召唤谁去回这条评论。
@@ -1062,94 +1065,46 @@ Future<void> openMomentPage(BuildContext context) {
 /// 这个面板是插到根 Overlay 上的，**不继承朋友圈那套浅色主题**，
 /// 所以配色一律写死（浅底 + 深字），不然夜间模式下白底白字看不见。
 class _SummonSheet extends StatefulWidget {
-  const _SummonSheet({
-    required this.pool,
-    required this.avatars,
-    required this.favorites,
-    required this.favoritesOf,
-    required this.onToggleFavorite,
-  });
+  const _SummonSheet({required this.pool, required this.avatars});
 
   /// 候选角色，进来之前已经按首字母排好序。
   final List<MomentCharacter> pool;
   final Map<String, MomentAssets> avatars;
-
-  /// 收藏了谁。
-  final List<String> favorites;
-
-  /// 现读收藏名单：store 写完会刷新缓存，重新读才拿得到刚存的值。
-  final List<String> Function() favoritesOf;
-
-  /// 点星星时调它，返回更新后的收藏名单。
-  final Future<List<String>> Function(String name) onToggleFavorite;
 
   @override
   State<_SummonSheet> createState() => _SummonSheetState();
 }
 
 class _SummonSheetState extends State<_SummonSheet> {
-  // 不是 final：收藏状态更新时要整组替换（见 _toggle）。
-  Set<String> _favorites = <String>{};
-  bool _busy = false;
+  static const double _letterRowHeight = 26;
+  static const double _contactRowHeight = 54;
+
+  final ScrollController _scroll = ScrollController();
 
   @override
-  void initState() {
-    super.initState();
-    _favorites.addAll(widget.favorites);
-    // 面板是异步建的，建的时候再读一次，避免拿到过时的那份。
-    _favorites.addAll(widget.favoritesOf());
-  }
-
-  Future<void> _toggle(String name) async {
-    if (_busy) return;
-    _busy = true;
-    final before = <String>{..._favorites};
-    setState(() {
-      if (!_favorites.remove(name)) _favorites.add(name);
-    });
-    try {
-      await widget.onToggleFavorite(name);
-      if (!mounted) return;
-      // 从 store 现读：面板是挂在根 Overlay 上的，写完之后只有重新读
-      // 才能拿到最新名单，光信回调返回值容易读到写之前的旧缓存。
-      setState(() => _favorites = <String>{...widget.favoritesOf()});
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _favorites = before);
-    } finally {
-      _busy = false;
-    }
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final starred = <MomentCharacter>[
-      for (final character in widget.pool)
-        if (_favorites.contains(character.name.trim())) character,
-    ];
-    final rest = <MomentCharacter>[
-      for (final character in widget.pool)
-        if (!_favorites.contains(character.name.trim())) character,
-    ];
-
     final tiles = <Widget>[];
-    if (starred.isNotEmpty) {
-      tiles.add(_header('收藏', trailing: '${starred.length}'));
-      for (final character in starred) {
-        tiles.add(_row(character, starred: true));
+    final letters = <String>[];
+    final offsets = <String, double>{};
+    var y = 0.0;
+    String? lastLetter;
+    for (final character in widget.pool) {
+      final letter = pinyinInitialOf(character.name);
+      if (letter != lastLetter) {
+        letters.add(letter);
+        offsets[letter] = y;
+        y += _letterRowHeight;
+        tiles.add(_letter(letter));
+        lastLetter = letter;
       }
-    }
-    if (rest.isNotEmpty) {
-      tiles.add(_header('全部召唤', trailing: '${rest.length}'));
-      String? lastLetter;
-      for (final character in rest) {
-        final letter = pinyinInitialOf(character.name);
-        if (letter != lastLetter) {
-          tiles.add(_letter(letter));
-          lastLetter = letter;
-        }
-        tiles.add(_row(character, starred: false));
-      }
+      y += _contactRowHeight;
+      tiles.add(_row(character));
     }
 
     return SafeArea(
@@ -1190,9 +1145,22 @@ class _SummonSheetState extends State<_SummonSheet> {
               color: MomentColors.hairline,
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 12),
-                children: tiles,
+              child: Stack(
+                children: <Widget>[
+                  // 右边留出一条给字母条，不然会盖住字。
+                  ListView(
+                    controller: _scroll,
+                    padding: const EdgeInsets.only(right: 22, bottom: 12),
+                    children: tiles,
+                  ),
+                  if (letters.length > 2)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: _indexBar(letters, offsets),
+                    ),
+                ],
               ),
             ),
           ],
@@ -1201,36 +1169,12 @@ class _SummonSheetState extends State<_SummonSheet> {
     );
   }
 
-  Widget _header(String text, {String trailing = ''}) {
-    return Container(
-      color: const Color(0xFFF4F5F7),
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-      child: Row(
-        children: <Widget>[
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: MomentColors.secondaryText,
-            ),
-          ),
-          const Spacer(),
-          if (trailing.isNotEmpty)
-            Text(
-              trailing,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: MomentColors.secondaryText,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _letter(String letter) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 2),
+    return Container(
+      height: _letterRowHeight,
+      color: const Color(0xFFF4F5F7),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      alignment: Alignment.centerLeft,
       child: Text(
         letter,
         style: const TextStyle(
@@ -1242,54 +1186,89 @@ class _SummonSheetState extends State<_SummonSheet> {
     );
   }
 
-  Widget _row(MomentCharacter character, {required bool starred}) {
+  Widget _row(MomentCharacter character) {
     final name = character.name.trim();
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
-      child: Row(
-        children: <Widget>[
-          // 只有「头像 + 名字」这一块点了才是召唤，星星在它外面，
-          // 免得点星星连面板一起关掉、看着像收藏没反应。
-          Expanded(
-            child: InkWell(
-              onTap: () => Navigator.of(context).pop(name),
-              child: Row(
-                children: <Widget>[
-                  MomentAvatar(
-                    name: name,
-                    size: 34,
-                    imagePath: widget.avatars[name]?.avatar,
+    return SizedBox(
+      height: _contactRowHeight,
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(18, 0, 8, 0),
+        child: InkWell(
+          onTap: () => Navigator.of(context).pop(name),
+          child: Row(
+            children: <Widget>[
+              MomentAvatar(
+                name: name,
+                size: 34,
+                imagePath: widget.avatars[name]?.avatar,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: MomentColors.primaryText,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 右侧那一竖排 A、B、C……，点一下滚到对应分组。
+  Widget _indexBar(List<String> letters, Map<String, double> offsets) {
+    return Center(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0x0D000000),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final letter in letters)
+                GestureDetector(
+                  onTap: () => _jumpTo(letter, offsets),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 3,
+                      vertical: 1.2,
+                    ),
                     child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      letter,
                       style: const TextStyle(
-                        fontSize: 15,
-                        color: MomentColors.primaryText,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                        color: MomentColors.secondaryText,
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
-          IconButton(
-            onPressed: () => _toggle(name),
-            tooltip: starred ? '取消收藏' : '收藏',
-            icon: Icon(
-              Lucide.Bookmark,
-              size: 19,
-              color: starred
-                  ? const Color(0xFFE0A33E)
-                  : const Color(0xFFC8CCD4),
-            ),
-          ),
-        ],
+        ),
       ),
+    );
+  }
+
+  void _jumpTo(String letter, Map<String, double> offsets) {
+    if (!_scroll.hasClients) return;
+    final target = offsets[letter];
+    if (target == null) return;
+    final max = _scroll.position.maxScrollExtent;
+    _scroll.animateTo(
+      target.clamp(0.0, max).toDouble(),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
     );
   }
 }

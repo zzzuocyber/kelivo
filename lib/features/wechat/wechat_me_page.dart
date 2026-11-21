@@ -54,9 +54,8 @@ class _WechatMePageState extends State<WechatMePage> {
     if (path == null || !mounted) return;
     try {
       final stored = await importAvatarFile(path);
-      await MomentStore(
-        context.read<ChatService>(),
-      ).saveAssets(MomentAssets.personaKey, avatar: stored);
+      await MomentStore(context.read<ChatService>())
+          .saveAssets(MomentAssets.personaKey, avatar: stored);
       if (!mounted) return;
       _reload();
       widget.onChanged?.call();
@@ -406,9 +405,7 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
       ),
     );
     if (saved != true || !mounted) return;
-    await _store.saveWechatSettings(
-      _settings.copyWith(burstPreset: preset),
-    );
+    await _store.saveWechatSettings(_settings.copyWith(burstPreset: preset));
     if (!mounted) return;
     _reload();
   }
@@ -605,9 +602,8 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
     if (path == null || !mounted) return;
     try {
       final stored = await importAvatarFile(path);
-      await MomentStore(
-        context.read<ChatService>(),
-      ).saveAssets(contact.name, avatar: stored);
+      await MomentStore(context.read<ChatService>())
+          .saveAssets(contact.name, avatar: stored);
       if (!mounted) return;
       _reload();
     } catch (_) {
@@ -616,9 +612,8 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
   }
 
   Future<void> _clearAvatar(WechatContact contact) async {
-    await MomentStore(
-      context.read<ChatService>(),
-    ).saveAssets(contact.name, clearAvatar: true);
+    await MomentStore(context.read<ChatService>())
+        .saveAssets(contact.name, clearAvatar: true);
     if (!mounted) return;
     _reload();
   }
@@ -643,6 +638,114 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
         ),
       );
     }
+    if (!mounted) return;
+    _reload();
+  }
+
+  /// 私聊偶尔不回：按角色单独开，默认关。
+  Future<void> _pickNoReply(WechatContact contact) async {
+    var enabled = contact.noReplyEnabled;
+    var strength = contact.noReplyStrength;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          '${contact.name} 会不会不搭理人',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: WechatColors.primaryText,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('好'),
+                      ),
+                    ],
+                  ),
+                ),
+                SwitchListTile(
+                  value: enabled,
+                  onChanged: (value) => setSheetState(() => enabled = value),
+                  title: const Text(
+                    '会不搭理人',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: WechatColors.primaryText,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    '开了才可能已读不回；关掉就是每次都回。',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: WechatColors.secondaryText,
+                    ),
+                  ),
+                ),
+                if (enabled) ...<Widget>[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 6, 16, 4),
+                    child: Text(
+                      '不搭理的频繁程度',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: WechatColors.secondaryText,
+                      ),
+                    ),
+                  ),
+                  for (final item in WechatNoReplyStrength.values)
+                    RadioListTile<WechatNoReplyStrength>(
+                      value: item,
+                      groupValue: strength,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setSheetState(() => strength = value);
+                        }
+                      },
+                      title: Text(
+                        item.label,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: WechatColors.primaryText,
+                        ),
+                      ),
+                      subtitle: Text(
+                        item.hint,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: WechatColors.secondaryText,
+                        ),
+                      ),
+                      dense: true,
+                    ),
+                ],
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    await _store.saveContact(
+      contact.copyWith(noReplyEnabled: enabled, noReplyStrength: strength),
+    );
     if (!mounted) return;
     _reload();
   }
@@ -748,6 +851,31 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
                                   children: <Widget>[
                                     Text(
                                       _modelLabel(contact, settings),
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: WechatColors.secondaryText,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    const Icon(
+                                      Lucide.ChevronRight,
+                                      size: 12,
+                                      color: Color(0xFFC8C8C8),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              GestureDetector(
+                                onTap: () => _pickNoReply(contact),
+                                behavior: HitTestBehavior.opaque,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    Text(
+                                      contact.noReplyEnabled
+                                          ? '会不搭理人 · ${contact.noReplyStrength.label}'
+                                          : '不会不搭理人',
                                       style: const TextStyle(
                                         fontSize: 11.5,
                                         color: WechatColors.secondaryText,

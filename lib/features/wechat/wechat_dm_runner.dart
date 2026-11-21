@@ -29,6 +29,11 @@ class WechatDmReplyRunner {
   /// 上一轮的错误，页面回来时取走提示一次。
   final Map<String, String> _errors = <String, String>{};
 
+  /// 内部用的连续不回次数；只用于强制兜底，界面永远看不到。
+  final Map<String, int> _noReplyStreak = <String, int>{};
+
+  static const int _maxNoReplyStreak = 2;
+
   final List<VoidCallback> _listeners = <VoidCallback>[];
 
   void addListener(VoidCallback listener) => _listeners.add(listener);
@@ -64,19 +69,23 @@ class WechatDmReplyRunner {
     required WorldBookProvider worldBooks,
     required Duration delay,
     bool selfInitiated = false,
+    bool forceReply = false,
   }) {
     if (isPending(key)) return;
     _errors.remove(key);
     _timers[key] = Timer(delay, () {
       _timers.remove(key);
-      unawaited(_run(
-        key: key,
-        contactName: contactName,
-        store: store,
-        settings: settings,
-        worldBooks: worldBooks,
-        selfInitiated: selfInitiated,
-      ));
+      unawaited(
+        _run(
+          key: key,
+          contactName: contactName,
+          store: store,
+          settings: settings,
+          worldBooks: worldBooks,
+          selfInitiated: selfInitiated,
+          forceReply: forceReply,
+        ),
+      );
     });
     _notify();
   }
@@ -88,7 +97,9 @@ class WechatDmReplyRunner {
     required SettingsProvider settings,
     required WorldBookProvider worldBooks,
     required bool selfInitiated,
+    required bool forceReply,
   }) async {
+    final streak = _noReplyStreak[key] ?? 0;
     _inFlight.add(key);
     _notify();
     try {
@@ -97,6 +108,14 @@ class WechatDmReplyRunner {
           store.contact(contactName) ?? WechatContact(name: contactName);
       final wechatSettings = store.wechatSettings();
       final burst = wechatBurstCount(wechatSettings.burstPreset, Random());
+      // 概率只决定「这一轮允不允许考虑不回」，最终由模型按人设输出暗号。
+      // 召唤、明确指令、连续不回太多都直接关掉这个口子。
+      final allowNoReply =
+          contact.noReplyEnabled &&
+          !forceReply &&
+          !selfInitiated &&
+          streak < _maxNoReplyStreak &&
+          Random().nextDouble() < contact.noReplyStrength.chance;
       final generator = WechatDmGenerator(
         settings: settings,
         worldBooks: worldBooks,
@@ -106,6 +125,7 @@ class WechatDmReplyRunner {
         worldPrompt: wechatSettings.worldPrompt,
         history: wechatRecentContext(store.dmMessages(contactName), limit: 40),
         selfInitiated: selfInitiated,
+        allowNoReply: allowNoReply,
       );
       final text = await generator.generate(burstCount: burst);
       final parts = wechatSplitReply(text, maxParts: burst);
@@ -126,6 +146,12 @@ class WechatDmReplyRunner {
           withImage: parsed.withImage,
         );
       }
+      // 真回过一次就把连续不回清零。
+      _noReplyStreak.remove(key);
+    } on WechatNoReplyException catch (_) {
+      // 模型决定不理：不建消息、不写库、不弹提示，只记个内部计数防连续冷暴力。
+      _noReplyStreak[key] = streak + 1;
+      return;
     } on WechatServiceException catch (error) {
       _errors[key] = error.code == 'model_missing'
           ? '这个人还没选模型，去「我 → 设置 → 角色管理」挑一个'

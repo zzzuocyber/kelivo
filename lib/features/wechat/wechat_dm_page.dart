@@ -70,7 +70,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
     });
     // 召唤进来的：他先说话。给一小段时间让页面站稳再开口。
     if (widget.summon) {
-      _scheduleReply(const Duration(milliseconds: 500));
+      _scheduleReply(summonDelay: const Duration(milliseconds: 500));
     }
   }
 
@@ -136,7 +136,15 @@ class _WechatDmPageState extends State<WechatDmPage> {
       _messages = _store.dmMessages(widget.contactName);
     });
     _jumpToBottom();
-    _scheduleReply();
+    _scheduleReply(forceReply: _shouldForceReply(text));
+  }
+
+  /// 明确指令、召唤、剧情关键内容必须回，不能触发已读不回。
+  bool _shouldForceReply(String text) {
+    final t = text.trim();
+    if (t.startsWith('/') || t.startsWith('!') || t.startsWith('！'))
+      return true;
+    return RegExp(r'召唤|角色扮演|剧情|继续|接着说|回答我').hasMatch(t);
   }
 
   /// 后台执行器状态变了：把 typing 和消息刷新到界面。
@@ -154,7 +162,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
 
   /// 隔一会儿他再回，太秒回像机器人。
   /// 等待和生成都交给后台执行器，退出页面也不会停。
-  void _scheduleReply([Duration? summonDelay]) {
+  void _scheduleReply({Duration? summonDelay, bool forceReply = false}) {
     if (WechatDmReplyRunner.instance.isPending(_chatKey)) return;
     final isSummon = summonDelay != null;
     final delay = summonDelay ?? _replyDelay();
@@ -166,6 +174,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
       worldBooks: context.read<WorldBookProvider>(),
       delay: delay,
       selfInitiated: isSummon,
+      forceReply: forceReply || isSummon,
     );
   }
 

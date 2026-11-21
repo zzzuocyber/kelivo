@@ -39,6 +39,57 @@ const String wechatImageMark = '[图]';
   return (text: text, withImage: marked);
 }
 
+/// 私聊「已读不回」暗号：模型决定这轮不搭理时，只输出这个标记。
+/// 它在建消息之前就被认出来并整轮丢掉，绝不写进聊天记录。
+const String wechatNoReplyMark = '[[不回]]';
+
+bool wechatHasNoReplyMark(String raw) {
+  final text = raw.trimLeft();
+  const variants = <String>[
+    wechatNoReplyMark,
+    '［［不回］］',
+    '[[不理]]',
+    '[[不搭理]]',
+    '[[沉默]]',
+  ];
+  for (final mark in variants) {
+    if (text.startsWith(mark)) return true;
+  }
+  return false;
+}
+
+/// 私聊不搭理人的强度。只管开关打开的角色，默认关。
+enum WechatNoReplyStrength { low, mid, high }
+
+extension WechatNoReplyStrengthX on WechatNoReplyStrength {
+  String get label => switch (this) {
+    WechatNoReplyStrength.low => '偶尔',
+    WechatNoReplyStrength.mid => '看心情',
+    WechatNoReplyStrength.high => '经常',
+  };
+
+  String get hint => switch (this) {
+    WechatNoReplyStrength.low => '大部分时候都会回',
+    WechatNoReplyStrength.mid => '烦了、忙了就可能不回',
+    WechatNoReplyStrength.high => '懒得搭理的时候很多',
+  };
+
+  /// 每轮允许模型考虑「不回」的基础概率。
+  double get chance => switch (this) {
+    WechatNoReplyStrength.low => 0.15,
+    WechatNoReplyStrength.mid => 0.35,
+    WechatNoReplyStrength.high => 0.6,
+  };
+
+  static WechatNoReplyStrength parse(Object? raw) {
+    final value = (raw ?? '').toString();
+    for (final item in WechatNoReplyStrength.values) {
+      if (item.name == value) return item;
+    }
+    return WechatNoReplyStrength.low;
+  }
+}
+
 /// 通讯录里的一个人。**手动添加**，不会自己从世界书灌进来。
 ///
 /// 人设正文还是去世界书取（entryId + bookId 定位）；
@@ -54,6 +105,8 @@ class WechatContact {
     this.intervalPreset = WechatIntervalPreset.follow,
     this.customMinSeconds = 2,
     this.customMaxSeconds = 12,
+    this.noReplyEnabled = false,
+    this.noReplyStrength = WechatNoReplyStrength.low,
     this.addedAt = 0,
   });
 
@@ -73,6 +126,10 @@ class WechatContact {
   final int customMinSeconds;
   final int customMaxSeconds;
 
+  /// 私聊时这个人会不会偶尔已读不回。默认关，老数据不受影响。
+  final bool noReplyEnabled;
+  final WechatNoReplyStrength noReplyStrength;
+
   final int addedAt;
 
   WechatContact copyWith({
@@ -84,6 +141,8 @@ class WechatContact {
     WechatIntervalPreset? intervalPreset,
     int? customMinSeconds,
     int? customMaxSeconds,
+    bool? noReplyEnabled,
+    WechatNoReplyStrength? noReplyStrength,
     bool clearModel = false,
   }) {
     return WechatContact(
@@ -95,6 +154,8 @@ class WechatContact {
       intervalPreset: intervalPreset ?? this.intervalPreset,
       customMinSeconds: customMinSeconds ?? this.customMinSeconds,
       customMaxSeconds: customMaxSeconds ?? this.customMaxSeconds,
+      noReplyEnabled: noReplyEnabled ?? this.noReplyEnabled,
+      noReplyStrength: noReplyStrength ?? this.noReplyStrength,
       addedAt: addedAt,
     );
   }
@@ -108,6 +169,8 @@ class WechatContact {
     'interval': intervalPreset.name,
     'min': customMinSeconds,
     'max': customMaxSeconds,
+    if (noReplyEnabled) 'noReply': true,
+    if (noReplyEnabled) 'noReplyStrength': noReplyStrength.name,
     'at': addedAt,
   };
 
@@ -126,6 +189,8 @@ class WechatContact {
       intervalPreset: WechatIntervalPresetX.parse(raw['interval']),
       customMinSeconds: _intOr(raw['min'], 2),
       customMaxSeconds: _intOr(raw['max'], 12),
+      noReplyEnabled: raw['noReply'] == true,
+      noReplyStrength: WechatNoReplyStrengthX.parse(raw['noReplyStrength']),
       addedAt: _intOr(raw['at'], 0),
     );
   }

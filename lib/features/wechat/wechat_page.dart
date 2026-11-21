@@ -213,10 +213,7 @@ class _WechatPageState extends State<WechatPage> {
         context: context,
         builder: (dialogCtx) => AlertDialog(
           backgroundColor: Colors.white,
-          title: const Text(
-            '清空聊天记录？',
-            style: TextStyle(fontSize: 16),
-          ),
+          title: const Text('清空聊天记录？', style: TextStyle(fontSize: 16)),
           content: Text('和「${session.title}」的聊天记录会全部清掉，群和人都留着，删了拿不回来。'),
           actions: <Widget>[
             TextButton(
@@ -225,7 +222,10 @@ class _WechatPageState extends State<WechatPage> {
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(true),
-              child: const Text('清空', style: TextStyle(color: WechatColors.red)),
+              child: const Text(
+                '清空',
+                style: TextStyle(color: WechatColors.red),
+              ),
             ),
           ],
         ),
@@ -350,9 +350,9 @@ class _WechatPageState extends State<WechatPage> {
                                   color: WechatColors.secondaryText,
                                 ),
                               ),
-                              onTap: () => Navigator.of(
-                                sheetCtx,
-                              ).pop('open:${group.id}'),
+                              onTap: () =>
+                                  Navigator.of(sheetCtx)
+                                      .pop('open:${group.id}'),
                             ),
                         ],
                       ),
@@ -786,8 +786,14 @@ class _WechatChatPageState extends State<WechatChatPage> {
   /// 长按空白后才把天意消息标出来。
   bool _showDivineMark = false;
 
-  /// 被 @ 的人：下一次一定轮到他说话。发完就清掉。
-  String? _pendingSpeaker;
+  /// 被 @ 的人：发消息时从文本里解析出来，排队等他们接话。发完一个清一个。
+  final List<String> _pendingSpeakers = <String>[];
+
+  /// 连续生成失败次数，超过三次才停自动回复，别一次失败就永久哑火。
+  int _loopFailures = 0;
+
+  /// @ 按钮刚选完人时的高亮，只管图标颜色，不参与回复调度。
+  bool _mentionArmed = false;
 
   /// 下一条我发的消息要不要带图（输入栏图片开关）。发完自动关掉。
   bool _attachImage = false;
@@ -856,6 +862,9 @@ class _WechatChatPageState extends State<WechatChatPage> {
     if (group == null) return;
     final text = _input.text.trim();
     if (text.isEmpty) return;
+    // @ 要在文本里认，不能只靠点 @ 按钮时那个临时状态：
+    // 计时器抢先跑、退出重进、历史消息重发，都会把临时状态弄丢。
+    final mentioned = _mentionsInGroupText(text, group);
     _input.clear();
     final divine = group.divine.trim();
     final asDivine = divine.isNotEmpty;
@@ -870,10 +879,33 @@ class _WechatChatPageState extends State<WechatChatPage> {
     if (!mounted) return;
     setState(() {
       _attachImage = false;
+      _mentionArmed = false;
+      // @ 是明确点名，哪怕之前暂停了自动回复也要让这个人接一句。
+      if (mentioned.isNotEmpty) _autoLoop = true;
       _messages = <WechatMessage>[..._messages, message];
+      for (final name in mentioned) {
+        if (!_pendingSpeakers.contains(name)) _pendingSpeakers.add(name);
+      }
     });
     _jumpToBottom();
     _restartLoop();
+  }
+
+  /// 从群消息文本里挑出 @ 了谁。只认当前群成员，长名字优先，避免短名截断。
+  List<String> _mentionsInGroupText(String text, WechatGroup group) {
+    final names = <String>[
+      for (final member in group.members)
+        if (member.name.trim().isNotEmpty) member.name.trim(),
+    ]..sort((a, b) => b.length.compareTo(a.length));
+    if (names.isEmpty) return const <String>[];
+    final pattern = RegExp('@(${names.map(RegExp.escape).join('|')})');
+    final out = <String>[];
+    for (final match in pattern.allMatches(text)) {
+      final name = match.group(1);
+      if (name == null || name.isEmpty) continue;
+      if (!out.contains(name)) out.add(name);
+    }
+    return out;
   }
 
   /// @ 一个人：下一次一定是他说话，等的间隔照旧按群聊那套。
@@ -935,20 +967,21 @@ class _WechatChatPageState extends State<WechatChatPage> {
       _input.text = '${_input.text}$insert';
       _input.selection = TextSelection.collapsed(offset: _input.text.length);
     }
-    setState(() => _pendingSpeaker = picked);
+    // 只高亮图标：真正的排队交给 _send 从文本里解析，
+    // 免得计时器抢先把这个临时状态消费掉。
+    setState(() => _mentionArmed = true);
     _focus.requestFocus();
   }
 
   // ---------------- 自动循环 ----------------
 
-  void _restartLoop() {
+  void _restartLoop({Duration? delay}) {
     _timer?.cancel();
     if (!_autoLoop || _group == null) return;
-    final delay = _scheduler.nextDelay(
-      _group!,
-      settings: _store.wechatSettings(),
+    _timer = Timer(
+      delay ?? _scheduler.nextDelay(_group!, settings: _store.wechatSettings()),
+      () => _tick(),
     );
-    _timer = Timer(delay, () => _tick());
   }
 
   Future<void> _tick() async {
@@ -956,19 +989,21 @@ class _WechatChatPageState extends State<WechatChatPage> {
     final group = _group;
     if (group == null) return;
     // 被 @ 的人优先：说了叫谁就一定是谁，但等的间隔还是按群聊那套。
-    final forced = _pendingSpeaker;
+    final forced = _pendingSpeakers.isEmpty ? null : _pendingSpeakers.first;
     WechatMember? wanted;
     if (forced != null) {
       for (final member in group.members) {
-        if (member.name == forced) {
+        if (member.name.trim() == forced.trim()) {
           wanted = member;
           break;
         }
       }
+      // 名字对不上（人退群了/改名了）就把这个死队列项丢掉，别卡住后面的人。
+      if (wanted == null && mounted) _pendingSpeakers.removeAt(0);
     }
     final speaker = wanted ?? _scheduler.pickSpeaker(group, _messages);
     if (speaker == null) return;
-    final isForced = forced != null && speaker.name == forced;
+    final isForced = wanted != null;
     final speakerName = speaker.name;
     // 等待和生成期间都静默：打字只在消息落地前短暂亮一下。
     try {
@@ -1007,26 +1042,36 @@ class _WechatChatPageState extends State<WechatChatPage> {
       if (added.isEmpty || !mounted) return;
       setState(() {
         _typingName = null;
-        if (isForced) _pendingSpeaker = null;
+        _loopFailures = 0;
+        if (isForced &&
+            _pendingSpeakers.isNotEmpty &&
+            _pendingSpeakers.first == forced) {
+          _pendingSpeakers.removeAt(0);
+        }
         _messages = <WechatMessage>[..._messages, ...added];
       });
       _jumpToBottom();
       _restartLoop();
     } on WechatServiceException catch (error) {
       if (!mounted) return;
-      setState(() {
-        _typingName = null;
-        _autoLoop = false;
-      });
-      _toast(_messageFor(error));
+      _handleLoopFailure(_messageFor(error));
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _typingName = null;
-        _autoLoop = false;
-      });
-      _toast('这次没接上，点右上角继续');
+      _handleLoopFailure('这次没接上，等会儿再试');
     }
+  }
+
+  /// 生成失败不再一次就永久停摆：先退避重试，连着三次才停。
+  void _handleLoopFailure(String message) {
+    final failures = ++_loopFailures;
+    setState(() => _typingName = null);
+    if (failures >= 3) {
+      setState(() => _autoLoop = false);
+      _toast('$message，已暂停自动回复');
+      return;
+    }
+    _toast(message);
+    _restartLoop(delay: Duration(seconds: 3 * failures));
   }
 
   String _messageFor(WechatServiceException error) {
@@ -1034,9 +1079,9 @@ class _WechatChatPageState extends State<WechatChatPage> {
       case 'model_missing':
         return '这个群还没选模型，去设置里挑一个';
       case 'empty':
-        return '这次没生成出内容，点右上角继续';
+        return '这次没生成出内容';
       default:
-        return '生成失败了，点右上角继续';
+        return '生成失败了';
     }
   }
 
@@ -1333,9 +1378,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
                         '清空聊天记录？',
                         style: TextStyle(fontSize: 16),
                       ),
-                      content: const Text(
-                        '这个群的记录会全部清掉，群和人都留着，删了拿不回来。',
-                      ),
+                      content: const Text('这个群的记录会全部清掉，群和人都留着，删了拿不回来。'),
                       actions: <Widget>[
                         TextButton(
                           onPressed: () => Navigator.of(dialogCtx).pop(false),
@@ -1357,7 +1400,10 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   setState(() => _messages = const <WechatMessage>[]);
                   _toast('聊天记录已清空');
                 } else if (value == 'toggle') {
-                  setState(() => _autoLoop = !_autoLoop);
+                  setState(() {
+                    _autoLoop = !_autoLoop;
+                    if (_autoLoop) _loopFailures = 0;
+                  });
                   if (_autoLoop) {
                     _restartLoop();
                   } else {
@@ -1868,7 +1914,10 @@ class _WechatChatPageState extends State<WechatChatPage> {
 
   /// @ 按钮。图标库里没有 AtSign，就直接写一个 @，比找个近似图标清楚。
   Widget _mentionButton(WechatGroup group) {
-    final armed = _pendingSpeaker != null;
+    final armed =
+        _mentionArmed ||
+        _pendingSpeakers.isNotEmpty ||
+        _input.text.contains('@');
     return GestureDetector(
       onTap: () => _pickMention(group),
       behavior: HitTestBehavior.opaque,

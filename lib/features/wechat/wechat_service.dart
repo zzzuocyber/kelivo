@@ -19,6 +19,11 @@ class WechatServiceException implements Exception {
   String toString() => 'WechatServiceException($code)';
 }
 
+/// 模型这轮决定不回：不是错误，调用处静默丢掉整轮，不能弹提示。
+class WechatNoReplyException implements Exception {
+  const WechatNoReplyException();
+}
+
 // ============================================================
 // 公用零件
 // ============================================================
@@ -176,10 +181,7 @@ class WechatGenerator {
   /// 真正去要一句话。[speaker] 是这次轮到的人。
   ///
   /// [burstCount] 是这次抽到的连发条数（1~7），写进提示词让模型按行数回。
-  Future<String> generateFor(
-    WechatMember speaker, {
-    int burstCount = 1,
-  }) async {
+  Future<String> generateFor(WechatMember speaker, {int burstCount = 1}) async {
     final target = _resolveModel(speaker);
     final system = _systemPrompt(speaker, burstCount: burstCount);
     final user = _userPrompt(speaker);
@@ -325,6 +327,7 @@ class WechatDmGenerator {
     required this.history,
     this.worldPrompt = '',
     this.selfInitiated = false,
+    this.allowNoReply = false,
   });
 
   final SettingsProvider settings;
@@ -346,6 +349,9 @@ class WechatDmGenerator {
 
   /// 这次是你主动去找对方开口（召唤私聊），不是回应他。
   final bool selfInitiated;
+
+  /// 只有开了「会不搭理人」且没被强制回复时才是 true。
+  final bool allowNoReply;
 
   /// [burstCount] 是这次抽到的连发条数（1~7），写进提示词让模型按行数回。
   Future<String> generate({int burstCount = 1}) async {
@@ -370,6 +376,10 @@ class WechatDmGenerator {
       reasoning: ReasoningRequest.auto,
       requestTimeout: wechatRequestTimeout,
     );
+    // 暗号要在 cleanReply 之前认：cleanReply 会剥行首括号，别让标记被吃掉。
+    if (allowNoReply && wechatHasNoReplyMark(result.text)) {
+      throw const WechatNoReplyException();
+    }
     final text = cleanReply(result.text, contact.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
@@ -433,6 +443,17 @@ class WechatDmGenerator {
         '也不要表现出是被谁指使的——就当你一念之间想跟他说两句。',
       );
     }
+    if (allowNoReply) {
+      buffer.writeln(
+        '- 这一轮你**可以真的不回**：如果按你的人设此刻讨厌对方、正忙、'
+        '只是同事懒得搭理，或者单纯不想开口，就只输出 $wechatNoReplyMark，'
+        '一个字都别多写。',
+      );
+      buffer.writeln(
+        '- 但对方明确命令、召唤你、或正在推进剧情关键内容时，必须正常回，'
+        '不能用这个标记。',
+      );
+    }
     return buffer.toString().trim();
   }
 
@@ -463,9 +484,7 @@ class WechatDmGenerator {
         '现在由「${contact.name}」主动开口找「$persona」，只输出${contact.name}这一次要发的内容。',
       );
     } else {
-      buffer.writeln(
-        '现在轮到「${contact.name}」说话。只输出${contact.name}这一次要发的内容。',
-      );
+      buffer.writeln('现在轮到「${contact.name}」说话。只输出${contact.name}这一次要发的内容。');
     }
     return buffer.toString().trim();
   }
