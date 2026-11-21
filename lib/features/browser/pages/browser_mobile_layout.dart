@@ -102,7 +102,7 @@ class BrowserMobileLayout extends StatelessWidget {
         ? 0.0
         : topBar != null
         ? padding.top + topBarHeight
-        : (underlapStatusBar ? 0 : padding.top);
+        : (underlapStatusBar ? 0.0 : padding.top);
     return LayoutBuilder(
       builder: (context, constraints) {
         onViewportHeight?.call(

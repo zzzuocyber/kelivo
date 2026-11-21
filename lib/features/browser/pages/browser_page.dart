@@ -23,6 +23,7 @@ import '../../../shared/widgets/snackbar.dart';
 import '../models/browser_models.dart';
 import '../widgets/browser_controls.dart';
 import '../widgets/browser_favicon.dart';
+import '../widgets/browser_text_field.dart';
 import '../widgets/browser_find_bar.dart';
 import '../widgets/browser_glass.dart';
 import '../widgets/browser_scroll_configuration.dart';
@@ -1322,7 +1323,7 @@ class BrowserPageViewState extends State<BrowserPage>
           ),
           // 手势条区域
           SizedBox(
-            height: viewPadding.bottom > 0 ? viewPadding.bottom : 16,
+            height: viewPadding.bottom > 0 ? viewPadding.bottom : 16.0,
             child: Align(
               alignment: Alignment.topCenter,
               child: Container(
