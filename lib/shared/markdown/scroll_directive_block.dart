@@ -9,7 +9,7 @@ import 'package:Kelivo/shared/widgets/snackbar.dart';
 const double scrollDirectiveBlockHeight = 320;
 
 const _ink = Color(0xFF1C1C1E);
-const _mutedInk = Color(0xFF6B6B70);
+const _mutedInk = Color(0xFFB8B8BD);
 const _border = Color(0xFFE4E4E7);
 
 /// Renders a `:::scroll[标题] ... :::` directive as a fixed white scrolling
