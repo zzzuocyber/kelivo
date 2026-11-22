@@ -85,6 +85,8 @@ final class LoadedTimelinePage {
   }) : slots = List.unmodifiable(slots);
 
   final String conversationId;
+
+  /// Message history revision captured with the page's message snapshots.
   final int stateRevision;
   final String? contextStartRevisionId;
   final List<LoadedTimelineSlot> slots;
@@ -765,7 +767,7 @@ class ChatService extends ChangeNotifier {
     }
     // A cold prefetch must also know whether its bounded cache is complete.
     // The maintained index resolves this once without scanning message rows.
-    final revision = _contextRevisions[conversationId] ?? 0;
+    final revision = compressionHistoryRevision(conversationId);
     await _resolveMessageCount(conversationId);
     if (timelineCacheFastPathEnabled &&
         !fromStart &&
@@ -791,7 +793,7 @@ class ChatService extends ChangeNotifier {
         .map((slot) => slot.revisionId)
         .toList(growable: false);
     final messages = await _repo.getMessagesByIds(revisionIds);
-    if ((_contextRevisions[conversationId] ?? 0) != revision) {
+    if (compressionHistoryRevision(conversationId) != revision) {
       return loadTimelinePage(
         conversationId,
         beforeRevisionId: beforeRevisionId,
@@ -828,14 +830,21 @@ class ChatService extends ChangeNotifier {
     if (loadedSlots.length != page.slots.length) {
       throw StateError('timeline_selected_revision_shadow_missing');
     }
-    // Browse only the requested page. Full order and full bodies are loaded
-    // only by operations that explicitly need them.
-    _cacheLoadedMessages(conversationId, messages);
-    await _cacheMessageArtifacts(messages);
-    // A selection or structural mutation may finish during body/artifact reads.
-    // Return a page from the current selection, so a delayed navigation cannot
-    // replace an already refreshed version with an older selected body.
-    if ((_contextRevisions[conversationId] ?? 0) != revision) {
+    // Publish the bodies and artifacts together against the same history
+    // revision. The queries above cover only the requested page.
+    await _cacheMessageArtifacts(
+      messages,
+      beforePublish: () {
+        if (compressionHistoryRevision(conversationId) != revision) {
+          return false;
+        }
+        _mergeCachedMessages(conversationId, messages);
+        return true;
+      },
+    );
+    // A generation can finish while loading this page, as can a selection or
+    // structural change. Retry so the page reflects the latest message history.
+    if (compressionHistoryRevision(conversationId) != revision) {
       return loadTimelinePage(
         conversationId,
         beforeRevisionId: beforeRevisionId,
@@ -847,11 +856,7 @@ class ChatService extends ChangeNotifier {
     }
     return LoadedTimelinePage(
       conversationId: conversationId,
-      stateRevision:
-          _conversationsCache[conversationId]
-              ?.updatedAt
-              .microsecondsSinceEpoch ??
-          0,
+      stateRevision: revision,
       contextStartRevisionId: null,
       slots: loadedSlots,
       hasMoreBefore: page.hasMoreBefore,
@@ -859,6 +864,9 @@ class ChatService extends ChangeNotifier {
       totalSlotCount: page.totalSlotCount,
     );
   }
+
+  bool isTimelinePageCurrent(LoadedTimelinePage page) =>
+      page.stateRevision == compressionHistoryRevision(page.conversationId);
 
   LoadedTimelinePage? _loadTemporaryTimelinePage(
     String conversationId, {
@@ -959,7 +967,7 @@ class ChatService extends ChangeNotifier {
     }
     return LoadedTimelinePage(
       conversationId: conversationId,
-      stateRevision: conversation.updatedAt.microsecondsSinceEpoch,
+      stateRevision: compressionHistoryRevision(conversationId),
       contextStartRevisionId: null,
       slots: slots,
       hasMoreBefore: start > 0,
@@ -1033,7 +1041,7 @@ class ChatService extends ChangeNotifier {
     }
     return LoadedTimelinePage(
       conversationId: conversationId,
-      stateRevision: conversation.updatedAt.microsecondsSinceEpoch,
+      stateRevision: compressionHistoryRevision(conversationId),
       contextStartRevisionId: null,
       slots: loadedSlots,
       hasMoreBefore: start > 0,
@@ -1077,9 +1085,8 @@ class ChatService extends ChangeNotifier {
         );
         // The conversation may have legitimately changed since the hit; only
         // compare when it is untouched.
-        final current = _conversationsCache[conversationId];
-        if (current == null ||
-            current.updatedAt.microsecondsSinceEpoch != page.stateRevision) {
+        if (_conversationsCache[conversationId] == null ||
+            !isTimelinePageCurrent(page)) {
           return;
         }
         String describe(
@@ -1132,9 +1139,15 @@ class ChatService extends ChangeNotifier {
   int getContextStartIndex(String conversationId) =>
       _contextStartIndices[conversationId] ?? -1;
 
-  Future<void> _cacheMessageArtifacts(Iterable<ChatMessage> messages) async {
+  Future<void> _cacheMessageArtifacts(
+    Iterable<ChatMessage> messages, {
+    bool Function()? beforePublish,
+  }) async {
     final ids = messages.map((message) => message.id).toSet();
-    if (ids.isEmpty) return;
+    if (ids.isEmpty) {
+      beforePublish?.call();
+      return;
+    }
     final artifactKinds = _providerArtifactKinds.toList();
     // Awaited as one: a query failing after the repository closed must not
     // leave the other's error unhandled.
@@ -1146,6 +1159,8 @@ class ChatService extends ChangeNotifier {
         ),
       ),
     ).wait;
+    if (beforePublish?.call() == false) return;
+
     for (final id in ids) {
       _toolEventsCache.remove(id);
       _providerArtifactsCache.remove(id);
@@ -4017,8 +4032,16 @@ class ChatService extends ChangeNotifier {
           (content != null || parts != null)) {
         _compressionHistoryCache = null;
       }
-      if (shouldBump) _bumpContextRevision(temporaryMessage.conversationId);
-      if (notify) notifyListeners();
+      if (shouldBump) {
+        _bumpContextRevision(temporaryMessage.conversationId);
+      } else if (isStreaming != null) {
+        _bumpCompressionHistoryRevision(temporaryMessage.conversationId);
+      }
+      if (notify) {
+        notifyListeners();
+      } else if (content != null || parts != null || isStreaming != null) {
+        AttachmentFileLock.notifyTransientChanged();
+      }
       return;
     }
 
@@ -4058,6 +4081,8 @@ class ChatService extends ChangeNotifier {
     if (shouldBump) {
       _bumpContextRevision(updatedMessage.conversationId);
       await loadContextOperations(updatedMessage.conversationId, refresh: true);
+    } else if (isStreaming != null) {
+      _bumpCompressionHistoryRevision(updatedMessage.conversationId);
     }
     if (notify) notifyListeners();
   });
