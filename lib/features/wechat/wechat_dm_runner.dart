@@ -144,9 +144,14 @@ class WechatDmReplyRunner {
       // 跨场景记忆 + 此刻处境：只跟「我」有关的别处记录才有意义。
       var contextText = '';
       if (social != null) {
+        final forgetFloor = social.forgetFloor(contactName);
         final memories = <String>[
-          ...?momentStore?.memoryLinesFor(contactName),
-          ...store.memoryLinesFor(contactName, excludeKey: key),
+          ...?momentStore?.memoryLinesFor(contactName, since: forgetFloor),
+          ...store.memoryLinesFor(
+            contactName,
+            excludeKey: key,
+            since: forgetFloor,
+          ),
         ];
         final where = social.whereabouts(contactName);
         final built = SocialContextBuilder.build(

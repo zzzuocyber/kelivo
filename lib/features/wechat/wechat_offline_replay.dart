@@ -161,9 +161,14 @@ class WechatOfflineReplay {
         final speakerName = speaker.name;
         final wechatSettings = store.wechatSettings();
         final burst = wechatBurstCount(wechatSettings.burstPreset, _random);
+        final forgetFloor = social.forgetFloor(speakerName);
         final memories = <String>[
-          ...momentStore.memoryLinesFor(speakerName),
-          ...store.memoryLinesFor(speakerName, excludeKey: group.id),
+          ...momentStore.memoryLinesFor(speakerName, since: forgetFloor),
+          ...store.memoryLinesFor(
+            speakerName,
+            excludeKey: group.id,
+            since: forgetFloor,
+          ),
         ];
         // 按这条补算消息「发生」的真实时刻（pastReal）换算成故事时间，
         // 查作息、写时间句、写库时间戳都用同一个时刻——避免「昨晚的消息按今天作息说话」。
@@ -263,9 +268,10 @@ class WechatOfflineReplay {
         final contact = store.contact(name) ?? WechatContact(name: name);
         final wechatSettings = store.wechatSettings();
         final burst = wechatBurstCount(wechatSettings.burstPreset, _random);
+        final forgetFloor = social.forgetFloor(name);
         final memories = <String>[
-          ...momentStore.memoryLinesFor(name),
-          ...store.memoryLinesFor(name, excludeKey: key),
+          ...momentStore.memoryLinesFor(name, since: forgetFloor),
+          ...store.memoryLinesFor(name, excludeKey: key, since: forgetFloor),
         ];
         // 按补算消息发生的时刻（pastReal）换算故事时间，查作息/时间戳用同一个。
         final pastReal = _pastStamp(seen, now);

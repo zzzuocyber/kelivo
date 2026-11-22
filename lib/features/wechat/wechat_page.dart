@@ -262,6 +262,8 @@ class _WechatPageState extends State<WechatPage> {
       );
       if (!mounted || ok != true) return;
       await _store.clearMessages(session.key);
+      // 连根清：涉事角色忘掉这一刻之前说过的话，连同话题一起抹掉。
+      await _forgetForSession(session);
       if (!mounted) return;
       _reload();
       return;
@@ -298,8 +300,32 @@ class _WechatPageState extends State<WechatPage> {
     } else {
       await _store.deleteDm(session.title);
     }
+    // 连根清：群按全体成员、私聊按对方，抹掉水位线之前的记忆和话题。
+    await _forgetForSession(session);
     if (!mounted) return;
     _reload();
+  }
+
+  /// 会话被清空/删除后给涉事角色打记忆水位线，并清掉该会话的话题。
+  /// 群聊按全体成员（含群主/我的马甲），私聊按对方。
+  Future<void> _forgetForSession(_WechatSession session) async {
+    var names = session.memberNames;
+    if (session.isGroup) {
+      // 群聊按全体成员，补上群主和我的马甲，别漏掉没进 members 的人。
+      final group = _store.group(session.key);
+      if (group != null) {
+        names = <String>[
+          ...names,
+          group.effectiveOwner,
+          group.effectivePersona,
+        ];
+      }
+    }
+    await _social.forgetBefore(names);
+    final scope = session.isGroup
+        ? socialGroupScope(session.key)
+        : socialDmScope(session.title);
+    await _social.endTopic(scope);
   }
 
   Future<void> _openSession(_WechatSession session) async {
@@ -1208,9 +1234,14 @@ class _WechatChatPageState extends State<WechatChatPage> {
       final wechatSettings = _store.wechatSettings();
       final burst = wechatBurstCount(wechatSettings.burstPreset, _burstRandom);
       // 跨场景记忆 + 此刻处境：让角色记得自己在朋友圈/别处聊过的事。
+      final forgetFloor = _social.forgetFloor(speakerName);
       final memories = <String>[
-        ..._momentStore.memoryLinesFor(speakerName),
-        ..._store.memoryLinesFor(speakerName, excludeKey: group.id),
+        ..._momentStore.memoryLinesFor(speakerName, since: forgetFloor),
+        ..._store.memoryLinesFor(
+          speakerName,
+          excludeKey: group.id,
+          since: forgetFloor,
+        ),
       ];
       final whereabouts = _social.whereabouts(speakerName);
       final built = SocialContextBuilder.build(
@@ -1689,6 +1720,13 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   );
                   if (!mounted || ok != true) return;
                   await _store.clearMessages(group.id);
+                  // 连根清：全体成员忘掉这一刻之前的记忆，话题一起抹掉。
+                  await _social.forgetBefore(<String>[
+                    for (final m in group.members) m.name,
+                    group.effectiveOwner,
+                    group.effectivePersona,
+                  ]);
+                  await _social.endTopic(socialGroupScope(group.id));
                   if (!mounted) return;
                   setState(() => _messages = const <WechatMessage>[]);
                   _toast('聊天记录已清空');

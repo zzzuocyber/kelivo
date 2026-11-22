@@ -5,6 +5,7 @@ import '../../core/models/world_book.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_store.dart';
 import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
 import '../model/widgets/model_select_sheet.dart';
@@ -258,6 +259,14 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     );
     if (ok != true) return;
     await _store.deleteGroup(group.id);
+    // 连根清：全体成员忘掉这一刻之前的记忆，连同这个群的话题一起抹掉。
+    final social = SocialStore(context.read<ChatService>());
+    await social.forgetBefore(<String>[
+      for (final m in group.members) m.name,
+      group.effectiveOwner,
+      group.effectivePersona,
+    ]);
+    await social.endTopic(socialGroupScope(group.id));
     if (!mounted) return;
     Navigator.of(context).pop(true);
   }

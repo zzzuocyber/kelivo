@@ -137,10 +137,19 @@ class MomentStore {
 
   /// 跨场景记忆：扫朋友圈所有帖子，挑出 [name] 发过的动态和留过的评论，
   /// 返回 `朋友圈 · 内容` 的行，给社交上下文构建器用。
-  List<String> memoryLinesFor(String name, {int limit = 40}) {
+  /// [since] 是 [name] 的记忆水位线（毫秒）：这条时间之前发的动态/评论
+  /// 不再当跨场景记忆喂给模型，让"删记录 = 角色忘了那一刻之前的事"生效。
+  /// 评论没单独的时间戳，跟着所在动态走：动态早于水位线就整条跳过。
+  /// 传 0（默认）不过滤。
+  List<String> memoryLinesFor(String name, {int limit = 40, int since = 0}) {
     final posts = momentPostsOf(findConversation());
     final out = <String>[];
     for (final post in posts) {
+      if (since > 0 &&
+          post.createdAt.millisecondsSinceEpoch > 0 &&
+          post.createdAt.millisecondsSinceEpoch < since) {
+        continue;
+      }
       if (!post.isMine && post.author.trim() == name && post.text.trim().isNotEmpty) {
         out.add('朋友圈：发了「${post.text}」');
         if (out.length >= limit) return out;

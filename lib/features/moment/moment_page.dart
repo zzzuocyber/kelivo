@@ -145,8 +145,12 @@ class _MomentPageState extends State<MomentPage> {
     for (final character in _characters) {
       final where = _social.whereabouts(character.name).promptLine;
       lines.add('${character.name}：$where');
-      // 他在微信里说过的话，取最近几条。
-      final wechat = _wechatStore.memoryLinesFor(character.name, limit: 6);
+      // 他在微信里说过的话，取最近几条。删过记录的角色跳过水位线之前的话。
+      final wechat = _wechatStore.memoryLinesFor(
+        character.name,
+        limit: 6,
+        since: _social.forgetFloor(character.name),
+      );
       for (final line in wechat.take(6)) {
         lines.add('  - $line');
       }
@@ -500,8 +504,14 @@ class _MomentPageState extends State<MomentPage> {
     if (action == '删除') {
       await _confirmDelete(
         '删除这条动态？',
-        '连同它的点赞和评论一起删掉。',
-        onOk: () => _store.deletePost(post.id),
+        '连同它的点赞和评论一起删掉，角色也不会再记得。',
+        onOk: () async {
+          await _store.deletePost(post.id);
+          // 连根清：作者是角色的话，让他忘掉这一刻之前的记忆。
+          if (!post.isMine && post.author.trim().isNotEmpty) {
+            await _social.forgetBefore(<String>[post.author]);
+          }
+        },
       );
       return;
     }
@@ -540,8 +550,14 @@ class _MomentPageState extends State<MomentPage> {
     if (action == '删除') {
       await _confirmDelete(
         '删除这条回复？',
-        '只删这一条，别的不动。',
-        onOk: () => _store.deleteComment(post.id, index),
+        '只删这一条，角色也不会再记得。',
+        onOk: () async {
+          await _store.deleteComment(post.id, index);
+          // 连根清：作者是角色的话，让他忘掉这一刻之前的记忆。
+          if (author.isNotEmpty) {
+            await _social.forgetBefore(<String>[author]);
+          }
+        },
       );
       return;
     }

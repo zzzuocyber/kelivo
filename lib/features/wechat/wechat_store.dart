@@ -523,8 +523,16 @@ class WechatStore {
   /// 跨场景记忆：扫所有会话（群 + 所有私聊），挑出 [name] 说过的话，
   /// 跳过 [excludeKey] 这个当前会话，避免把自己刚说的重复喂进去。
   ///
+  /// [since] 是 [name] 的记忆水位线（毫秒）：之前说过的话一律不再喂给模型，
+  /// 让"删记录 = 角色忘了那一刻之前的事"生效。传 0（默认）不过滤。
+  ///
   /// 返回 `场景 · 内容` 的行，给社交上下文构建器用。
-  List<String> memoryLinesFor(String name, {String excludeKey = '', int limit = 40}) {
+  List<String> memoryLinesFor(
+    String name, {
+    String excludeKey = '',
+    int limit = 40,
+    int since = 0,
+  }) {
     final extras = _extras();
     final raw = extras[wechatMessagesKey];
     final out = <String>[];
@@ -539,6 +547,8 @@ class WechatStore {
       }, key);
       for (final message in list) {
         if (message.system || message.text.trim().isEmpty) continue;
+        // 水位线之前的话不再当记忆喂给模型；消息没带时间(at=0)的旧数据放行。
+        if (since > 0 && message.at > 0 && message.at < since) continue;
         final isMine = message.mine && !message.divine;
         final speaker = isMine ? myName : message.sender.trim();
         // 群里认发送者；私聊里认对方（键名）。

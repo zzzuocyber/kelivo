@@ -29,6 +29,7 @@ const String socialCompressPromptKey = 'social.compressprompt';
 const String socialPlotLogKey = 'social.plotlog';
 const String socialWorldClockKey = 'social.worldclock';
 const String socialHeartVoiceKey = 'social.heartvoice';
+const String socialForgetKey = 'social.forget';
 const String socialContainerTitle = '社交状态';
 
 /// 故事世界的时间坐标。
@@ -368,7 +369,8 @@ class SocialStore {
           extras.containsKey(socialCompressPromptKey) ||
           extras.containsKey(socialPlotLogKey) ||
           extras.containsKey(socialWorldClockKey) ||
-          extras.containsKey(socialHeartVoiceKey);
+          extras.containsKey(socialHeartVoiceKey) ||
+          extras.containsKey(socialForgetKey);
       if (!looksLikeOurs) continue;
       return chat.getConversation(conversation.id) ?? conversation;
     }
@@ -912,6 +914,51 @@ class SocialStore {
     });
   }
 
+  // ---------------- 记忆水位线（删记录 = 让角色忘掉那一刻之前的事） ----------------
+
+  /// 每个角色的记忆水位线（毫秒）：跨场景记忆里，这个角色 [watermark] 之前
+  /// 说过的话一律不再喂给模型。删/清空聊天时把它推到当下，于是角色就"忘了"
+  /// 之前聊过的内容——但别的会话记录照常显示，不会被物理删除。
+  Map<String, int> forgetMap() {
+    final raw = _extras[socialForgetKey];
+    final out = <String, int>{};
+    if (raw is! Map) return out;
+    for (final entry in raw.entries) {
+      final name = entry.key.toString().trim();
+      if (name.isNotEmpty) out[name] = socialInt(entry.value);
+    }
+    return out;
+  }
+
+  /// 某个角色的水位线；没删过就是 0（等于不过滤）。
+  int forgetFloor(String name) => forgetMap()[name.trim()] ?? 0;
+
+  /// 把 [names] 的水位线推进到 [at]（默认此刻），只往前推、不回退。
+  /// 清空群聊时传全体成员，删私聊时传对方——这些角色从此忘了这之前说过的话。
+  Future<void> forgetBefore(Iterable<String> names, {int? at}) async {
+    final stamp = at ?? DateTime.now().millisecondsSinceEpoch;
+    final targets = <String>{
+      for (final n in names)
+        if (n.trim().isNotEmpty) n.trim(),
+    };
+    if (targets.isEmpty) return;
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      final raw = <String, dynamic>{};
+      final stored = next[socialForgetKey];
+      if (stored is Map) {
+        for (final entry in stored.entries) {
+          raw[entry.key.toString()] = socialInt(entry.value);
+        }
+      }
+      for (final name in targets) {
+        final previous = socialInt(raw[name]);
+        if (stamp > previous) raw[name] = stamp;
+      }
+      next[socialForgetKey] = raw;
+      return next;
+    });
+  }
 }
 
 bool conversationIsSocial(Conversation conversation) =>

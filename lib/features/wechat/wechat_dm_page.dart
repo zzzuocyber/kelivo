@@ -457,6 +457,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
     );
     if (!mounted || ok != true) return;
     await _store.deleteDm(widget.contactName);
+    // 连根清：让对方忘掉这一刻之前说过的话，连同这个私聊的话题一起抹掉。
+    await _social.forgetBefore(<String>[widget.contactName]);
+    await _social.endTopic(socialDmScope(widget.contactName));
     if (!mounted) return;
     Navigator.of(context).pop();
   }
