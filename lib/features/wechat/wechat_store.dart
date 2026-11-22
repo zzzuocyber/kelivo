@@ -365,6 +365,7 @@ class WechatStore {
     String? sender,
     bool divine = false,
     bool withImage = false,
+    int? at,
   }) => appendMessage(
     wechatDmKey(name),
     sender: sender ?? name,
@@ -372,6 +373,7 @@ class WechatStore {
     mine: mine,
     divine: divine,
     withImage: withImage,
+    at: at,
   );
 
   /// 删掉跟某个人的私聊记录（通讯录里那人还在）。
@@ -443,6 +445,33 @@ class WechatStore {
       map[wechatReadsKey] = reads;
       return map;
     });
+  }
+
+  /// 把一个会话标成「有未读」：把已读游标拨到最后一条消息之前。
+  /// 离线补算的消息时间戳在过去，正常 markRead 会把它们当成老的、不冒红点，
+  /// 所以补完要主动把游标拨回去，让用户一进来看见红点。
+  Future<void> markUnread(String key) async {
+    final all = messages(key);
+    if (all.isEmpty) return;
+    final latest = all.last.at;
+    final current = _reads();
+    final before = latest - 1;
+    if ((current[key] ?? 0) >= before) {
+      final id = await ensureConversation();
+      await chat.updateConversationExtras(id, (extras) {
+        final map = Map<String, dynamic>.from(extras);
+        final reads = <String, dynamic>{};
+        final raw = map[wechatReadsKey];
+        if (raw is Map) {
+          for (final entry in raw.entries) {
+            reads[entry.key.toString()] = entry.value;
+          }
+        }
+        reads[key] = before;
+        map[wechatReadsKey] = reads;
+        return map;
+      });
+    }
   }
 
   /// 所有私聊的键（有记录的那些人）。
@@ -536,7 +565,8 @@ class WechatStore {
   String _newMessageId() =>
       '${DateTime.now().microsecondsSinceEpoch}_${_random.nextInt(9999)}';
 
-  /// 追加一条消息。传 [extra] 里的是已经定好的字段。
+  /// 追加一条消息。
+  /// [at] 默认当下；离线补算会传一段过去的时间，让消息看着像离开时真发过。
   Future<WechatMessage> appendMessage(
     String groupId, {
     required String sender,
@@ -545,12 +575,13 @@ class WechatStore {
     bool mine = false,
     bool divine = false,
     bool withImage = false,
+    int? at,
   }) async {
     final message = WechatMessage(
       id: _newMessageId(),
       sender: sender,
       text: text,
-      at: DateTime.now().millisecondsSinceEpoch,
+      at: at ?? DateTime.now().millisecondsSinceEpoch,
       system: system,
       mine: mine,
       divine: divine,

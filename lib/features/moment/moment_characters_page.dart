@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import '../../core/models/world_book.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_affinity.dart';
+import '../../core/services/social_store.dart';
 import '../../icons/lucide_adapter.dart';
+import '../wechat/wechat_ui.dart';
 import 'moment_models.dart';
 import 'moment_settings_page.dart';
 import 'moment_store.dart';
@@ -23,6 +26,7 @@ class MomentCharactersPage extends StatefulWidget {
 
 class _MomentCharactersPageState extends State<MomentCharactersPage> {
   late final MomentStore _store;
+  late final SocialStore _social;
   late Set<String> _selected;
 
   List<WorldBook> get _books {
@@ -40,6 +44,7 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
     super.initState();
     final chat = context.read<ChatService>();
     _store = MomentStore(chat);
+    _social = SocialStore(chat);
     final conversation = _store.findConversation();
     _selected = <String>{
       for (final c in momentCharactersOf(conversation)) c.name,
@@ -67,6 +72,16 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
     }
   }
 
+  /// 长按某个角色：看好感度 + 作弊改分数/状态/颜值。
+  Future<void> _editAffinity(String name) async {
+    final key = name.trim();
+    if (key.isEmpty) return;
+    final current = _social.affinity(key);
+    final updated = await showAffinityDialog(context, affinity: current);
+    if (updated == null || !mounted) return;
+    await _social.setAffinity(updated);
+  }
+
   @override
   Widget build(BuildContext context) {
     final books = _books;
@@ -75,9 +90,19 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
       child: Scaffold(
         appBar: AppBar(
           titleSpacing: 0,
-          title: const Text(
-            '添加角色',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                '添加角色',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                '点一下选用，长按改好感度',
+                style: TextStyle(fontSize: 11, color: MomentColors.secondaryText),
+              ),
+            ],
           ),
         ),
         body: _buildBody(books),
@@ -147,6 +172,7 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
         final on = _selected.contains(name);
         return InkWell(
           onTap: () => _toggle(entry),
+          onLongPress: () => _editAffinity(name),
           child: Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),

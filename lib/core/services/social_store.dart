@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../models/conversation.dart';
 import 'chat/chat_service.dart';
+import 'social_affinity.dart';
 
 // ---------------------------------------------------------------------------
 // 社交共享状态。
@@ -21,6 +22,8 @@ const String socialAutoReplyKey = 'social.autoreply';
 const String socialContextModeKey = 'social.contextmode';
 const String socialDirectiveKey = 'social.directive';
 const String socialTokensKey = 'social.tokens';
+const String socialAffinityKey = 'social.affinity';
+const String socialSeenKey = 'social.seen';
 const String socialContainerTitle = '社交状态';
 
 /// 一周里的某一天，跟 DateTime.weekday 一致：1=周一 … 7=周日。
@@ -258,7 +261,9 @@ class SocialStore {
           extras.containsKey(socialTopicsKey) ||
           extras.containsKey(socialTokensKey) ||
           extras.containsKey(socialDirectiveKey) ||
-          extras.containsKey(socialContextModeKey);
+          extras.containsKey(socialContextModeKey) ||
+          extras.containsKey(socialAffinityKey) ||
+          extras.containsKey(socialSeenKey);
       if (!looksLikeOurs) continue;
       return chat.getConversation(conversation.id) ?? conversation;
     }
@@ -575,6 +580,88 @@ class SocialStore {
     await _update((extras) {
       final next = Map<String, dynamic>.from(extras);
       next[socialTokensKey] = const SocialTokenStats().toJson();
+      return next;
+    });
+  }
+
+  // ---------------- 好感度（单向：角色 → 我） ----------------
+
+  Map<String, SocialAffinity> affinities() {
+    final raw = _extras[socialAffinityKey];
+    final out = <String, SocialAffinity>{};
+    if (raw is! Map) return out;
+    for (final entry in raw.entries) {
+      final affinity = SocialAffinity.fromJson(entry.value);
+      if (affinity != null) out[entry.key.toString()] = affinity;
+    }
+    return out;
+  }
+
+  /// 没有档案时给一份默认值（分数 0、颜值 4、状态平淡），不改存储。
+  SocialAffinity affinity(String name) =>
+      affinities()[name.trim()] ??
+      SocialAffinity(name: name.trim());
+
+  Future<void> setAffinity(SocialAffinity value) async {
+    final key = value.name.trim();
+    if (key.isEmpty) return;
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      final raw = Map<String, dynamic>.from(
+        next[socialAffinityKey] is Map
+            ? next[socialAffinityKey] as Map
+            : <String, dynamic>{},
+      );
+      raw[key] = value.toJson();
+      next[socialAffinityKey] = raw;
+      return next;
+    });
+  }
+
+  /// 给某角色记一次好感度事件（读当前档案 → 套公式 → 写回）。
+  /// 同一时刻多次调用会串读同一份档案，UI 层串行 await 即可。
+  Future<SocialAffinity> applyAffinityEvent(
+    String name,
+    AffinityEvent event, {
+    String? reason,
+  }) async {
+    final key = name.trim();
+    final current = affinity(key);
+    final updated = current.apply(event, reason: reason);
+    await setAffinity(updated);
+    return updated;
+  }
+
+  // ---------------- 会话最后活跃时间（离线补算用） ----------------
+
+  /// 每个会话关键过的时刻（毫秒）。键跟消息键一致：群 id 或 `dm:名字`。
+  Map<String, int> seenMap() {
+    final raw = _extras[socialSeenKey];
+    final out = <String, int>{};
+    if (raw is! Map) return out;
+    for (final entry in raw.entries) {
+      out[entry.key.toString()] = socialInt(entry.value);
+    }
+    return out;
+  }
+
+  int lastSeen(String key) => seenMap()[key] ?? 0;
+
+  /// 打开某个会话 / 离开时打点。给的是"这一刻算活跃过"。
+  Future<void> markSeen(String key, {int? at}) async {
+    if (key.trim().isEmpty) return;
+    final stamp = at ?? DateTime.now().millisecondsSinceEpoch;
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      final raw = Map<String, dynamic>.from(
+        next[socialSeenKey] is Map
+            ? next[socialSeenKey] as Map
+            : <String, dynamic>{},
+      );
+      // 只往前推，不因迟到的打点把时间往回改。
+      final previous = socialInt(raw[key]);
+      if (stamp > previous) raw[key] = stamp;
+      next[socialSeenKey] = raw;
       return next;
     });
   }

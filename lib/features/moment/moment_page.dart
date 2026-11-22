@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_affinity.dart';
 import '../../core/services/social_store.dart';
 import '../../core/utils/token_estimator.dart';
 import '../../core/utils/pinyin_sort.dart';
@@ -249,6 +250,11 @@ class _MomentPageState extends State<MomentPage> {
     if (_divineName != null && post.author.trim() == me) return;
     try {
       await _store.toggleLike(post.id, me);
+      // 以我自己名义给角色点赞 = 朋友圈互动，好感微涨（夺舍不算）。
+      final author = post.author.trim();
+      if (_divineName == null && author.isNotEmpty && author != me) {
+        unawaited(_social.applyAffinityEvent(author, AffinityEvent.momentTouch));
+      }
       if (!mounted) return;
       _reload();
     } catch (_) {
@@ -323,6 +329,11 @@ class _MomentPageState extends State<MomentPage> {
     );
     try {
       await _store.addComments(post.id, <MomentComment>[myComment]);
+      // 以我自己名义回复角色 = 朋友圈互动，好感微涨（夺舍不算）。
+      final who = target.trim();
+      if (_divineName == null && who.isNotEmpty && who != me) {
+        unawaited(_social.applyAffinityEvent(who, AffinityEvent.momentTouch));
+      }
     } catch (_) {
       _toast('评论没存上，再试一次');
       return;

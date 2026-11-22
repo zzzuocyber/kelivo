@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_affinity.dart';
 import '../../core/services/social_context_builder.dart';
 import '../../core/services/social_store.dart';
 import '../../icons/lucide_adapter.dart';
@@ -15,6 +16,7 @@ import 'wechat_models.dart';
 import 'wechat_contacts_page.dart';
 import 'wechat_dm_page.dart';
 import 'wechat_me_page.dart';
+import 'wechat_offline_replay.dart';
 import 'wechat_scheduler.dart';
 import 'wechat_ui.dart';
 import 'wechat_service.dart';
@@ -66,6 +68,8 @@ class WechatPage extends StatefulWidget {
 
 class _WechatPageState extends State<WechatPage> {
   late WechatStore _store;
+  late SocialStore _social;
+  late MomentStore _momentStore;
   int _tab = 0;
 
   /// 老数据迁完没有。没迁完先别建子页面，不然通讯录会读到空的。
@@ -81,8 +85,23 @@ class _WechatPageState extends State<WechatPage> {
   @override
   void initState() {
     super.initState();
-    _store = WechatStore(context.read<ChatService>());
+    final chat = context.read<ChatService>();
+    _store = WechatStore(chat);
+    _social = SocialStore(chat);
+    _momentStore = MomentStore(chat);
+    WechatOfflineReplay.instance.addListener(_onOfflineReplay);
     _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    WechatOfflineReplay.instance.removeListener(_onOfflineReplay);
+    super.dispose();
+  }
+
+  /// 离线补算写完消息后通知一次，刷新会话列表和红点。
+  void _onOfflineReplay() {
+    if (mounted) _reload();
   }
 
   /// 先把老数据迁一遍（以前的群成员补进通讯录），再读。
@@ -91,6 +110,14 @@ class _WechatPageState extends State<WechatPage> {
     if (!mounted) return;
     _reload();
     setState(() => _ready = true);
+    // 打开微信时补一次「离开期间发生的事」。后台跑，写完通知刷新。
+    WechatOfflineReplay.instance.maybeRun(
+      store: _store,
+      social: _social,
+      momentStore: _momentStore,
+      settings: context.read<SettingsProvider>(),
+      worldBooks: context.read<WorldBookProvider>(),
+    );
   }
 
   void _reload() {
@@ -933,6 +960,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
     });
     // 进来就算读过了，会话列表的红点会消掉。
     unawaited(_store.markRead(widget.groupId));
+    // 离线补算靠这个算「离开了多久」：进群即打点。
+    unawaited(_social.markSeen(widget.groupId));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _jumpToBottom();
     });
@@ -981,6 +1010,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
         if (!_pendingSpeakers.contains(name)) _pendingSpeakers.add(name);
       }
     });
+    // 我在群里 @ 了谁 = 主动找他，给这些人记好感（夺舍发言不算）。
+    if (!asDivine) {
+      for (final name in mentioned) {
+        unawaited(_social.applyAffinityEvent(name, AffinityEvent.meToThem));
+      }
+    }
     _jumpToBottom();
     _restartLoop();
   }

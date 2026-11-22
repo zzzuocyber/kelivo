@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/services/social_affinity.dart';
 import 'wechat_models.dart';
 
 /// 底部弹出菜单里的字色。微信一律浅色，这里的字必须够深，
@@ -559,6 +560,245 @@ class _WechatMinutesDialogState extends State<WechatMinutesDialog> {
         TextButton(
           onPressed: _submit,
           child: const Text('确定', style: TextStyle(color: WechatColors.green)),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// 好感度面板：私聊三点菜单「看好感度」弹出。
+// 上半显示分数/颜值/状态/粘人概率/变因/公式，下半是作弊（改分数、颜值、
+// 状态、特殊状态、跳段）。保存返回新的 SocialAffinity，取消返回 null。
+// ============================================================
+
+/// 打开好感度面板。返回 null 表示没改。
+Future<SocialAffinity?> showAffinityDialog(
+  BuildContext context, {
+  required SocialAffinity affinity,
+}) {
+  return showDialog<SocialAffinity>(
+    context: context,
+    builder: (_) => WechatAffinityDialog(affinity: affinity),
+  );
+}
+
+class WechatAffinityDialog extends StatefulWidget {
+  const WechatAffinityDialog({super.key, required this.affinity});
+
+  final SocialAffinity affinity;
+
+  @override
+  State<WechatAffinityDialog> createState() => _WechatAffinityDialogState();
+}
+
+class _WechatAffinityDialogState extends State<WechatAffinityDialog> {
+  late double _score;
+  late int _beauty;
+  late final TextEditingController _status;
+  late final Set<String> _specials;
+
+  static const List<String> _allSpecials = <String>[
+    '🩸 偏执',
+    '💤 爱不自知',
+    '🫧 错觉',
+    '🔥 又爱又恨',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _score = widget.affinity.score;
+    _beauty = widget.affinity.beauty;
+    _status = TextEditingController(text: widget.affinity.manualStatus);
+    _specials = <String>{...widget.affinity.specials};
+  }
+
+  @override
+  void dispose() {
+    _status.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final updated = widget.affinity.copyWith(
+      score: _score.clamp(-100, 100).toDouble(),
+      beauty: _beauty.clamp(1, 10),
+      manualStatus: _status.text.trim(),
+      specials: _specials.toList(growable: false),
+      lastReason: '手动调整',
+      lastFormula: '',
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    Navigator.of(context).pop(updated);
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 62,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12.5, color: WechatColors.secondaryText),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, color: WechatColors.primaryText),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 预览用临时值算，所见即所得。
+    final preview = widget.affinity.copyWith(
+      score: _score,
+      beauty: _beauty,
+      manualStatus: _status.text.trim(),
+      specials: _specials.toList(growable: false),
+    );
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      titlePadding: const EdgeInsets.fromLTRB(20, 18, 12, 8),
+      contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      title: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              '${widget.affinity.name} 的好感度',
+              style: const TextStyle(fontSize: 16, color: wechatMenuInk),
+            ),
+          ),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            icon: const Icon(Icons.close, size: 20, color: WechatColors.secondaryText),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _row('分数', _score.toStringAsFixed(1)),
+              _row('状态', preview.status),
+              _row('粘人概率', '${(preview.chance * 100).round()}%'),
+              _row('最近变因', widget.affinity.lastReason.isEmpty
+                  ? '（暂无）'
+                  : widget.affinity.lastReason),
+              if (widget.affinity.lastFormula.isNotEmpty)
+                _row('算式', widget.affinity.lastFormula),
+              const Divider(height: 18),
+              const Text(
+                '作弊 · 直接改数值',
+                style: TextStyle(fontSize: 13, color: wechatMenuInk),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: <Widget>[
+                  const SizedBox(
+                    width: 62,
+                    child: Text(
+                      '分数',
+                      style: TextStyle(fontSize: 12.5, color: WechatColors.secondaryText),
+                    ),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      min: -100,
+                      max: 100,
+                      value: _score,
+                      activeColor: WechatColors.green,
+                      onChanged: (value) => setState(() => _score = value),
+                    ),
+                  ),
+                  Text(
+                    _score.round().toString(),
+                    style: const TextStyle(fontSize: 12, color: WechatColors.secondaryText),
+                  ),
+                ],
+              ),
+              Row(
+                children: <Widget>[
+                  const SizedBox(
+                    width: 62,
+                    child: Text(
+                      '颜值',
+                      style: TextStyle(fontSize: 12.5, color: WechatColors.secondaryText),
+                    ),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      min: 1,
+                      max: 10,
+                      divisions: 9,
+                      value: _beauty.toDouble(),
+                      activeColor: WechatColors.green,
+                      onChanged: (value) => setState(() => _beauty = value.round()),
+                    ),
+                  ),
+                  Text(
+                    '$_beauty',
+                    style: const TextStyle(fontSize: 12, color: WechatColors.secondaryText),
+                  ),
+                ],
+              ),
+              TextField(
+                controller: _status,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '状态标签（留空=按分数自动）',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: <Widget>[
+                  for (final tag in _allSpecials)
+                    FilterChip(
+                      label: Text(tag, style: const TextStyle(fontSize: 11.5)),
+                      selected: _specials.contains(tag),
+                      onSelected: (on) => setState(() {
+                        if (on) {
+                          _specials.add(tag);
+                        } else {
+                          _specials.remove(tag);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text(
+            '取消',
+            style: TextStyle(color: WechatColors.secondaryText),
+          ),
+        ),
+        TextButton(
+          onPressed: _save,
+          child: const Text('保存', style: TextStyle(color: WechatColors.green)),
         ),
       ],
     );

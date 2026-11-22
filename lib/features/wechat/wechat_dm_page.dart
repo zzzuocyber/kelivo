@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_affinity.dart';
 import '../../core/services/social_store.dart';
 import '../../icons/lucide_adapter.dart';
 import '../moment/moment_store.dart';
@@ -75,6 +76,8 @@ class _WechatDmPageState extends State<WechatDmPage> {
     WechatDmReplyRunner.instance.addListener(_onReplyChanged);
     _reload();
     unawaited(_store.markRead(WechatStore.dmKey(widget.contactName)));
+    // 离线补算靠这个算离开时长：进私聊即打点。
+    unawaited(_social.markSeen(WechatStore.dmKey(widget.contactName)));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _jumpToBottom();
     });
@@ -159,6 +162,13 @@ class _WechatDmPageState extends State<WechatDmPage> {
       divine: _asDivine,
       withImage: _attachImage,
     );
+    // 我主动找他：好感度按「我→他」事件微涨（夺舍不算，那是替他说话）。
+    if (!_asDivine) {
+      unawaited(_social.applyAffinityEvent(
+        widget.contactName,
+        AffinityEvent.meToThem,
+      ));
+    }
     if (!mounted) return;
     setState(() {
       _attachImage = false;
@@ -312,6 +322,18 @@ class _WechatDmPageState extends State<WechatDmPage> {
   }
 
   /// 这个过程改了隔多久回你：第三处间隔（单角色私聊）就存在联系人身上。
+  /// 私聊三点菜单「看好感度」：查看 + 作弊改分数/状态/颜值。
+  Future<void> _showAffinity() async {
+    final name = widget.contactName.trim();
+    if (name.isEmpty) return;
+    final current = _social.affinity(name);
+    final updated = await showAffinityDialog(context, affinity: current);
+    if (updated == null || !mounted) return;
+    await _social.setAffinity(updated);
+    if (!mounted) return;
+    _toast('好感度已保存：${updated.score.round()} · ${updated.status}');
+  }
+
   Future<void> _pickInterval() async {
     final contact = _contact;
     if (contact == null) return;
@@ -477,6 +499,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
               icon: const Icon(Lucide.Ellipsis, color: Colors.black),
               onSelected: (value) async {
                 if (value == 'interval') await _pickInterval();
+                if (value == 'affinity') await _showAffinity();
                 if (value == 'divine') {
                   setState(() => _asDivine = !_asDivine);
                 }
@@ -517,6 +540,10 @@ class _WechatDmPageState extends State<WechatDmPage> {
                 const PopupMenuItem<String>(
                   value: 'interval',
                   child: Text('回复间隔'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'affinity',
+                  child: Text('看好感度'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'delete',
