@@ -841,6 +841,10 @@ class _WechatChatPageState extends State<WechatChatPage> {
   final ScrollController _scroll = ScrollController();
   final FocusNode _focus = FocusNode();
 
+  /// 上一帧的键盘高度：只在键盘「从无到有」的那一刻自动滚到底，
+  /// 键盘打字过程中的高度微调不重复滚，免得把正在看的历史消息拽走。
+  double _lastKeyboardInset = 0;
+
   WechatGroup? _group;
   List<WechatMessage> _messages = const <WechatMessage>[];
   Timer? _timer;
@@ -887,6 +891,22 @@ class _WechatChatPageState extends State<WechatChatPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _jumpToBottom();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    // 键盘从收起变为弹出：等列表收缩的动画跑完，再自动带到最新一条，
+    // 用户不用自己往上拖。
+    if (inset > 0 && _lastKeyboardInset <= 0 && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future<void>.delayed(const Duration(milliseconds: 160), () {
+          if (mounted) _jumpToBottom();
+        });
+      });
+    }
+    _lastKeyboardInset = inset;
   }
 
   @override
@@ -1674,14 +1694,23 @@ class _WechatChatPageState extends State<WechatChatPage> {
         // 这样打字时列表不会被键盘顶上去、界面不跳动。
         body: Stack(
           children: <Widget>[
+            // 键盘弹出时列表底部跟着收缩，可视区变矮后自动滚到最新一条，
+            // 不用用户手动往上拖；顶部标题栏不动（不是把整页顶跑）。
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  _focus.unfocus();
-                  _showBlankMenu();
-                },
-                child: _messageList(group),
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    _focus.unfocus();
+                    _showBlankMenu();
+                  },
+                  child: _messageList(group),
+                ),
               ),
             ),
             Positioned(

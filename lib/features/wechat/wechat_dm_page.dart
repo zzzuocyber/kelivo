@@ -42,6 +42,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
   final FocusNode _focus = FocusNode();
   final Random _random = Random();
 
+  /// 上一帧的键盘高度：只在键盘「从无到有」时自动滚到底，打字中的高度微调不重复滚。
+  double _lastKeyboardInset = 0;
+
   WechatContact? _contact;
   WechatSettings _settings = const WechatSettings();
   Map<String, String> _avatars = const <String, String>{};
@@ -81,6 +84,21 @@ class _WechatDmPageState extends State<WechatDmPage> {
       unawaited(_social.clearCooldown(socialDmScope(widget.contactName)));
       _scheduleReply(summonDelay: const Duration(milliseconds: 500));
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    // 键盘从收起变为弹出：等列表收缩动画跑完，自动带到最新一条。
+    if (inset > 0 && _lastKeyboardInset <= 0 && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future<void>.delayed(const Duration(milliseconds: 160), () {
+          if (mounted) _jumpToBottom();
+        });
+      });
+    }
+    _lastKeyboardInset = inset;
   }
 
   @override
@@ -508,15 +526,23 @@ class _WechatDmPageState extends State<WechatDmPage> {
             ),
           ],
         ),
-        // 键盘弹起时不把整页顶上去：消息列表留在原位，只有输入栏浮到键盘上方。
         body: Stack(
           children: <Widget>[
+            // 键盘弹出时列表底部跟着收缩，可视区变矮后自动滚到最新一条，
+            // 不用用户手动往上拖；顶部标题栏不动。
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _focus.unfocus(),
-                onLongPress: _showSkyMenu,
-                child: _messageList(),
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _focus.unfocus(),
+                  onLongPress: _showSkyMenu,
+                  child: _messageList(),
+                ),
               ),
             ),
             Positioned(
