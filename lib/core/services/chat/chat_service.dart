@@ -4039,8 +4039,6 @@ class ChatService extends ChangeNotifier {
       }
       if (notify) {
         notifyListeners();
-      } else if (content != null || parts != null || isStreaming != null) {
-        AttachmentFileLock.notifyTransientChanged();
       }
       return;
     }
