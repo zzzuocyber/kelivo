@@ -642,7 +642,7 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
     _reload();
   }
 
-  /// 私聊偶尔不回：按角色单独开，默认关。
+  /// 私聊偶尔不回：全局默认开，可按角色单独关。
   Future<void> _pickNoReply(WechatContact contact) async {
     var enabled = contact.noReplyEnabled;
     var strength = contact.noReplyStrength;
@@ -691,7 +691,7 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
                     ),
                   ),
                   subtitle: const Text(
-                    '开了才可能已读不回；关掉就是每次都回。',
+                    '默认会偶尔不搭理你；关掉就是每次都回。',
                     style: TextStyle(
                       fontSize: 11.5,
                       color: WechatColors.secondaryText,

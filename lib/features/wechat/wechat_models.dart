@@ -58,7 +58,7 @@ bool wechatHasNoReplyMark(String raw) {
   return false;
 }
 
-/// 私聊不搭理人的强度。只管开关打开的角色，默认关。
+/// 私聊不搭理人的强度。全局默认开，每个角色可在角色管理里单独关。
 enum WechatNoReplyStrength { low, mid, high }
 
 extension WechatNoReplyStrengthX on WechatNoReplyStrength {
@@ -74,7 +74,7 @@ extension WechatNoReplyStrengthX on WechatNoReplyStrength {
     WechatNoReplyStrength.high => '懒得搭理的时候很多',
   };
 
-  /// 每轮允许模型考虑「不回」的基础概率。
+  /// 概率直接拍板「这一轮不回」的基础概率。
   double get chance => switch (this) {
     WechatNoReplyStrength.low => 0.15,
     WechatNoReplyStrength.mid => 0.35,
@@ -105,7 +105,7 @@ class WechatContact {
     this.intervalPreset = WechatIntervalPreset.follow,
     this.customMinSeconds = 2,
     this.customMaxSeconds = 12,
-    this.noReplyEnabled = false,
+    this.noReplyEnabled = true,
     this.noReplyStrength = WechatNoReplyStrength.low,
     this.addedAt = 0,
   });
@@ -126,7 +126,7 @@ class WechatContact {
   final int customMinSeconds;
   final int customMaxSeconds;
 
-  /// 私聊时这个人会不会偶尔已读不回。默认关，老数据不受影响。
+  /// 私聊时这个人会不会偶尔已读不回。默认开；显式存了 false 才是关。
   final bool noReplyEnabled;
   final WechatNoReplyStrength noReplyStrength;
 
@@ -169,8 +169,9 @@ class WechatContact {
     'interval': intervalPreset.name,
     'min': customMinSeconds,
     'max': customMaxSeconds,
-    if (noReplyEnabled) 'noReply': true,
-    if (noReplyEnabled) 'noReplyStrength': noReplyStrength.name,
+    // 总是写死当前值：默认开，关掉要存 false，老数据缺字段时按开处理。
+    'noReply': noReplyEnabled,
+    'noReplyStrength': noReplyStrength.name,
     'at': addedAt,
   };
 
@@ -189,7 +190,8 @@ class WechatContact {
       intervalPreset: WechatIntervalPresetX.parse(raw['interval']),
       customMinSeconds: _intOr(raw['min'], 2),
       customMaxSeconds: _intOr(raw['max'], 12),
-      noReplyEnabled: raw['noReply'] == true,
+      // 只有显式存了 false 才是关；老数据缺字段一律按「开」处理。
+      noReplyEnabled: raw['noReply'] != false,
       noReplyStrength: WechatNoReplyStrengthX.parse(raw['noReplyStrength']),
       addedAt: _intOr(raw['at'], 0),
     );

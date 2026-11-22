@@ -123,14 +123,19 @@ class WechatDmReplyRunner {
           store.contact(contactName) ?? WechatContact(name: contactName);
       final wechatSettings = store.wechatSettings();
       final burst = wechatBurstCount(wechatSettings.burstPreset, Random());
-      // 概率只决定「这一轮允不允许考虑不回」，最终由模型按人设输出暗号。
-      // 召唤、明确指令、连续不回太多都直接关掉这个口子。
-      final allowNoReply =
+      // 概率直接决定这一轮不回，不再看模型心情：命中就整轮丢掉，
+      // 不生成、不亮「正在输入」、不写库、不弹提示，聊天记录里干干净净。
+      // 召唤、明确指令、连续不回太多都强制回（全局默认开，也能单个关掉）。
+      final shouldSkip =
           contact.noReplyEnabled &&
           !forceReply &&
           !selfInitiated &&
           streak < _maxNoReplyStreak &&
           Random().nextDouble() < contact.noReplyStrength.chance;
+      if (shouldSkip) {
+        _noReplyStreak[key] = streak + 1;
+        return;
+      }
       // 一次性天意指令（切换话题/结束/冷场）。
       final scope = socialDmScope(contactName);
       final directive = social == null
@@ -166,7 +171,8 @@ class WechatDmReplyRunner {
         worldPrompt: wechatSettings.worldPrompt,
         history: wechatRecentContext(store.dmMessages(contactName), limit: 40),
         selfInitiated: selfInitiated,
-        allowNoReply: allowNoReply,
+        // 概率已在上面直接拍板，模型侧不再留「输出暗号不回」的口子。
+        allowNoReply: false,
         socialContext: contextText,
         directiveKind: directive.kind,
         directiveWho: directive.who,
