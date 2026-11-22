@@ -17123,6 +17123,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get languageDisplayTurkish => 'Türkçe';
 
   @override
+  String get languageDisplayBangla => 'Bengalce';
+
+  @override
   String sideDrawerDeleteConfirmContent(String title) {
     return '\"$title\" silinsin mi?';
   }

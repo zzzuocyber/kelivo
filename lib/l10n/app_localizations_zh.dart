@@ -16115,6 +16115,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get languageDisplayTurkish => '土耳其语';
 
   @override
+  String get languageDisplayBangla => '孟加拉语';
+
+  @override
   String sideDrawerDeleteConfirmContent(String title) {
     return '删除“$title”？';
   }
@@ -32785,6 +32788,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get languageDisplayTurkish => '土耳其语';
+
+  @override
+  String get languageDisplayBangla => '孟加拉语';
 
   @override
   String sideDrawerDeleteConfirmContent(String title) {
@@ -49474,6 +49480,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get languageDisplayTurkish => '土耳其語';
+
+  @override
+  String get languageDisplayBangla => '孟加拉語';
 
   @override
   String sideDrawerDeleteConfirmContent(String title) {
