@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../shared/animations/widgets.dart';
 import '../shared/widgets/snackbar.dart';
 import '../core/services/chat/chat_service.dart';
+import '../core/services/chat/visible_conversations.dart';
 import '../core/models/conversation.dart';
 import '../theme/app_font_weights.dart';
 import '../features/home/controllers/chat_actions.dart';
@@ -53,8 +54,7 @@ class _ChatHistoryDesktopDialogState extends State<_ChatHistoryDesktopDialog> {
       (chat) => (chat.initialized, chat.conversationListRevision),
     );
     final chatService = context.read<ChatService>();
-    final List<Conversation> all = chatService
-        .getAllConversations()
+    final List<Conversation> all = visibleConversations(chatService)
         .where(
           (c) =>
               widget.assistantId == null ||
@@ -150,8 +150,7 @@ class _ChatHistoryDesktopDialogState extends State<_ChatHistoryDesktopDialog> {
                           );
                           if (!context.mounted) return;
                           if (confirm == true) {
-                            final idsToDelete = svc
-                                .getAllConversations()
+                            final idsToDelete = visibleConversations(svc)
                                 .where(
                                   (c) =>
                                       c.assistantId == widget.assistantId &&

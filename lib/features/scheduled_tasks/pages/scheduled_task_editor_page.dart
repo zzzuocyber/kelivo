@@ -13,6 +13,7 @@ import '../../../desktop/widgets/desktop_select_dropdown.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../workspace/widgets/desktop_workspace_text_field.dart';
 import '../../../core/models/assistant.dart';
+import '../../../core/services/chat/visible_conversations.dart';
 import '../../../core/models/conversation.dart';
 import '../../../core/models/scheduled_task.dart';
 import '../../../core/providers/settings_provider.dart';
@@ -193,8 +194,7 @@ class _ScheduledTaskEditorPageState extends State<ScheduledTaskEditorPage> {
     await chat.init();
     if (!mounted) return;
     final l = AppLocalizations.of(context)!;
-    final choices = chat
-        .getAllConversations()
+    final choices = visibleConversations(chat)
         .where(
           (c) =>
               c.assistantId == assistantId &&

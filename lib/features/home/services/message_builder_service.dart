@@ -12,6 +12,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import '../../../core/database/chat_database_repository.dart';
+import '../../../core/services/chat/visible_conversations.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/chat_input_data.dart';
 import '../../../core/models/chat_message.dart';
@@ -2189,7 +2190,7 @@ class MessageBuilderService {
       );
     }
     if (assistant.allowPastConversationRecall) {
-      final chats = chatService.getAllConversations();
+      final chats = visibleConversations(chatService);
       final excludeId =
           currentConversationId ?? chatService.currentConversationId;
       final relevantChats = chats

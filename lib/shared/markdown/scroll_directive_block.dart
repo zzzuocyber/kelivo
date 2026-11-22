@@ -176,16 +176,20 @@ class _ScrollDirectiveCardState extends State<_ScrollDirectiveCard> {
                 ),
                 child: Stack(
                   children: [
+                    // 这块卡片刻意钉死白底深字：禁用文字选择，免得 SelectionArea
+                    // 的选中高亮把正文冲成灰底浅字（有右上角一键复制兜底）。
                     SingleChildScrollView(
                       controller: _controller,
                       primary: false,
                       physics: const ClampingScrollPhysics(),
-                      child: SelectableText(
-                        widget.text,
-                        style: const TextStyle(
-                          color: _ink,
-                          fontSize: 15.5,
-                          height: 1.55,
+                      child: SelectionContainer.disabled(
+                        child: Text(
+                          widget.text,
+                          style: const TextStyle(
+                            color: _ink,
+                            fontSize: 15.5,
+                            height: 1.55,
+                          ),
                         ),
                       ),
                     ),

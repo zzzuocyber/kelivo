@@ -44,6 +44,7 @@ import '../../../core/services/api/stream/stream_chunk.dart';
 import '../../../core/services/api/stream/stream_chunk_handler.dart';
 import '../../../core/services/api/tool_call_cancellation.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../core/services/chat/visible_conversations.dart';
 import '../../../core/services/app_exit_flush.dart';
 import '../../../core/services/mobile_background.dart';
 import '../../../core/services/logging/flutter_logger.dart';
@@ -316,8 +317,7 @@ class ChatActions {
   ) async {
     final actions = _current;
     if (actions == null) return;
-    final conversationIds = actions.chatService
-        .getAllConversations()
+    final conversationIds = visibleConversations(actions.chatService)
         .where((c) => c.assistantId == assistantId)
         .map((c) => c.id)
         .toList();

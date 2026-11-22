@@ -81,8 +81,7 @@ import '../utils/chat_layout_constants.dart';
 import '../widgets/chat_input_bar.dart';
 import '../widgets/share_destination_sheet.dart';
 import '../../model/widgets/model_select_sheet.dart';
-import '../../moment/moment_store.dart';
-import '../../wechat/wechat_store.dart';
+import '../../../core/services/chat/visible_conversations.dart';
 
 /// Translation data for UI state (expanded/collapsed).
 class TranslationData {
@@ -1388,11 +1387,8 @@ class HomePageController extends ChangeNotifier {
       if (prefs.newChatOnLaunch) {
         await _createNewConversation();
       } else {
-        // 朋友圈那条隐藏对话不能当聊天打开，否则启动会落进一条空白对话。
-        final conversations = _chatService
-            .getAllConversations()
-            .where((c) => !isMomentConversation(c) && !isWechatConversation(c))
-            .toList(growable: false);
+        // 小手机三块隐藏容器不能当聊天打开，否则启动会落进一条空白对话。
+        final conversations = visibleConversations(_chatService);
         if (conversations.isNotEmpty) {
           final recent = conversations.first;
           _chatService.setCurrentConversation(recent.id);
@@ -1467,8 +1463,7 @@ class HomePageController extends ChangeNotifier {
     _startupWarmupScheduled = true;
     final serial = _warmupSerial;
     final currentId = _chatService.currentConversationId;
-    final ids = _chatService
-        .getAllConversations()
+    final ids = visibleConversations(_chatService)
         .take(startupWarmupConversationCount)
         .map((c) => c.id)
         .where(
@@ -3736,9 +3731,7 @@ class HomePageController extends ChangeNotifier {
     final sourceId = currentConversation?.id;
     final destination = await showShareDestinationSheet(
       _context,
-      conversations: _context
-          .read<ChatService>()
-          .getAllConversations()
+      conversations: visibleConversations(_context.read<ChatService>())
           .where((conversation) => conversation.id != sourceId)
           .toList(),
     );

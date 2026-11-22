@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import '../../../icons/lucide_adapter.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../core/services/chat/visible_conversations.dart';
 import '../../../core/services/api/chat_api_service.dart';
 import '../../../core/services/logging/flutter_logger.dart';
 import '../../../core/providers/settings_provider.dart';
@@ -20,8 +21,6 @@ import '../../../core/providers/user_provider.dart';
 import '../../settings/pages/settings_page.dart';
 import '../../translate/pages/translate_page.dart';
 import '../../moment/moment_phone_page.dart';
-import '../../moment/moment_store.dart';
-import '../../wechat/wechat_store.dart';
 import '../../backup/pages/backup_page.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/update_provider.dart';
@@ -339,7 +338,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                 final ap = context.read<AssistantProvider>();
                 final currentAid = ap.currentAssistantId;
                 if (currentAid != null) {
-                  final all = chatService.getAllConversations();
+                  final all = visibleConversations(chatService);
                   final candidates =
                       all
                           .where(
@@ -542,7 +541,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
                           final ap = context.read<AssistantProvider>();
                           final currentAid = ap.currentAssistantId;
                           if (currentAid != null) {
-                            final all = chatService.getAllConversations();
+                            final all = visibleConversations(chatService);
                             final candidates =
                                 all
                                     .where(
@@ -843,11 +842,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
       final currentAid = ap.currentAssistantId;
       if (currentAid == null) return null;
       final candidates =
-          chatService
-              .getAllConversations()
-              .where(
-                (c) => !isMomentConversation(c) && !isWechatConversation(c),
-              )
+          visibleConversations(chatService)
               .where(
                 (c) =>
                     c.assistantId == currentAid && !excludeIds.contains(c.id),
@@ -1470,8 +1465,8 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
     final rest = <ChatItem>[];
     final resolvedOwnerIds = <String, String?>{};
     // Single pass: filter assistant + query, split pinned/rest via ChatItem.isPinned.
-    for (final c in chatService.getAllConversations()) {
-      if (isMomentConversation(c) || isWechatConversation(c)) continue;
+    // 统一过滤小手机三块隐藏容器（微信/朋友圈/社交状态），漏一个就会露到主页。
+    for (final c in visibleConversations(chatService)) {
       if (c.assistantId != null &&
           resolvedOwnerIds.putIfAbsent(
                 c.assistantId!,
@@ -1691,7 +1686,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
         _selectionAssistantId = null;
       } else {
         final liveIds = <String>{
-          for (final c in chatServiceForSelection.getAllConversations()) c.id,
+          for (final c in visibleConversations(chatServiceForSelection)) c.id,
         };
         _selectedConversationIds.removeWhere((id) => !liveIds.contains(id));
       }
@@ -3134,7 +3129,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
       // otherwise create a new conversation.
       try {
         final chatService = context.read<ChatService>();
-        final all = chatService.getAllConversations();
+        final all = visibleConversations(chatService);
         // Filter conversations owned by this assistant and pick the newest
         final recent = all
             .where(

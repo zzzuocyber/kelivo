@@ -265,7 +265,15 @@ class MarkstreamRenderer {
             )
           : buildCustom(context);
       // Code extensions use MarkstreamCodeContent, which paints exact ranges.
-      return node is CodeBlockNode ? child : highlights.atom(node.span, child);
+      // `:scroll` owns an opaque pinned-white surface whose dark ink is chosen
+      // to stay readable in every theme. Painting a translucent highlight over
+      // the whole atom washes that surface grey and its text pale, so exempt it
+      // from the atom-level highlight (other custom blocks keep the behavior).
+      final ownsOpaqueSurface =
+          node is NamedBlockNode && node.name.toLowerCase() == 'scroll';
+      return node is CodeBlockNode || ownsOpaqueSurface
+          ? child
+          : highlights.atom(node.span, child);
     }
     final body = style ?? theme.body;
     if (node is CodeBlockNode)

@@ -4,11 +4,10 @@ import 'package:animations/animations.dart';
 import '../../../shared/animations/widgets.dart';
 import '../../../shared/widgets/snackbar.dart';
 import 'package:provider/provider.dart';
-import '../../moment/moment_store.dart';
-import '../../wechat/wechat_store.dart';
 
 import '../../../icons/lucide_adapter.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../../core/services/chat/visible_conversations.dart';
 import '../../../core/models/conversation.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../theme/app_font_weights.dart';
@@ -42,9 +41,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage>
       (chat) => (chat.initialized, chat.conversationListRevision),
     );
     final chatService = context.read<ChatService>();
-    final List<Conversation> all = chatService
-        .getAllConversations()
-        .where((c) => !isMomentConversation(c) && !isWechatConversation(c))
+    final List<Conversation> all = visibleConversations(chatService)
         .where(
           (c) =>
               widget.assistantId == null ||
@@ -112,8 +109,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage>
               if (!context.mounted) return;
               if (confirm == true) {
                 final svc = context.read<ChatService>();
-                final idsToDelete = svc
-                    .getAllConversations()
+                final idsToDelete = visibleConversations(svc)
                     .where(
                       (c) => c.assistantId == widget.assistantId && !c.isPinned,
                     )
