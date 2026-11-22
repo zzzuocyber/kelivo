@@ -3,6 +3,7 @@ import '../../core/models/world_book.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/api/chat_api_service.dart';
+import '../../core/services/heart_voice.dart';
 import 'wechat_models.dart';
 
 /// 一次生成最多等多久。卡住就报错，不让界面无限挂着。
@@ -245,12 +246,20 @@ class WechatGenerator {
     this.directiveKind = '',
     this.directiveWho = '',
     this.directiveText = '',
+    this.heartVoiceOn = false,
   });
 
   final SettingsProvider settings;
   final WorldBookProvider worldBooks;
   final WechatGroup group;
   final List<WechatMessage> history;
+
+  /// 这个角色开了心声才让模型附带；没开就完全不提心声这回事。
+  final bool heartVoiceOn;
+
+  /// 最近一次 generateFor 解析出来的心声。调用方写完消息后读它存库。
+  /// 没开心声 / 模型没给时为空。
+  String lastHeartVoice = '';
 
   /// 通讯录，用来取角色级的模型绑定。群里没有这个人的时候退回群设置。
   final Map<String, WechatContact> contacts;
@@ -294,12 +303,15 @@ class WechatGenerator {
     if (wechatHasNoSpeakMark(result.text)) {
       throw const WechatNoReplyException();
     }
+    // 心声要在 cleanReply 之前剥出来，免得标记被当正文清洗掉。
+    // 没开心声时 splitHeartVoice 原样返回，不影响老行为。
+    final split = splitHeartVoice(result.text);
+    lastHeartVoice = heartVoiceOn ? split.heartVoice : '';
+    final clean = split.text;
     // 控制剧情走向：我写的剧情原样落地，不做任何清洗——
     // 否则旁白、括号动作、markdown 会被 cleanReply 抹掉，剧情就"不奏效"了。
     final isPlot = directiveKind == 'plot' && directiveText.trim().isNotEmpty;
-    final text = isPlot
-        ? result.text.trim()
-        : cleanReply(result.text, speaker.name);
+    final text = isPlot ? clean.trim() : cleanReply(clean, speaker.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
     }
@@ -396,6 +408,9 @@ class WechatGenerator {
       who: directiveWho,
       text: directiveText,
     );
+    // 心声：只有这个角色开了才让模型附一段，没开就一个字都不提，
+    // 免得模型在没开的角色上也吐标记。
+    if (heartVoiceOn) writeHeartVoiceRule(buffer, speaker.name);
     return buffer.toString().trim();
   }
 
@@ -457,10 +472,17 @@ class WechatDmGenerator {
     this.directiveKind = '',
     this.directiveWho = '',
     this.directiveText = '',
+    this.heartVoiceOn = false,
   });
 
   final SettingsProvider settings;
   final WorldBookProvider worldBooks;
+
+  /// 对面这个人开了心声才附带；关卡就一个字都不提。
+  final bool heartVoiceOn;
+
+  /// 最近一次 generate 解析出的心声，调用方写完消息后读它存库。
+  String lastHeartVoice = '';
 
   /// 对面这个人（人设、模型都从他身上取）。
   final WechatContact contact;
@@ -516,11 +538,13 @@ class WechatDmGenerator {
         (allowNoReply && wechatHasNoReplyMark(result.text))) {
       throw const WechatNoReplyException();
     }
+    // 心声在 cleanReply 之前剥出，免得标记被当正文洗掉。
+    final split = splitHeartVoice(result.text);
+    lastHeartVoice = heartVoiceOn ? split.heartVoice : '';
+    final clean = split.text;
     // 控制剧情走向：原文落地，不清洗，保住旁白/动作/多角色。
     final isPlot = directiveKind == 'plot' && directiveText.trim().isNotEmpty;
-    final text = isPlot
-        ? result.text.trim()
-        : cleanReply(result.text, contact.name);
+    final text = isPlot ? clean.trim() : cleanReply(clean, contact.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
     }
@@ -608,6 +632,7 @@ class WechatDmGenerator {
         '不能用这个标记。',
       );
     }
+    if (heartVoiceOn) writeHeartVoiceRule(buffer, contact.name);
     return buffer.toString().trim();
   }
 

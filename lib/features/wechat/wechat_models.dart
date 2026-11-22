@@ -774,6 +774,7 @@ class WechatMessage {
     this.recalled = false,
     this.withImage = false,
     this.plot = false,
+    this.heartVoice = '',
   });
 
   final String id;
@@ -802,12 +803,17 @@ class WechatMessage {
   /// 「控制剧情走向」落地的旁白：整段剧情、不挂某人、居中卡片显示。
   final bool plot;
 
+  /// 这条消息生成时一并存下的心声（口是心非的真实想法）。空 = 没有。
+  /// 只有开了心声的角色、且是角色本人发的才有；我发的/夺舍替人说的没有。
+  final String heartVoice;
+
   WechatMessage copyWith({
     String? sender,
     String? text,
     int? at,
     bool? recalled,
     bool? withImage,
+    String? heartVoice,
   }) {
     return WechatMessage(
       id: id,
@@ -820,6 +826,7 @@ class WechatMessage {
       recalled: recalled ?? this.recalled,
       withImage: withImage ?? this.withImage,
       plot: plot,
+      heartVoice: heartVoice ?? this.heartVoice,
     );
   }
 
@@ -834,6 +841,7 @@ class WechatMessage {
     if (recalled) 'recalled': true,
     if (withImage) 'img': true,
     if (plot) 'plot': true,
+    if (heartVoice.isNotEmpty) 'heart': heartVoice,
   };
 
   static WechatMessage? fromJson(Object? raw) {
@@ -851,6 +859,7 @@ class WechatMessage {
       recalled: raw['recalled'] == true,
       withImage: raw['img'] == true,
       plot: raw['plot'] == true,
+      heartVoice: (raw['heart'] ?? '').toString(),
     );
   }
 }

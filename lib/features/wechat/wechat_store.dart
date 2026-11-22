@@ -366,6 +366,7 @@ class WechatStore {
     bool divine = false,
     bool withImage = false,
     bool plot = false,
+    String heartVoice = '',
     int? at,
   }) => appendMessage(
     wechatDmKey(name),
@@ -375,6 +376,7 @@ class WechatStore {
     divine: divine,
     withImage: withImage,
     plot: plot,
+    heartVoice: heartVoice,
     at: at,
   );
 
@@ -578,6 +580,7 @@ class WechatStore {
     bool divine = false,
     bool withImage = false,
     bool plot = false,
+    String heartVoice = '',
     int? at,
   }) async {
     final message = WechatMessage(
@@ -590,6 +593,7 @@ class WechatStore {
       divine: divine,
       withImage: withImage,
       plot: plot,
+      heartVoice: heartVoice,
     );
     final next = <WechatMessage>[...messages(groupId), message];
     await _writeMessages(groupId, next);
@@ -602,13 +606,18 @@ class WechatStore {
     String id,
     String text, {
     bool? withImage,
+    String? heartVoice,
   }) async {
     final list = messages(key);
     var changed = false;
     final next = <WechatMessage>[];
     for (final message in list) {
       if (message.id == id) {
-        next.add(message.copyWith(text: text, withImage: withImage));
+        next.add(message.copyWith(
+          text: text,
+          withImage: withImage,
+          heartVoice: heartVoice,
+        ));
         changed = true;
       } else {
         next.add(message);

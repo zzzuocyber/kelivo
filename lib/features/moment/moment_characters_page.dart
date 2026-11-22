@@ -82,6 +82,15 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
     await _social.setAffinity(updated);
   }
 
+  /// 点行尾的心形：开/关这个角色的心声（一份全局名单，三场景通用）。
+  Future<void> _toggleHeartVoice(String name) async {
+    final key = name.trim();
+    if (key.isEmpty) return;
+    await _social.setHeartVoice(key, !_social.heartVoiceOn(key));
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final books = _books;
@@ -186,6 +195,23 @@ class _MomentCharactersPageState extends State<MomentCharactersPage> {
                     style: const TextStyle(
                       fontSize: 15,
                       color: MomentColors.primaryText,
+                    ),
+                  ),
+                ),
+                // 心声开关：一份全局名单，开了三场景都带心声。长按仍改好感度。
+                GestureDetector(
+                  onTap: () => _toggleHeartVoice(name),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(
+                      _social.heartVoiceOn(name)
+                          ? Lucide.Heart
+                          : Lucide.HeartOff,
+                      size: 20,
+                      color: _social.heartVoiceOn(name)
+                          ? MomentColors.name
+                          : MomentColors.secondaryText,
                     ),
                   ),
                 ),

@@ -65,6 +65,7 @@ class MomentPost {
     this.isMine = false,
     this.likes = const <String>[],
     this.comments = const <MomentComment>[],
+    this.heartVoice = '',
   });
 
   final String id;
@@ -80,6 +81,9 @@ class MomentPost {
   final List<String> likes;
   final List<MomentComment> comments;
 
+  /// 这条动态生成时一并存下的心声。空 = 没有（角色没开心声或是我发的）。
+  final String heartVoice;
+
   MomentPost copyWith({
     String? id,
     String? author,
@@ -89,6 +93,7 @@ class MomentPost {
     bool? isMine,
     List<String>? likes,
     List<MomentComment>? comments,
+    String? heartVoice,
   }) {
     return MomentPost(
       id: id ?? this.id,
@@ -99,6 +104,7 @@ class MomentPost {
       isMine: isMine ?? this.isMine,
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,
+      heartVoice: heartVoice ?? this.heartVoice,
     );
   }
 
@@ -111,6 +117,7 @@ class MomentPost {
     'mine': isMine,
     'likes': likes,
     'comments': comments.map((c) => c.toJson()).toList(growable: false),
+    if (heartVoice.isNotEmpty) 'heart': heartVoice,
   };
 
   static MomentPost? fromJson(dynamic raw) {
@@ -145,6 +152,7 @@ class MomentPost {
       isMine: raw['mine'] == true,
       likes: likes,
       comments: comments,
+      heartVoice: (raw['heart'] ?? '').toString(),
     );
   }
 }

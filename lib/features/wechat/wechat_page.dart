@@ -1235,9 +1235,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
         directiveKind: directive.kind,
         directiveWho: directive.who,
         directiveText: directive.text,
+        heartVoiceOn: _social.heartVoiceOn(speakerName),
       );
       unawaited(_social.addTokens('group', built.tokens));
       final text = await generator.generateFor(speaker, burstCount: burst);
+      final heart = generator.lastHeartVoice;
       if (!mounted) return;
       // 控制剧情走向：整段剧情一条落地，不按连发拆成多个气泡、不挂多个角色名下。
       // 普通发言才按抽到的条数拆，一条一个气泡。
@@ -1262,6 +1264,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
             text: parsed.text,
             withImage: parsed.withImage,
             plot: isPlot,
+            // 心声随这轮发言一起存；剧情旁白不挂角色，不该带心声。
+            heartVoice: isPlot ? '' : heart,
           ),
         );
       }
@@ -2074,6 +2078,14 @@ class _WechatChatPageState extends State<WechatChatPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
+              // 心声是角色本人发言时存下的；我发的/夺舍的没有，也不给看。
+              if (!mine && message.heartVoice.trim().isNotEmpty)
+                _messageMenuItem(
+                  sheetCtx,
+                  icon: Lucide.Heart,
+                  label: '偷看心声',
+                  value: 'heart',
+                ),
               if (mine)
                 _messageMenuItem(
                   sheetCtx,
@@ -2109,6 +2121,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
     );
     if (!mounted || action == null) return;
     switch (action) {
+      case 'heart':
+        await showHeartVoiceDialog(
+          context,
+          who: message.sender,
+          text: message.heartVoice,
+        );
       case 'edit':
         await _editMessage(group, message);
       case 'regen':
@@ -2204,9 +2222,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
         history: wechatRecentContext(before),
         contacts: _contactModels,
         worldPrompt: _store.wechatSettings().worldPrompt,
+        heartVoiceOn: _social.heartVoiceOn(speaker.name),
       );
       // 重新生成只替换这一条，所以明确要一条，别让它连发。
       final text = await generator.generateFor(speaker, burstCount: 1);
+      final heart = generator.lastHeartVoice;
       final parts = wechatSplitReply(text, maxParts: 1);
       if (!mounted) return;
       if (parts.isEmpty) {
@@ -2226,6 +2246,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
         message.id,
         parsed.text,
         withImage: parsed.withImage,
+        heartVoice: heart,
       );
       if (!mounted) return;
       setState(() {
