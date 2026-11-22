@@ -215,13 +215,17 @@ class WorldBookProvider with ChangeNotifier {
     for (final book in books) {
       final label = normalizeWorldBookGroup(book.group);
       if (label.isEmpty) continue;
-      var groupId = names.entries
+      final existingId = names.entries
           .where((entry) => entry.value == label)
           .map((entry) => entry.key)
           .firstOrNull;
-      if (groupId == null) {
-        groupId = const Uuid().v4();
-        names[groupId] = label;
+      final String groupId;
+      if (existingId == null) {
+        final newId = const Uuid().v4();
+        names[newId] = label;
+        groupId = newId;
+      } else {
+        groupId = existingId;
       }
       memberships[book.id] = groupId;
     }
