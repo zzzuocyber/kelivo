@@ -163,7 +163,11 @@ class WechatOfflineReplay {
           ...momentStore.memoryLinesFor(speakerName),
           ...store.memoryLinesFor(speakerName, excludeKey: group.id),
         ];
-        final where = social.whereabouts(speakerName);
+        // 按这条补算消息「发生」的真实时刻（pastReal）换算成故事时间，
+        // 查作息、写时间句、写库时间戳都用同一个时刻——避免「昨晚的消息按今天作息说话」。
+        final pastReal = _pastStamp(seen, now);
+        final storyAt = social.storyTimeFromRealMillis(pastReal);
+        final where = social.whereabouts(speakerName, now: storyAt);
         final built = SocialContextBuilder.build(
           name: speakerName,
           scene: 'group',
@@ -172,6 +176,7 @@ class WechatOfflineReplay {
           store: social,
           topic: group.autoTopic ? social.topic(groupScope(group.id)).topic : '',
           summaryText: social.plotSummary,
+          timeLine: socialTimeLine(storyAt),
         );
         final generator = WechatGenerator(
           settings: settings,
@@ -192,8 +197,8 @@ class WechatOfflineReplay {
         for (final part in parts) {
           final parsed = wechatStripImageMark(part);
           if (parsed.text.isEmpty) continue;
-          // 几条之间错开几秒，像真的一段对话。
-          final at = _pastStamp(seen, now) + wrote * 1500;
+          // 几条之间错开几秒，像真的一段对话；基准与查作息的时刻一致。
+          final at = pastReal + wrote * 1500;
           await store.appendMessage(
             group.id,
             sender: speakerName,
@@ -257,7 +262,10 @@ class WechatOfflineReplay {
           ...momentStore.memoryLinesFor(name),
           ...store.memoryLinesFor(name, excludeKey: key),
         ];
-        final where = social.whereabouts(name);
+        // 按补算消息发生的时刻（pastReal）换算故事时间，查作息/时间戳用同一个。
+        final pastReal = _pastStamp(seen, now);
+        final storyAt = social.storyTimeFromRealMillis(pastReal);
+        final where = social.whereabouts(name, now: storyAt);
         final built = SocialContextBuilder.build(
           name: name,
           scene: 'dm',
@@ -266,6 +274,7 @@ class WechatOfflineReplay {
           store: social,
           topic: social.topic(key).topic,
           summaryText: social.plotSummary,
+          timeLine: socialTimeLine(storyAt),
         );
         final generator = WechatDmGenerator(
           settings: settings,
@@ -283,7 +292,7 @@ class WechatOfflineReplay {
         for (final part in parts) {
           final parsed = wechatStripImageMark(part);
           if (parsed.text.isEmpty) continue;
-          final at = _pastStamp(seen, now) + wrote * 1500;
+          final at = pastReal + wrote * 1500;
           await store.appendDmMessage(
             name,
             text: parsed.text,

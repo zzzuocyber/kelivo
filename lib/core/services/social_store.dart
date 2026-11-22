@@ -27,7 +27,95 @@ const String socialSeenKey = 'social.seen';
 const String socialSummaryKey = 'social.summary';
 const String socialCompressPromptKey = 'social.compressprompt';
 const String socialPlotLogKey = 'social.plotlog';
+const String socialWorldClockKey = 'social.worldclock';
 const String socialContainerTitle = '社交状态';
+
+/// 故事世界的时间坐标。
+///
+/// 三场景（群聊/私聊/朋友圈）和离线补算都读这一个，不再各取手机的 DateTime.now()。
+/// 存一对锚点：把某个真实时刻 [realAnchor] 对应到故事时刻 [storyAnchor]，于是
+///   故事现在 = storyAnchor + (真实现在 − realAnchor)
+/// 这样设定后时间照常往前流；[advance] 只需往前挪 storyAnchor。
+/// 没有存过（老数据/未设置）时用 [followReal] = true，直接等于真实时间。
+class SocialWorldClock {
+  const SocialWorldClock({
+    required this.followReal,
+    required this.realAnchor,
+    required this.storyAnchor,
+  });
+
+  /// true = 直接用手机真实时间；false = 用故事锚点推算。
+  final bool followReal;
+  final int realAnchor;
+  final int storyAnchor;
+
+  static SocialWorldClock real() => SocialWorldClock(
+        followReal: true,
+        realAnchor: 0,
+        storyAnchor: 0,
+      );
+
+  /// 把真实时刻换算成故事时刻。
+  DateTime at(DateTime real) {
+    if (followReal) return real;
+    final delta = real.millisecondsSinceEpoch - realAnchor;
+    return DateTime.fromMillisecondsSinceEpoch(storyAnchor + delta);
+  }
+
+  /// 故事里的「现在」。
+  DateTime now() => at(DateTime.now());
+
+  /// 从真实时刻反推故事时刻（离线补算用：把过去的真实时间戳换算过去）。
+  DateTime storyTimeFromRealMillis(int millis) =>
+      at(DateTime.fromMillisecondsSinceEpoch(millis));
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'follow': followReal,
+        'real': realAnchor,
+        'story': storyAnchor,
+      };
+
+  static SocialWorldClock fromJson(Object? raw) {
+    if (raw is! Map) return real();
+    final follow = raw['follow'] != false;
+    final realAnchor = _clockIntOr(raw['real'], 0);
+    final storyAnchor = _clockIntOr(raw['story'], 0);
+    if (follow || realAnchor <= 0 || storyAnchor <= 0) return real();
+    return SocialWorldClock(
+      followReal: false,
+      realAnchor: realAnchor,
+      storyAnchor: storyAnchor,
+    );
+  }
+
+  static int _clockIntOr(Object? value, int fallback) {
+    if (value is num) return value.round();
+    return int.tryParse('$value') ?? fallback;
+  }
+}
+
+/// 把故事时间写成一句给模型看的中文，明确到星期和上午/下午/晚上。
+String socialTimeLine(DateTime storyNow) {
+  const weeks = <String>['一', '二', '三', '四', '五', '六', '日'];
+  final week = weeks[storyNow.weekday - 1];
+  final hour = storyNow.hour;
+  final String period;
+  if (hour < 5) {
+    period = '凌晨';
+  } else if (hour < 12) {
+    period = '上午';
+  } else if (hour < 13) {
+    period = '中午';
+  } else if (hour < 18) {
+    period = '下午';
+  } else {
+    period = '晚上';
+  }
+  final hh = hour.toString().padLeft(2, '0');
+  final mm = storyNow.minute.toString().padLeft(2, '0');
+  return '现在的故事时间：${storyNow.month}月${storyNow.day}日 '
+      '星期$week $period$hh:$mm。';
+}
 
 /// 压缩词的预设内容：只作手写「剧情概括」时的填写参考，不喂给模型。
 const String kDefaultCompressPrompt = '写一份剧情概括，供群聊/私聊/朋友圈共用：\n'
@@ -277,7 +365,8 @@ class SocialStore {
           extras.containsKey(socialSeenKey) ||
           extras.containsKey(socialSummaryKey) ||
           extras.containsKey(socialCompressPromptKey) ||
-          extras.containsKey(socialPlotLogKey);
+          extras.containsKey(socialPlotLogKey) ||
+          extras.containsKey(socialWorldClockKey);
       if (!looksLikeOurs) continue;
       return chat.getConversation(conversation.id) ?? conversation;
     }
@@ -361,8 +450,9 @@ class SocialStore {
   }
 
   /// 取某角色此刻的去向。按表的顺序匹配第一条命中的规则。
+  /// 默认用故事时间坐标，不再取手机真实时间——三场景因此始终对得上。
   SocialWhereabouts whereabouts(String name, {DateTime? now}) {
-    final moment = now ?? DateTime.now();
+    final moment = now ?? storyNow();
     final slots = scheduleFor(name);
     for (final slot in slots) {
       if (slot.matches(moment)) {
@@ -676,6 +766,64 @@ class SocialStore {
       final previous = socialInt(raw[key]);
       if (stamp > previous) raw[key] = stamp;
       next[socialSeenKey] = raw;
+      return next;
+    });
+  }
+
+  // ---------------- 故事时间坐标（三场景 + 离线补算共用） ----------------
+
+  SocialWorldClock get worldClock =>
+      SocialWorldClock.fromJson(_extras[socialWorldClockKey]);
+
+  /// 故事里的「现在」。所有场景都该用它，而不是 DateTime.now()。
+  DateTime storyNow() => worldClock.now();
+
+  /// 给模型看的一句故事时间。
+  String get storyTimeLine => socialTimeLine(storyNow());
+
+  /// 把真实的毫秒时间戳换算成故事时刻（离线补算按消息时间查作息用）。
+  DateTime storyTimeFromRealMillis(int millis) =>
+      worldClock.storyTimeFromRealMillis(millis);
+
+  /// 切回跟随手机真实时间（清掉锚点）。
+  Future<void> setWorldClockFollowReal() async {
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      next.remove(socialWorldClockKey);
+      return next;
+    });
+  }
+
+  /// 手动把故事时间锁定到 [storyAt]，之后照常往前流。
+  /// 例如传「2026-11-20 20:00」，故事就从周三晚八点开始走。
+  Future<void> setWorldClockTo(DateTime storyAt) async {
+    final realNow = DateTime.now().millisecondsSinceEpoch;
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      next[socialWorldClockKey] = SocialWorldClock(
+        followReal: false,
+        realAnchor: realNow,
+        storyAnchor: storyAt.millisecondsSinceEpoch,
+      ).toJson();
+      return next;
+    });
+  }
+
+  /// 把故事时间往前推 [by]（可为负表示回拨）：在当前锚点基础上平移。
+  Future<void> advanceWorldClock(Duration by) async {
+    final clock = worldClock;
+    if (clock.followReal) {
+      // 当前跟随真实时间：先把「现在」定住，再平移。
+      await setWorldClockTo(DateTime.now().add(by));
+      return;
+    }
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      next[socialWorldClockKey] = SocialWorldClock(
+        followReal: false,
+        realAnchor: clock.realAnchor,
+        storyAnchor: clock.storyAnchor + by.inMilliseconds,
+      ).toJson();
       return next;
     });
   }

@@ -15,6 +15,8 @@ class SocialContextBuilder {
   /// [topic] 是当前话题（可选），有就一起注入，保证三处话题感一致。
   /// [summaryText] 是我手写的剧情概括：摘要模式下若给了，就用它替代规则压缩，
   /// 三场景共用同一份，不再各压各的。
+  /// [timeLine] 是可覆盖的故事时间句；默认读 [store] 的故事时钟，让模型明确知道
+  /// 现在是星期几、上午还是晚上。离线补算传消息发生那一刻的故事时间。
   static BuiltContext build({
     required String name,
     required String scene,
@@ -23,8 +25,14 @@ class SocialContextBuilder {
     required SocialStore store,
     String topic = '',
     String summaryText = '',
+    String? timeLine,
   }) {
     final sections = <String>[];
+
+    final time = (timeLine ?? store.storyTimeLine).trim();
+    if (time.isNotEmpty) {
+      sections.add('【时间】\n$time');
+    }
 
     final whereTrimmed = where.trim();
     if (whereTrimmed.isNotEmpty) {

@@ -140,6 +140,8 @@ class _MomentPageState extends State<MomentPage> {
   /// 注入提示词。时间地点跟群聊/私聊共用同一份作息表，所以三处对得上。
   Future<String> _buildSocialContext() async {
     final lines = <String>[];
+    // 故事时间坐标，跟群聊/私聊同一份；明确告诉模型现在星期几、白天还是晚上。
+    lines.add(_social.storyTimeLine);
     for (final character in _characters) {
       final where = _social.whereabouts(character.name).promptLine;
       lines.add('${character.name}：$where');

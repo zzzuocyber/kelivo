@@ -36,6 +36,7 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
   String _plotSummary = '';
   String _compressPrompt = kDefaultCompressPrompt;
   List<PlotLogEntry> _plotLogs = const <PlotLogEntry>[];
+  SocialWorldClock _clock = SocialWorldClock.real();
 
   @override
   void initState() {
@@ -65,7 +66,45 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
       _plotSummary = _social.plotSummary;
       _compressPrompt = _social.compressPrompt;
       _plotLogs = _social.plotLogs();
+      _clock = _social.worldClock;
     });
+  }
+
+  /// 故事时间：三场景 + 离线补算共用的时间坐标。
+  String get _storyNowText => socialTimeLine(_clock.now());
+
+  Future<void> _pickWorldClockDate() async {
+    final now = _clock.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year, now.month, now.day),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: now.hour, minute: now.minute),
+    );
+    if (time == null || !mounted) return;
+    await _social.setWorldClockTo(DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    ));
+    _reload();
+  }
+
+  Future<void> _advanceWorldClock(Duration by) async {
+    await _social.advanceWorldClock(by);
+    _reload();
+  }
+
+  Future<void> _followRealTime() async {
+    await _social.setWorldClockFollowReal();
+    _reload();
   }
 
   Future<void> _setMode(String scene, SocialContextMode mode) async {
@@ -212,6 +251,8 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
         ),
         body: ListView(
           children: <Widget>[
+            _sectionTitle('故事时间坐标（三场景 + 离线补算共用）'),
+            _worldClockCard(),
             _sectionTitle('喂给模型的方式'),
             _modeRow('朋友圈', 'moment'),
             _modeRow('群聊', 'group'),
@@ -392,6 +433,81 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
             const SizedBox(height: 28),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _worldClockCard() {
+    final following = _clock.followReal;
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  _storyNowText,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: MomentColors.primaryText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            following
+                ? '当前跟随手机真实时间。设定一个故事时刻后，三个场景都会按它走。'
+                : '已锁定故事时间，会照常往前流；下面可推进/回拨或改回真实时间。',
+            style: const TextStyle(
+              fontSize: 11.5,
+              color: MomentColors.secondaryText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: _pickWorldClockDate,
+                icon: const Icon(Lucide.Calendar, size: 15),
+                label: const Text('手动设定'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _advanceWorldClock(const Duration(hours: 1)),
+                icon: const Icon(Lucide.Timer, size: 15),
+                label: const Text('+1 小时'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _advanceWorldClock(const Duration(hours: 6)),
+                icon: const Icon(Lucide.Timer, size: 15),
+                label: const Text('+6 小时'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _advanceWorldClock(const Duration(days: 1)),
+                icon: const Icon(Lucide.Calendar, size: 15),
+                label: const Text('+1 天'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _advanceWorldClock(const Duration(hours: -1)),
+                icon: const Icon(Lucide.Timer, size: 15),
+                label: const Text('-1 小时'),
+              ),
+              if (!following)
+                OutlinedButton.icon(
+                  onPressed: _followRealTime,
+                  icon: const Icon(Lucide.RotateCcw, size: 15),
+                  label: const Text('跟随真实时间'),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
