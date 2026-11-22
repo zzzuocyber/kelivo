@@ -190,10 +190,8 @@ class WechatDmReplyRunner {
         socialContext: contextText,
         directiveKind: directive.kind,
         directiveWho: directive.who,
-        heartVoiceOn: social?.heartVoiceOn(contactName) ?? false,
       );
       final text = await generator.generate(burstCount: burst);
-      final heart = generator.lastHeartVoice;
       final parts = wechatSplitReply(text, maxParts: burst);
       if (parts.isEmpty) {
         throw const WechatServiceException('empty');
@@ -210,8 +208,6 @@ class WechatDmReplyRunner {
           text: parsed.text,
           mine: false,
           withImage: parsed.withImage,
-          // 心声随这轮回复存。
-          heartVoice: heart,
         );
       }
       // 真回过一次就把连续不回清零。

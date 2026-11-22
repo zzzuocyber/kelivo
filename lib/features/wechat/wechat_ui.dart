@@ -519,52 +519,6 @@ Future<SocialAffinity?> showAffinityDialog(
   );
 }
 
-// ============================================================
-// 心声偷看：长按消息 → 菜单「偷看心声」弹出的只读卡片。
-// 心声是生成时就存好的私货，这里只展示，不改、不重新问 AI。
-// ============================================================
-
-/// [who] 是谁的心声，[text] 是当时存下的那段。
-Future<void> showHeartVoiceDialog(
-  BuildContext context, {
-  required String who,
-  required String text,
-}) {
-  return showDialog<void>(
-    context: context,
-    builder: (dialogCtx) => AlertDialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Row(
-        children: <Widget>[
-          const Icon(Lucide.Heart, size: 18, color: WechatColors.red),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$who 的心声',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-      content: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          color: wechatMenuInk,
-          height: 1.5,
-        ),
-      ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(dialogCtx).pop(),
-          child: const Text('知道了'),
-        ),
-      ],
-    ),
-  );
-}
-
 class WechatAffinityDialog extends StatefulWidget {
   const WechatAffinityDialog({super.key, required this.affinity});
 

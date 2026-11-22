@@ -779,7 +779,6 @@ class WechatMessage {
     this.recalled = false,
     this.withImage = false,
     this.plot = false,
-    this.heartVoice = '',
     this.snapshot = '',
   });
 
@@ -809,13 +808,10 @@ class WechatMessage {
   /// 旧的「控制剧情走向」旁白标记，仅用于老数据仍能显示，现不再新写。
   final bool plot;
 
-  /// 这条消息生成时一并存下的心声（口是心非的真实想法）。空 = 没有。
-  /// 只有开了心声的角色、且是角色本人发的才有；我发的/夺舍替人说的没有。
-  final String heartVoice;
-
   /// 转发的「模拟聊天截图」内容（JSON 字符串：来源 + 若干对话行）。
   /// 非空时这条消息渲染成一张聊天截图卡片，AI 上下文里标明这是转发的截图。
   final String snapshot;
+
 
   WechatMessage copyWith({
     String? sender,
@@ -823,7 +819,6 @@ class WechatMessage {
     int? at,
     bool? recalled,
     bool? withImage,
-    String? heartVoice,
   }) {
     return WechatMessage(
       id: id,
@@ -836,7 +831,6 @@ class WechatMessage {
       recalled: recalled ?? this.recalled,
       withImage: withImage ?? this.withImage,
       plot: plot,
-      heartVoice: heartVoice ?? this.heartVoice,
     );
   }
 
@@ -851,7 +845,6 @@ class WechatMessage {
     if (recalled) 'recalled': true,
     if (withImage) 'img': true,
     if (plot) 'plot': true,
-    if (heartVoice.isNotEmpty) 'heart': heartVoice,
     if (snapshot.isNotEmpty) 'snap': snapshot,
   };
 
@@ -870,7 +863,6 @@ class WechatMessage {
       recalled: raw['recalled'] == true,
       withImage: raw['img'] == true,
       plot: raw['plot'] == true,
-      heartVoice: (raw['heart'] ?? '').toString(),
       snapshot: (raw['snap'] ?? '').toString(),
     );
   }

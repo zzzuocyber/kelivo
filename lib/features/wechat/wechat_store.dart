@@ -366,7 +366,6 @@ class WechatStore {
     bool divine = false,
     bool withImage = false,
     bool plot = false,
-    String heartVoice = '',
     String snapshot = '',
     int? at,
   }) async {
@@ -380,11 +379,11 @@ class WechatStore {
       divine: divine,
       withImage: withImage,
       plot: plot,
-      heartVoice: heartVoice,
       snapshot: snapshot,
       at: at,
     );
   }
+
 
   /// 私聊窗口名单：独立于消息是否存在。
   /// 并上「还有消息的 dm key」是为了兼容老数据——升级前没有这份名单，
@@ -720,7 +719,6 @@ class WechatStore {
     bool divine = false,
     bool withImage = false,
     bool plot = false,
-    String heartVoice = '',
     String snapshot = '',
     int? at,
   }) async {
@@ -734,7 +732,6 @@ class WechatStore {
       divine: divine,
       withImage: withImage,
       plot: plot,
-      heartVoice: heartVoice,
       snapshot: snapshot,
     );
     final next = <WechatMessage>[...messages(groupId), message];
@@ -748,18 +745,13 @@ class WechatStore {
     String id,
     String text, {
     bool? withImage,
-    String? heartVoice,
   }) async {
     final list = messages(key);
     var changed = false;
     final next = <WechatMessage>[];
     for (final message in list) {
       if (message.id == id) {
-        next.add(message.copyWith(
-          text: text,
-          withImage: withImage,
-          heartVoice: heartVoice,
-        ));
+        next.add(message.copyWith(text: text, withImage: withImage));
         changed = true;
       } else {
         next.add(message);

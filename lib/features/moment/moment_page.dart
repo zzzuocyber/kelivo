@@ -185,7 +185,6 @@ class _MomentPageState extends State<MomentPage> {
         recentPosts: _posts,
         contextCharLimit: settings.momentContextChars,
         socialContext: socialContext,
-        heartVoiceNames: _social.heartVoiceNames(),
       );
       final batch = await generator.generate();
       await _store.applyBatch(batch);
@@ -451,56 +450,8 @@ class _MomentPageState extends State<MomentPage> {
   }
 
   Future<void> _showPostMenu(MomentPost post, Offset position) async {
-    // 心声是角色发这条动态时存下的；我发的动态没有。
-    final hasHeart = !post.isMine && post.heartVoice.trim().isNotEmpty;
-    final actions = <String>[
-      if (hasHeart) '偷看心声',
-      '刷新',
-      '删除',
-    ];
-    final action = await _showAnchorMenu(position, actions);
+    final action = await _showAnchorMenu(position, <String>['刷新', '删除']);
     if (action == null) return;
-    if (action == '偷看心声') {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogCtx) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          title: Row(
-            children: <Widget>[
-              const Icon(Lucide.Heart, size: 18, color: MomentColors.name),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${post.author} 的心声',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            post.heartVoice,
-            style: const TextStyle(
-              fontSize: 14,
-              color: MomentColors.primaryText,
-              height: 1.5,
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: const Text('知道了'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
     if (action == '删除') {
       await _confirmDelete(
         '删除这条动态？',

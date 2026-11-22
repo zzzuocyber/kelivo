@@ -732,9 +732,6 @@ class _WechatDmPageState extends State<WechatDmPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              // 心声只角色本人发言时存下；我发的/夺舍的没有。
-              if (!message.divine && message.heartVoice.trim().isNotEmpty)
-                _menuItem(sheetCtx, Lucide.Heart, '偷看心声', 'heart'),
               if (mine)
                 _menuItem(sheetCtx, Lucide.Pencil, '编辑', 'edit')
               else
@@ -750,12 +747,6 @@ class _WechatDmPageState extends State<WechatDmPage> {
     );
     if (!mounted || action == null) return;
     switch (action) {
-      case 'heart':
-        await showHeartVoiceDialog(
-          context,
-          who: message.sender,
-          text: message.heartVoice,
-        );
       case 'edit':
         await _editMessage(message);
       case 'regen':
@@ -890,11 +881,9 @@ class _WechatDmPageState extends State<WechatDmPage> {
         persona: _settings.effectivePersona,
         worldPrompt: _settings.worldPrompt,
         history: wechatRecentContext(before),
-        heartVoiceOn: _social.heartVoiceOn(widget.contactName),
       );
       // 重新生成只替换这一条，明确要一条。
       final text = await generator.generate(burstCount: 1);
-      final heart = generator.lastHeartVoice;
       final parts = wechatSplitReply(text, maxParts: 1);
       if (!mounted) return;
       if (parts.isEmpty) {
@@ -913,7 +902,6 @@ class _WechatDmPageState extends State<WechatDmPage> {
         message.id,
         parsed.text,
         withImage: parsed.withImage,
-        heartVoice: heart,
       );
       if (!mounted) return;
       setState(() {

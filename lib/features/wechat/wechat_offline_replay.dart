@@ -197,10 +197,8 @@ class WechatOfflineReplay {
           worldPrompt: wechatSettings.worldPrompt,
           groupPrompt: group.groupPrompt,
           socialContext: built.text,
-          heartVoiceOn: social.heartVoiceOn(speakerName),
         );
         final text = await generator.generateFor(speaker, burstCount: burst);
-        final heart = generator.lastHeartVoice;
         final parts = wechatSplitReply(text, maxParts: burst);
         if (parts.isEmpty) continue;
         var wrote = 0;
@@ -214,7 +212,6 @@ class WechatOfflineReplay {
             sender: speakerName,
             text: parsed.text,
             withImage: parsed.withImage,
-            heartVoice: heart,
             at: at > now ? now - 1000 : at,
           );
           wrote++;
@@ -297,10 +294,8 @@ class WechatOfflineReplay {
           worldPrompt: wechatSettings.worldPrompt,
           history: wechatRecentContext(store.dmMessages(name), limit: 40),
           socialContext: built.text,
-          heartVoiceOn: social.heartVoiceOn(name),
         );
         final text = await generator.generate(burstCount: burst);
-        final heart = generator.lastHeartVoice;
         final parts = wechatSplitReply(text, maxParts: burst);
         var wrote = 0;
         for (final part in parts) {
@@ -312,7 +307,6 @@ class WechatOfflineReplay {
             text: parsed.text,
             mine: false,
             withImage: parsed.withImage,
-            heartVoice: heart,
             at: at > now ? now - 1000 : at,
           );
           wrote++;

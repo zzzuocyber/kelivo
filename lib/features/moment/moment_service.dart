@@ -7,7 +7,6 @@ import '../../core/models/world_book.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/api/chat_api_service.dart';
-import '../../core/services/heart_voice.dart';
 import 'moment_models.dart';
 import 'moment_service_exception.dart';
 
@@ -51,7 +50,6 @@ class MomentGenerator {
     this.contextCharLimit = 0,
     this.batchSize = momentBatchSize,
     this.socialContext = '',
-    this.heartVoiceNames = const <String>{},
   });
 
   final SettingsProvider settings;
@@ -71,10 +69,6 @@ class MomentGenerator {
 
   /// 跨场景记忆 + 此刻处境，注入到 system 末尾。
   final String socialContext;
-
-  /// 开了心声的角色名。只有这些人的动态才让模型附 heart 字段。
-  /// 跟群聊/私聊读的是同一份全局名单。
-  final Set<String> heartVoiceNames;
 
   Future<MomentBatch> generate() async {
     if (characters.isEmpty) {
@@ -99,7 +93,6 @@ class MomentGenerator {
       oldPosts: recentPosts,
       count: batchSize,
       charLimit: contextCharLimit,
-      heartVoiceNames: heartVoiceNames,
     );
 
     Object? lastError;
@@ -125,7 +118,6 @@ class MomentGenerator {
           names: names,
           limit: batchSize,
           oldPosts: recentPosts,
-          heartVoiceNames: heartVoiceNames,
         );
         if (batch.posts.isEmpty) {
           lastError = const MomentServiceException('parse_failed');
@@ -152,27 +144,16 @@ class MomentGenerator {
     required List<String> names,
     required int limit,
     required List<MomentPost> oldPosts,
-    Set<String> heartVoiceNames = const <String>{},
   }) {
     final decoded = _decodePayload(raw);
     if (decoded is List) {
       return MomentBatch(
-        posts: _parsePosts(
-          decoded,
-          names: names,
-          limit: limit,
-          heartVoiceNames: heartVoiceNames,
-        ),
+        posts: _parsePosts(decoded, names: names, limit: limit),
       );
     }
     if (decoded is! Map) return const MomentBatch();
     final rawPosts = decoded['posts'];
-    final posts = _parsePosts(
-      rawPosts,
-      names: names,
-      limit: limit,
-      heartVoiceNames: heartVoiceNames,
-    );
+    final posts = _parsePosts(rawPosts, names: names, limit: limit);
     final reactions = <MomentReaction>[];
     final rawReactions = decoded['reactions'];
     if (rawReactions is List) {
@@ -284,7 +265,6 @@ class MomentGenerator {
     dynamic rawList, {
     required List<String> names,
     required int limit,
-    Set<String> heartVoiceNames = const <String>{},
   }) {
     if (rawList is! List) return const <MomentPost>[];
     final known = names.toSet();
@@ -320,10 +300,6 @@ class MomentGenerator {
           hasImage: item['withImage'] == true || item['image'] == true,
           likes: likes,
           comments: comments,
-          // 只有开了心声的角色才收下模型给的 heart，别人一律不带。
-          heartVoice: heartVoiceNames.contains(author)
-              ? (item['heart'] ?? '').toString().trim()
-              : '',
         ),
       );
       if (out.length >= limit) break;
@@ -433,7 +409,6 @@ class MomentGenerator {
     required List<MomentPost> oldPosts,
     required int count,
     int charLimit = 0,
-    Set<String> heartVoiceNames = const <String>{},
   }) {
     final buffer = StringBuffer();
     buffer.writeln('【角色】');
@@ -441,9 +416,6 @@ class MomentGenerator {
       final profile = profiles[name] ?? '';
       buffer.writeln('角色名：$name');
       if (profile.isNotEmpty) buffer.writeln(profile);
-      if (heartVoiceNames.contains(name)) {
-        buffer.writeln('（这个人开了心声：他的动态要附 heart 字段，见输出要求）');
-      }
       buffer.writeln('---');
     }
     if (oldPosts.isNotEmpty) {
@@ -512,13 +484,6 @@ class MomentGenerator {
       '"likes": ["角色名"], "comments": [{"author": "角色名", "text": "评论", '
       '"replyTo": "角色名"}]}',
     );
-    if (heartVoiceNames.isNotEmpty) {
-      buffer.writeln(
-        '  开了心声的角色，上面那条里再加 "heart": "他心里真正想的话"；'
-        '没开心声的角色不要加 heart 字段。',
-      );
-      buffer.writeln(momentHeartVoiceRule);
-    }
     buffer.writeln('  ],');
     buffer.writeln('  "reactions": [');
     buffer.writeln('    {"index": 2, "likes": ["角色名"], "comments": [');

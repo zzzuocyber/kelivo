@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/providers/settings_provider.dart';
 import '../../core/services/chat/chat_service.dart';
-import '../../core/services/social_store.dart';
 import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
 import '../../utils/avatar_files.dart';
@@ -525,27 +524,14 @@ class WechatCharactersPage extends StatefulWidget {
 
 class _WechatCharactersPageState extends State<WechatCharactersPage> {
   late WechatStore _store;
-  late SocialStore _social;
   List<WechatContact> _contacts = const <WechatContact>[];
   Map<String, String> _avatars = const <String, String>{};
 
   @override
   void initState() {
     super.initState();
-    final chat = context.read<ChatService>();
-    _store = WechatStore(chat);
-    // 心声开关也搬到这里：统一后的「角色管理」就在这页，开关不能再只藏在朋友圈里。
-    _social = SocialStore(chat);
+    _store = WechatStore(context.read<ChatService>());
     _reload();
-  }
-
-  /// 点行尾的心形：开/关这个角色的心声（一份全局名单，群聊/私聊/朋友圈通用）。
-  Future<void> _toggleHeartVoice(String name) async {
-    final key = name.trim();
-    if (key.isEmpty) return;
-    await _social.setHeartVoice(key, !_social.heartVoiceOn(key));
-    if (!mounted) return;
-    setState(() {});
   }
 
   void _reload() {
@@ -781,23 +767,9 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
               )
             : ListView.builder(
                 padding: EdgeInsets.zero,
-                itemCount: _contacts.length + 1,
+                itemCount: _contacts.length,
                 itemBuilder: (_, index) {
-                  if (index == 0) {
-                    return Container(
-                      color: const Color(0xFFF2F2F2),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: const Text(
-                        '点心形图标开启心声：角色说话时会附一段心里话，长按消息可偷看。',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: WechatColors.secondaryText,
-                          height: 1.5,
-                        ),
-                      ),
-                    );
-                  }
-                  final contact = _contacts[index - 1];
+                  final contact = _contacts[index];
                   return Container(
                     color: Colors.white,
                     padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
@@ -875,21 +847,6 @@ class _WechatCharactersPageState extends State<WechatCharactersPage> {
                                 ),
                               ),
                             ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => _toggleHeartVoice(contact.name),
-                          tooltip: _social.heartVoiceOn(contact.name)
-                              ? '关掉心声'
-                              : '开启心声',
-                          icon: Icon(
-                            _social.heartVoiceOn(contact.name)
-                                ? Lucide.Heart
-                                : Lucide.HeartOff,
-                            size: 18,
-                            color: _social.heartVoiceOn(contact.name)
-                                ? WechatColors.red
-                                : const Color(0xFF9A9A9A),
                           ),
                         ),
                         IconButton(

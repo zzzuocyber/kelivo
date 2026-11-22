@@ -28,7 +28,6 @@ const String socialSummaryKey = 'social.summary';
 const String socialCompressPromptKey = 'social.compressprompt';
 const String socialPlotLogKey = 'social.plotlog';
 const String socialWorldClockKey = 'social.worldclock';
-const String socialHeartVoiceKey = 'social.heartvoice';
 const String socialForgetKey = 'social.forget';
 const String socialContainerTitle = '社交状态';
 
@@ -369,7 +368,6 @@ class SocialStore {
           extras.containsKey(socialCompressPromptKey) ||
           extras.containsKey(socialPlotLogKey) ||
           extras.containsKey(socialWorldClockKey) ||
-          extras.containsKey(socialHeartVoiceKey) ||
           extras.containsKey(socialForgetKey);
       if (!looksLikeOurs) continue;
       return chat.getConversation(conversation.id) ?? conversation;
@@ -740,43 +738,6 @@ class SocialStore {
     final updated = current.apply(event, reason: reason);
     await setAffinity(updated);
     return updated;
-  }
-
-  // ---------------- 心声偷看（按角色，全场景共用一份开关） ----------------
-
-  /// 开了心声的角色名集合。存一份全局名单，群聊/私聊/朋友圈读同一份，
-  /// 所以给某角色开了，三个场景到处都带心声；没开的到处都没有。默认全关。
-  Set<String> heartVoiceNames() {
-    final raw = _extras[socialHeartVoiceKey];
-    final out = <String>{};
-    if (raw is! List) return out;
-    for (final value in raw) {
-      final name = value.toString().trim();
-      if (name.isNotEmpty) out.add(name);
-    }
-    return out;
-  }
-
-  /// 这个角色开心声了吗。默认关。
-  bool heartVoiceOn(String name) => heartVoiceNames().contains(name.trim());
-
-  Future<void> setHeartVoice(String name, bool enabled) async {
-    final key = name.trim();
-    if (key.isEmpty) return;
-    await _update((extras) {
-      final next = Map<String, dynamic>.from(extras);
-      final names = <String>[];
-      final raw = next[socialHeartVoiceKey];
-      if (raw is List) {
-        for (final value in raw) {
-          final n = value.toString().trim();
-          if (n.isNotEmpty && n != key) names.add(n);
-        }
-      }
-      if (enabled) names.add(key);
-      next[socialHeartVoiceKey] = names;
-      return next;
-    });
   }
 
   // ---------------- 会话最后活跃时间（离线补算用） ----------------
