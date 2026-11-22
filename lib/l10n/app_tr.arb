@@ -5175,4 +5175,21 @@
   "displaySettingsPageFontBoldClear": "Kalın yazı tipini kaldır",
   "displaySettingsPageFontBoldApplied": "Kalın yazı tipi uygulandı",
   "displaySettingsPageFontBoldFailed": "Kalın yazı tipi yüklenemedi"
+,
+  "worldBookGroupActions": "Grup işlemleri",
+  "worldBookGroupLabel": "Grup",
+  "worldBookOrder": "Enjeksiyon sırasını düzenle",
+  "worldBookGroupSelectedBooks": "{count, plural, =1{1 kitap seçildi} other{{count} kitap seçildi}}",
+  "worldBookGroupUngrouped": "Gruplanmamış",
+  "worldBookGroupNew": "Yeni grup",
+  "worldBookGroupName": "Grup adı",
+  "worldBookGroupNameInvalid": "Benzersiz bir grup adı girin.",
+  "worldBookGroupRename": "Grubu yeniden adlandır",
+  "worldBookGroupDelete": "Grubu sil",
+  "worldBookGroupDeleteMessage": "“{group}” içindeki kitaplar Gruplanmamış bölümüne taşınacak.",
+  "worldBookGroupMove": "Gruba taşı",
+  "worldBookGroupSelectBooks": "Dünya Kitaplarını seç",
+  "worldBookGroupSaveFailed": "Değişiklikleriniz kaydedilemedi. Tekrar deneyin.",
+  "worldBookGroupSelectAll": "Gruptakilerin tümünü seç",
+  "worldBookGroupClearSelection": "Grup seçimini temizle"
 }

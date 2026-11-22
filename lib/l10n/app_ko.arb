@@ -5175,4 +5175,21 @@
   "displaySettingsPageFontBoldClear": "굵은 글꼴 제거",
   "displaySettingsPageFontBoldApplied": "굵은 글꼴이 적용되었습니다",
   "displaySettingsPageFontBoldFailed": "굵은 글꼴을 불러오지 못했습니다"
+,
+  "worldBookGroupActions": "그룹 작업",
+  "worldBookGroupLabel": "그룹",
+  "worldBookOrder": "주입 순서 정렬",
+  "worldBookGroupSelectedBooks": "{count, plural, other{{count}권 선택됨}}",
+  "worldBookGroupUngrouped": "그룹 없음",
+  "worldBookGroupNew": "새 그룹",
+  "worldBookGroupName": "그룹 이름",
+  "worldBookGroupNameInvalid": "중복되지 않는 그룹 이름을 입력하세요.",
+  "worldBookGroupRename": "그룹 이름 변경",
+  "worldBookGroupDelete": "그룹 삭제",
+  "worldBookGroupDeleteMessage": "“{group}”의 책은 그룹 없음으로 이동합니다.",
+  "worldBookGroupMove": "그룹으로 이동",
+  "worldBookGroupSelectBooks": "세계관 선택",
+  "worldBookGroupSaveFailed": "변경 사항을 저장하지 못했습니다. 다시 시도하세요.",
+  "worldBookGroupSelectAll": "그룹 전체 선택",
+  "worldBookGroupClearSelection": "그룹 선택 해제"
 }

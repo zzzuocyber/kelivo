@@ -17263,4 +17263,59 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get settingsPageGroupEnvironmentTools => '环境与工具';
 
+  String get worldBookGroupActions => '그룹 작업';
+
+  @override
+  String get worldBookGroupLabel => '그룹';
+
+  @override
+  String get worldBookOrder => '주입 순서 정렬';
+
+  @override
+  String worldBookGroupSelectedBooks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count권 선택됨',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get worldBookGroupUngrouped => '그룹 없음';
+
+  @override
+  String get worldBookGroupNew => '새 그룹';
+
+  @override
+  String get worldBookGroupName => '그룹 이름';
+
+  @override
+  String get worldBookGroupNameInvalid => '중복되지 않는 그룹 이름을 입력하세요.';
+
+  @override
+  String get worldBookGroupRename => '그룹 이름 변경';
+
+  @override
+  String get worldBookGroupDelete => '그룹 삭제';
+
+  @override
+  String worldBookGroupDeleteMessage(String group) {
+    return '“$group”의 책은 그룹 없음으로 이동합니다.';
+  }
+
+  @override
+  String get worldBookGroupMove => '그룹으로 이동';
+
+  @override
+  String get worldBookGroupSelectBooks => '세계관 선택';
+
+  @override
+  String get worldBookGroupSaveFailed => '변경 사항을 저장하지 못했습니다. 다시 시도하세요.';
+
+  @override
+  String get worldBookGroupSelectAll => '그룹 전체 선택';
+
+  @override
+  String get worldBookGroupClearSelection => '그룹 선택 해제';
 }

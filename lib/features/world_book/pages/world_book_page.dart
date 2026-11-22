@@ -16,6 +16,8 @@ import '../utils/world_book_import.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_form_text_field.dart';
+import '../../../shared/widgets/ios_settings_rows.dart';
+import '../../../shared/widgets/action_sheet.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/ios_switch.dart';
 import '../../../shared/widgets/ios_tactile.dart';
@@ -26,6 +28,7 @@ import '../../../shared/widgets/section_card.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
 import '../widgets/world_book_entry_actions.dart';
+import '../widgets/world_book_group_actions.dart';
 
 class WorldBookPage extends StatefulWidget {
   const WorldBookPage({super.key});
@@ -35,6 +38,11 @@ class WorldBookPage extends StatefulWidget {
 }
 
 class _WorldBookPageState extends State<WorldBookPage> {
+  /// 批量把世界书移进/移出分组时选中的书。null = 不在多选态。
+  Set<String>? _selectedBookIds;
+  /// 排序引导态：本页列表一直支持长按拖动排序，此标志只用于显示引导条。
+  bool _arranging = false;
+
   @override
   void initState() {
     super.initState();
@@ -44,8 +52,68 @@ class _WorldBookPageState extends State<WorldBookPage> {
     });
   }
 
-  Future<WorldBook?> _showBookConfigSheet({WorldBook? book}) async {
-    return showModalBottomSheet<WorldBook>(
+  /// 截图③：分组页顶部的「…」菜单——选择世界书 / 调整注入顺序。
+  void _showGroupActions(BuildContext anchor) {
+    final l10n = AppLocalizations.of(context)!;
+    final box = anchor.findRenderObject() as RenderBox;
+    showAdaptiveActionMenu(
+      context,
+      anchor: box.localToGlobal(Offset(0, box.size.height)),
+      title: l10n.worldBookGroupActions,
+      items: [
+        ActionSheetItem(
+          icon: Lucide.ListChecks,
+          label: l10n.worldBookGroupSelectBooks,
+          onTap: () => setState(() => _selectedBookIds = <String>{}),
+        ),
+        if (context.read<WorldBookProvider>().books.length > 1)
+          ActionSheetItem(
+            icon: Lucide.ListOrdered,
+            label: l10n.worldBookOrder,
+            onTap: () => setState(() => _arranging = true),
+          ),
+      ],
+    );
+  }
+
+  /// 多选完成后，把选中的书移动到目标分组。
+  Future<void> _moveSelectedBooks() async {
+    final selected = _selectedBookIds;
+    if (selected == null || selected.isEmpty) return;
+    final destination = await chooseWorldBookGroup(
+      context,
+      desktop: false,
+      moving: true,
+    );
+    if (!mounted || destination == null) return;
+    try {
+      await context.read<WorldBookProvider>().moveBooksToGroup(
+        selected,
+        destination.groupId,
+      );
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: AppLocalizations.of(context)!.worldBookGroupSaveFailed,
+          type: NotificationType.error,
+        );
+      }
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _selectedBookIds = null;
+        _arranging = false;
+      });
+    }
+  }
+
+  Future<({WorldBook book, String? groupId})?> _showBookConfigSheet({
+    WorldBook? book,
+  }) async {
+    final provider = context.read<WorldBookProvider>();
+    return showModalBottomSheet<({WorldBook book, String? groupId})>(
       context: context,
       isScrollControlled: true,
       backgroundColor: context.overlaySurface,
@@ -56,7 +124,10 @@ class _WorldBookPageState extends State<WorldBookPage> {
         final maxHeight = MediaQuery.sizeOf(sheetCtx).height * 0.9;
         return ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: _WorldBookEditSheet(book: book),
+          child: _WorldBookEditSheet(
+            book: book,
+            groupId: book == null ? null : provider.groupIdForBook(book.id),
+          ),
         );
       },
     );
@@ -327,8 +398,22 @@ class _WorldBookPageState extends State<WorldBookPage> {
                 Haptics.light();
                 final result = await _showBookConfigSheet();
                 if (result == null) return;
-                await provider.addBook(result);
+                await provider.addBook(result.book, groupId: result.groupId);
               },
+            ),
+          ),
+          Builder(
+            builder: (anchor) => Tooltip(
+              message: l10n.worldBookGroupActions,
+              child: IosIconButton(
+                icon: Lucide.Ellipsis,
+                minSize: 44,
+                size: 22,
+                onTap: () {
+                  Haptics.light();
+                  _showGroupActions(anchor);
+                },
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -360,7 +445,10 @@ class _WorldBookPageState extends State<WorldBookPage> {
                 final groupUi = listCtx.watch<WorldBookGroupProvider>();
                 final grouped = provider.groupedBooks;
                 final groupNames = provider.groupNames;
-                return ListView(
+                return Column(
+                  children: [
+                    Expanded(
+                      child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                   children: [
                     // 一组 = 一张容器（组头 + 这组的书）。组间距照抄助手分组：
@@ -403,6 +491,7 @@ class _WorldBookPageState extends State<WorldBookPage> {
                               );
                             },
                             onReorderItem: (oldIndex, newIndex) async {
+                              if (_selectedBookIds != null) return;
                               Haptics.light();
                               await listCtx
                                   .read<WorldBookProvider>()
@@ -426,6 +515,57 @@ class _WorldBookPageState extends State<WorldBookPage> {
                         ),
                       ),
                   ],
+                      ),
+                    ),
+                    if (_selectedBookIds != null || _arranging)
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                        decoration: BoxDecoration(
+                          color: cs.surface,
+                          border: Border(
+                            top: BorderSide(
+                              color: cs.outlineVariant.withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _arranging
+                                    ? l10n.worldBookOrder
+                                    : l10n.worldBookGroupSelectBooks,
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontSize: 13,
+                                  fontWeight: AppFontWeights.medium,
+                                ),
+                              ),
+                            ),
+                            if (_selectedBookIds != null)
+                              TextButton(
+                                onPressed: () =>
+                                    setState(() => _selectedBookIds = null),
+                                child: Text(l10n.worldBookCancel),
+                              ),
+                            if (_selectedBookIds != null)
+                              FilledButton(
+                                onPressed:
+                                    _selectedBookIds!.isEmpty
+                                        ? null
+                                        : _moveSelectedBooks,
+                                child: Text(l10n.worldBookGroupMove),
+                              )
+                            else
+                              FilledButton(
+                                onPressed: () =>
+                                    setState(() => _arranging = false),
+                                child: Text(l10n.worldBookSave),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
@@ -440,14 +580,13 @@ class _WorldBookPageState extends State<WorldBookPage> {
     required bool isDesktop,
     required AppLocalizations l10n,
   }) {
-    return KeyedSubtree(
-      key: ValueKey('world-book-${book.id}'),
-      child: Padding(
+    final selecting = _selectedBookIds != null;
+    final tile = Padding(
         padding: EdgeInsets.only(bottom: index == groupCount - 1 ? 0 : 6),
         child: _WorldBookSection(
           book: book,
           bookIndex: index,
-          canReorderBooks: groupCount > 1,
+          canReorderBooks: groupCount > 1 && !selecting,
           collapsed: context.read<WorldBookProvider>().isBookCollapsed(book.id),
           onToggleCollapsed: () {
             Haptics.light();
@@ -469,16 +608,16 @@ class _WorldBookPageState extends State<WorldBookPage> {
           },
           onConfig: () async {
             Haptics.light();
-            final updated = await _showBookConfigSheet(book: book);
-            if (updated == null) return;
+            final result = await _showBookConfigSheet(book: book);
+            if (result == null) return;
             await context.read<WorldBookProvider>().updateBook(
               book.id,
               (current) => current.copyWith(
-                name: updated.name,
-                description: updated.description,
-                group: updated.group,
-                enabled: updated.enabled,
+                name: result.book.name,
+                description: result.book.description,
+                enabled: result.book.enabled,
               ),
+              group: (groupId: result.groupId),
             );
           },
           onDelete: () async {
@@ -521,6 +660,31 @@ class _WorldBookPageState extends State<WorldBookPage> {
           },
           isDesktop: isDesktop,
         ),
+    );
+    if (!selecting) {
+      return KeyedSubtree(key: ValueKey('world-book-${book.id}'), child: tile);
+    }
+    final selected = _selectedBookIds!.contains(book.id);
+    return KeyedSubtree(
+      key: ValueKey('world-book-${book.id}'),
+      child: Row(
+        children: [
+          IosCheckbox(
+            value: selected,
+            onChanged: (checked) {
+              Haptics.light();
+              setState(() {
+                if (checked) {
+                  _selectedBookIds!.add(book.id);
+                } else {
+                  _selectedBookIds!.remove(book.id);
+                }
+              });
+            },
+          ),
+          const SizedBox(width: 4),
+          Expanded(child: tile),
+        ],
       ),
     );
   }
@@ -1371,8 +1535,9 @@ class _TagPill extends StatelessWidget {
 }
 
 class _WorldBookEditSheet extends StatefulWidget {
-  const _WorldBookEditSheet({required this.book});
+  const _WorldBookEditSheet({required this.book, required this.groupId});
   final WorldBook? book;
+  final String? groupId;
 
   @override
   State<_WorldBookEditSheet> createState() => _WorldBookEditSheetState();
@@ -1380,25 +1545,35 @@ class _WorldBookEditSheet extends StatefulWidget {
 
 class _WorldBookEditSheetState extends State<_WorldBookEditSheet> {
   late final TextEditingController _nameController;
-  late final TextEditingController _groupController;
   late final TextEditingController _descController;
+  String? _groupId;
   bool _enabled = true;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.book?.name ?? '');
-    _groupController = TextEditingController(text: widget.book?.group ?? '');
+    _groupId = widget.groupId;
     _descController = TextEditingController(
       text: widget.book?.description ?? '',
     );
     _enabled = widget.book?.enabled ?? true;
   }
 
+  Future<void> _pickGroup() async {
+    FocusScope.of(context).unfocus();
+    final choice = await chooseWorldBookGroup(
+      context,
+      desktop: false,
+      selected: (groupId: _groupId),
+    );
+    if (!mounted || choice == null) return;
+    setState(() => _groupId = choice.groupId);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
-    _groupController.dispose();
     _descController.dispose();
     super.dispose();
   }
@@ -1510,13 +1685,16 @@ class _WorldBookEditSheetState extends State<_WorldBookEditSheet> {
                           textInputAction: TextInputAction.next,
                           inlineLabel: false,
                         ),
-                        IosFormTextField(
-                          label: l10n.instructionInjectionGroupLabel,
-                          hintText: l10n.instructionInjectionGroupHint,
-                          controller: _groupController,
-                          textAlign: TextAlign.start,
-                          textInputAction: TextInputAction.next,
-                          inlineLabel: false,
+                        IosNavRow(
+                          label: l10n.worldBookGroupLabel,
+                          subtitle: _groupId == null
+                              ? l10n.worldBookGroupUngrouped
+                              : context
+                                      .watch<WorldBookProvider>()
+                                      .groups[_groupId] ??
+                                  l10n.worldBookGroupUngrouped,
+                          focusable: true,
+                          onTap: _pickGroup,
                         ),
                         IosFormTextField(
                           label: l10n.worldBookDescriptionLabel,
@@ -1557,11 +1735,12 @@ class _WorldBookEditSheetState extends State<_WorldBookEditSheet> {
                         id: base?.id ?? const Uuid().v4(),
                         name: _nameController.text.trim(),
                         description: _descController.text.trim(),
-                        group: _groupController.text.trim(),
                         enabled: _enabled,
                         entries: base?.entries ?? const <WorldBookEntry>[],
                       );
-                      Navigator.of(context).pop(result);
+                      Navigator.of(
+                        context,
+                      ).pop((book: result, groupId: _groupId));
                     },
                   ),
                 ),

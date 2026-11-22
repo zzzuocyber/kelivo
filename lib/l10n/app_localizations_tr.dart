@@ -17903,4 +17903,61 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get settingsPageGroupEnvironmentTools => '环境与工具';
 
+  String get worldBookGroupActions => 'Grup işlemleri';
+
+  @override
+  String get worldBookGroupLabel => 'Grup';
+
+  @override
+  String get worldBookOrder => 'Enjeksiyon sırasını düzenle';
+
+  @override
+  String worldBookGroupSelectedBooks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count kitap seçildi',
+      one: '1 kitap seçildi',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get worldBookGroupUngrouped => 'Gruplanmamış';
+
+  @override
+  String get worldBookGroupNew => 'Yeni grup';
+
+  @override
+  String get worldBookGroupName => 'Grup adı';
+
+  @override
+  String get worldBookGroupNameInvalid => 'Benzersiz bir grup adı girin.';
+
+  @override
+  String get worldBookGroupRename => 'Grubu yeniden adlandır';
+
+  @override
+  String get worldBookGroupDelete => 'Grubu sil';
+
+  @override
+  String worldBookGroupDeleteMessage(String group) {
+    return '“$group” içindeki kitaplar Gruplanmamış bölümüne taşınacak.';
+  }
+
+  @override
+  String get worldBookGroupMove => 'Gruba taşı';
+
+  @override
+  String get worldBookGroupSelectBooks => 'Dünya Kitaplarını seç';
+
+  @override
+  String get worldBookGroupSaveFailed =>
+      'Değişiklikleriniz kaydedilemedi. Tekrar deneyin.';
+
+  @override
+  String get worldBookGroupSelectAll => 'Gruptakilerin tümünü seç';
+
+  @override
+  String get worldBookGroupClearSelection => 'Grup seçimini temizle';
 }

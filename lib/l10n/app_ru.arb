@@ -5175,4 +5175,21 @@
   "displaySettingsPageFontBoldClear": "Удалить полужирный шрифт",
   "displaySettingsPageFontBoldApplied": "Полужирный шрифт применён",
   "displaySettingsPageFontBoldFailed": "Не удалось загрузить полужирный шрифт"
+,
+  "worldBookGroupActions": "Действия с группой",
+  "worldBookGroupLabel": "Группа",
+  "worldBookOrder": "Настроить порядок внедрения",
+  "worldBookGroupSelectedBooks": "{count, plural, one{Выбрана {count} книга} few{Выбрано {count} книги} many{Выбрано {count} книг} other{Выбрано {count} книги}}",
+  "worldBookGroupUngrouped": "Без группы",
+  "worldBookGroupNew": "Новая группа",
+  "worldBookGroupName": "Название группы",
+  "worldBookGroupNameInvalid": "Введите уникальное название группы.",
+  "worldBookGroupRename": "Переименовать группу",
+  "worldBookGroupDelete": "Удалить группу",
+  "worldBookGroupDeleteMessage": "Книги в «{group}» будут перемещены в «Без группы».",
+  "worldBookGroupMove": "Переместить в группу",
+  "worldBookGroupSelectBooks": "Выбрать книги мира",
+  "worldBookGroupSaveFailed": "Не удалось сохранить изменения. Попробуйте ещё раз.",
+  "worldBookGroupSelectAll": "Выбрать все в группе",
+  "worldBookGroupClearSelection": "Снять выбор группы"
 }

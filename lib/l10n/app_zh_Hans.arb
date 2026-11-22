@@ -6430,4 +6430,21 @@
   "displaySettingsPageFontBoldClear": "移除粗体字体",
   "displaySettingsPageFontBoldApplied": "粗体字体已应用",
   "displaySettingsPageFontBoldFailed": "粗体字体加载失败"
+,
+  "worldBookGroupActions": "分组操作",
+  "worldBookGroupLabel": "分组",
+  "worldBookOrder": "调整注入顺序",
+  "worldBookGroupSelectedBooks": "已选 {count} 本",
+  "worldBookGroupUngrouped": "未分组",
+  "worldBookGroupNew": "新建分组",
+  "worldBookGroupName": "分组名称",
+  "worldBookGroupNameInvalid": "请输入不重复的分组名称。",
+  "worldBookGroupRename": "重命名分组",
+  "worldBookGroupDelete": "删除分组",
+  "worldBookGroupDeleteMessage": "「{group}」中的世界书将移到「未分组」。",
+  "worldBookGroupMove": "移到分组",
+  "worldBookGroupSelectBooks": "选择世界书",
+  "worldBookGroupSaveFailed": "保存失败，请重试。",
+  "worldBookGroupSelectAll": "全选本组",
+  "worldBookGroupClearSelection": "清空本组勾选"
 }
