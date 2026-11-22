@@ -659,21 +659,22 @@ class WechatStore {
     if (raw is! Map) return out;
     final myName = wechatSettings().effectivePersona;
     // 所有群（非 dm: 键）的消息，按时间从新到旧扫。
-    final groups = <MapEntry<String, List<WechatMessage>>>[];
+    final messageGroups = <MapEntry<String, List<WechatMessage>>>[];
     for (final entry in raw.entries) {
       final key = entry.key.toString();
       if (key.startsWith('dm:')) continue;
       final list = wechatMessagesFromExtras(<String, dynamic>{
         wechatMessagesKey: <String, dynamic>{key: entry.value},
       }, key);
-      groups.add(MapEntry<String, List<WechatMessage>>(key, list));
+      messageGroups.add(MapEntry<String, List<WechatMessage>>(key, list));
     }
     final groupNames = <String, String>{};
+    // 注意别把局部变量叫 groups：会挡住 WechatStore.groups()，下面那行就变成对 List 调用 ()。
     for (final group in groups()) {
       groupNames[group.id] = group.name;
     }
     final all = <({String label, WechatMessage msg})>[];
-    for (final entry in groups) {
+    for (final entry in messageGroups) {
       final label = groupNames[entry.key] ?? '群里';
       for (final message in entry.value) {
         if (message.system || message.text.trim().isEmpty) continue;

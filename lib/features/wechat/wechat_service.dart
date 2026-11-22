@@ -220,7 +220,7 @@ String wechatHistoryLine(WechatMessage message, {required String who}) {
 
 /// 替某个群里的某个人写一句要发的话。
 class WechatGenerator {
-  const WechatGenerator({
+  WechatGenerator({
     required this.settings,
     required this.worldBooks,
     required this.group,
@@ -445,7 +445,7 @@ class WechatGenerator {
 
 /// 一对一私聊：只有「我」和对面这个人，没有调度器，你一句他一句。
 class WechatDmGenerator {
-  const WechatDmGenerator({
+  WechatDmGenerator({
     required this.settings,
     required this.worldBooks,
     required this.contact,
