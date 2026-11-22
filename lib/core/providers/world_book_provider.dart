@@ -3,7 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../database/business_preferences.dart';
 import '../models/world_book.dart';
-import '../models/world_book_grouping.dart';
+import '../models/world_book_grouping_rules.dart';
 import '../services/world_book_store.dart';
 
 class WorldBookProvider with ChangeNotifier {
