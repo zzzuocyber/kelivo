@@ -170,6 +170,8 @@ class WechatOfflineReplay {
           memoryLines: memories,
           where: where.promptLine,
           store: social,
+          topic: group.autoTopic ? social.topic(groupScope(group.id)).topic : '',
+          summaryText: social.plotSummary,
         );
         final generator = WechatGenerator(
           settings: settings,
@@ -180,6 +182,7 @@ class WechatOfflineReplay {
             for (final c in store.contacts()) c.name: c,
           },
           worldPrompt: wechatSettings.worldPrompt,
+          groupPrompt: group.groupPrompt,
           socialContext: built.text,
         );
         final text = await generator.generateFor(speaker, burstCount: burst);
@@ -261,6 +264,8 @@ class WechatOfflineReplay {
           memoryLines: memories,
           where: where.promptLine,
           store: social,
+          topic: social.topic(key).topic,
+          summaryText: social.plotSummary,
         );
         final generator = WechatDmGenerator(
           settings: settings,

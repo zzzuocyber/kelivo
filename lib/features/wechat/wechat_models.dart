@@ -586,6 +586,8 @@ class WechatGroup {
     this.persona = '',
     this.divine = '',
     this.owner = '',
+    this.groupPrompt = '',
+    this.autoTopic = false,
     this.intervalPreset = WechatIntervalPreset.follow,
     this.customMinSeconds = 3,
     this.customMaxSeconds = 30,
@@ -610,6 +612,13 @@ class WechatGroup {
   /// 群主（成员名）。空 = 群主是我。建群时定，之后不改。
   /// 只是名义：拉人/踢人以他的名字发系统消息，我没有真的让出权限。
   final String owner;
+
+  /// 这个群自己的提示词：定主题/风格（比如「要抓马、别聊家常」）。
+  /// 生成群聊消息时注入 system，只对这个群生效。
+  final String groupPrompt;
+
+  /// 话题锚开关：开了就把当前话题一并注入，让角色围着这个话题聊、别岔回日常事务。
+  final bool autoTopic;
 
   final WechatIntervalPreset intervalPreset;
   final int customMinSeconds;
@@ -661,6 +670,8 @@ class WechatGroup {
     String? persona,
     String? divine,
     String? owner,
+    String? groupPrompt,
+    bool? autoTopic,
     WechatIntervalPreset? intervalPreset,
     int? customMinSeconds,
     int? customMaxSeconds,
@@ -676,6 +687,8 @@ class WechatGroup {
       persona: persona ?? this.persona,
       divine: divine ?? this.divine,
       owner: owner ?? this.owner,
+      groupPrompt: groupPrompt ?? this.groupPrompt,
+      autoTopic: autoTopic ?? this.autoTopic,
       intervalPreset: intervalPreset ?? this.intervalPreset,
       customMinSeconds: customMinSeconds ?? this.customMinSeconds,
       customMaxSeconds: customMaxSeconds ?? this.customMaxSeconds,
@@ -693,6 +706,8 @@ class WechatGroup {
     'persona': persona,
     'divine': divine,
     'owner': owner,
+    'groupPrompt': groupPrompt,
+    'autoTopic': autoTopic,
     'interval': intervalPreset.name,
     'min': customMinSeconds,
     'max': customMaxSeconds,
@@ -732,6 +747,8 @@ class WechatGroup {
       persona: (raw['persona'] ?? '').toString(),
       divine: (raw['divine'] ?? '').toString(),
       owner: (raw['owner'] ?? '').toString(),
+      groupPrompt: (raw['groupPrompt'] ?? '').toString(),
+      autoTopic: raw['autoTopic'] == true,
       intervalPreset: WechatIntervalPresetX.parse(raw['interval']),
       customMinSeconds: _intOr(raw['min'], 3),
       customMaxSeconds: _intOr(raw['max'], 30),
@@ -754,6 +771,7 @@ class WechatMessage {
     this.divine = false,
     this.recalled = false,
     this.withImage = false,
+    this.plot = false,
   });
 
   final String id;
@@ -779,6 +797,9 @@ class WechatMessage {
   /// 这条带图。图按 [text] 里的词拼 emoji——跟朋友圈一套逻辑。
   final bool withImage;
 
+  /// 「控制剧情走向」落地的旁白：整段剧情、不挂某人、居中卡片显示。
+  final bool plot;
+
   WechatMessage copyWith({
     String? sender,
     String? text,
@@ -796,6 +817,7 @@ class WechatMessage {
       divine: divine,
       recalled: recalled ?? this.recalled,
       withImage: withImage ?? this.withImage,
+      plot: plot,
     );
   }
 
@@ -809,6 +831,7 @@ class WechatMessage {
     if (divine) 'divine': true,
     if (recalled) 'recalled': true,
     if (withImage) 'img': true,
+    if (plot) 'plot': true,
   };
 
   static WechatMessage? fromJson(Object? raw) {
@@ -825,6 +848,7 @@ class WechatMessage {
       divine: raw['divine'] == true,
       recalled: raw['recalled'] == true,
       withImage: raw['img'] == true,
+      plot: raw['plot'] == true,
     );
   }
 }

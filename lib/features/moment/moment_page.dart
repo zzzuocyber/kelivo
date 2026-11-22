@@ -150,7 +150,11 @@ class _MomentPageState extends State<MomentPage> {
       }
     }
     final mode = _social.contextMode('moment');
-    final body = mode.isSummary ? socialSummarize(lines) : lines.join('\n');
+    final manual = _social.plotSummary.trim();
+    // 摘要模式 + 我写了剧情概括：三场景共用这一份，不再各压各的。
+    final body = mode.isSummary && manual.isNotEmpty
+        ? manual
+        : (mode.isSummary ? socialSummarize(lines) : lines.join('\n'));
     unawaited(_social.addTokens('moment', estimateTokens(body)));
     return body;
   }

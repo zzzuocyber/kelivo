@@ -13,6 +13,8 @@ class SocialContextBuilder {
   /// [scene] 是当前场景，用来取对应的摘要/完整开关。
   /// [where] 是这个人此刻的去处（可以是 SocialWhereabouts.promptLine）。
   /// [topic] 是当前话题（可选），有就一起注入，保证三处话题感一致。
+  /// [summaryText] 是我手写的剧情概括：摘要模式下若给了，就用它替代规则压缩，
+  /// 三场景共用同一份，不再各压各的。
   static BuiltContext build({
     required String name,
     required String scene,
@@ -20,6 +22,7 @@ class SocialContextBuilder {
     required String where,
     required SocialStore store,
     String topic = '',
+    String summaryText = '',
   }) {
     final sections = <String>[];
 
@@ -37,11 +40,14 @@ class SocialContextBuilder {
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty)
         .toList(growable: false);
-    if (lines.isNotEmpty) {
-      final mode = store.contextMode(scene);
-      final body = mode.isSummary
-          ? socialSummarize(lines)
-          : lines.join('\n');
+    final mode = store.contextMode(scene);
+    final manual = summaryText.trim();
+    if (mode.isSummary && manual.isNotEmpty) {
+      // 摘要模式 + 我写了概括：整段用我这份，三场景共用，不再规则压缩。
+      sections.add('【剧情概括（我写的）】\n$manual');
+    } else if (lines.isNotEmpty) {
+      // 完整模式照旧给全量记录；摘要模式没写概括时才退回规则压缩。
+      final body = mode.isSummary ? socialSummarize(lines) : lines.join('\n');
       final label = mode.isSummary ? '别处提过（大意）' : '别处聊过';
       sections.add('【$name 在$label】\n$body');
     }

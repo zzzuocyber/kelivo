@@ -24,7 +24,18 @@ const String socialDirectiveKey = 'social.directive';
 const String socialTokensKey = 'social.tokens';
 const String socialAffinityKey = 'social.affinity';
 const String socialSeenKey = 'social.seen';
+const String socialSummaryKey = 'social.summary';
+const String socialCompressPromptKey = 'social.compressprompt';
+const String socialPlotLogKey = 'social.plotlog';
 const String socialContainerTitle = '社交状态';
+
+/// 压缩词的预设内容：只作手写「剧情概括」时的填写参考，不喂给模型。
+const String kDefaultCompressPrompt = '写一份剧情概括，供群聊/私聊/朋友圈共用：\n'
+    '1. 现在最重要的事/冲突是什么；\n'
+    '2. 谁和谁是什么关系、最近发生了什么；\n'
+    '3. 各自的性格和说话方式要点；\n'
+    '4. 还在进行、没结掉的事。\n'
+    '只写要点，别写成流水账。';
 
 /// 一周里的某一天，跟 DateTime.weekday 一致：1=周一 … 7=周日。
 const List<int> kSocialAllDays = <int>[1, 2, 3, 4, 5, 6, 7];
@@ -263,7 +274,10 @@ class SocialStore {
           extras.containsKey(socialDirectiveKey) ||
           extras.containsKey(socialContextModeKey) ||
           extras.containsKey(socialAffinityKey) ||
-          extras.containsKey(socialSeenKey);
+          extras.containsKey(socialSeenKey) ||
+          extras.containsKey(socialSummaryKey) ||
+          extras.containsKey(socialCompressPromptKey) ||
+          extras.containsKey(socialPlotLogKey);
       if (!looksLikeOurs) continue;
       return chat.getConversation(conversation.id) ?? conversation;
     }
@@ -664,6 +678,125 @@ class SocialStore {
       next[socialSeenKey] = raw;
       return next;
     });
+  }
+
+  // ---------------- 手写剧情概括（三场景共用一份） ----------------
+
+  /// 我手写的「剧情概括」。摘要模式下三场景都读这一份，不再规则压缩。
+  String get plotSummary => (_extras[socialSummaryKey] ?? '').toString();
+
+  Future<void> setPlotSummary(String text) async {
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      next[socialSummaryKey] = text;
+      return next;
+    });
+  }
+
+  // ---------------- 压缩词（填写参考，可清空/恢复预设） ----------------
+
+  /// 压缩词模板：null 表示「当前是预设」（没单独存过）。
+  /// 存空串表示「我清空了」；存别的串表示「我改过」。
+  String? get compressPromptOverride {
+    if (!_extras.containsKey(socialCompressPromptKey)) return null;
+    return (_extras[socialCompressPromptKey] ?? '').toString();
+  }
+
+  /// 当前生效的压缩词：没清也没改就用预设。
+  String get compressPrompt {
+    final override = compressPromptOverride;
+    return override ?? kDefaultCompressPrompt;
+  }
+
+  Future<void> setCompressPrompt(String text) async {
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      next[socialCompressPromptKey] = text;
+      return next;
+    });
+  }
+
+  /// 恢复预设：把这项从 extras 里删掉，回到「没改过」的状态。
+  Future<void> resetCompressPrompt() async {
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      next.remove(socialCompressPromptKey);
+      return next;
+    });
+  }
+
+  // ---------------- 剧情控制记录 ----------------
+
+  /// 每次「控制剧情走向」写下的文字，新的在前。
+  List<PlotLogEntry> plotLogs() {
+    final raw = _extras[socialPlotLogKey];
+    if (raw is! List) return const <PlotLogEntry>[];
+    final out = <PlotLogEntry>[];
+    for (final item in raw) {
+      final entry = PlotLogEntry.fromJson(item);
+      if (entry != null) out.add(entry);
+    }
+    out.sort((a, b) => b.at.compareTo(a.at));
+    return out;
+  }
+
+  Future<void> addPlotLog(String text, {String scene = 'group'}) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final entry = PlotLogEntry(
+      text: trimmed,
+      scene: scene,
+      at: DateTime.now().millisecondsSinceEpoch,
+    );
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      final raw = next[socialPlotLogKey] is List
+          ? List<dynamic>.from(next[socialPlotLogKey] as List)
+          : <dynamic>[];
+      raw.insert(0, entry.toJson());
+      // 只留最近 200 条，别无限涨。
+      final trimmedList = raw.length > 200 ? raw.sublist(0, 200) : raw;
+      next[socialPlotLogKey] = trimmedList;
+      return next;
+    });
+  }
+
+  Future<void> clearPlotLogs() async {
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      next.remove(socialPlotLogKey);
+      return next;
+    });
+  }
+}
+
+/// 一条「控制剧情走向」的记录。
+class PlotLogEntry {
+  const PlotLogEntry({
+    required this.text,
+    required this.scene,
+    required this.at,
+  });
+
+  final String text;
+  final String scene;
+  final int at;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'text': text,
+        'scene': scene,
+        'at': at,
+      };
+
+  static PlotLogEntry? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final text = (raw['text'] ?? '').toString();
+    if (text.isEmpty) return null;
+    return PlotLogEntry(
+      text: text,
+      scene: (raw['scene'] ?? 'group').toString(),
+      at: socialInt(raw['at']),
+    );
   }
 }
 

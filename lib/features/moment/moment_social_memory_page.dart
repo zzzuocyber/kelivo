@@ -33,6 +33,9 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
   SocialTokenStats _stats = const SocialTokenStats();
   Map<String, List<SocialTimeSlot>> _schedules = const <String, List<SocialTimeSlot>>{};
   List<String> _characters = const <String>[];
+  String _plotSummary = '';
+  String _compressPrompt = kDefaultCompressPrompt;
+  List<PlotLogEntry> _plotLogs = const <PlotLogEntry>[];
 
   @override
   void initState() {
@@ -59,12 +62,129 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
       _stats = _social.tokenStats();
       _schedules = _social.schedules();
       _characters = sorted;
+      _plotSummary = _social.plotSummary;
+      _compressPrompt = _social.compressPrompt;
+      _plotLogs = _social.plotLogs();
     });
   }
 
   Future<void> _setMode(String scene, SocialContextMode mode) async {
     await _social.setContextMode(scene, mode);
     _reload();
+  }
+
+  Future<void> _editPlotSummary() async {
+    final controller = TextEditingController(text: _plotSummary);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('手写剧情概括', style: TextStyle(fontSize: 16)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 12,
+            minLines: 8,
+            decoration: const InputDecoration(
+              hintText: '把当前最重要的剧情、关系、冲突写下来，'
+                  '三处生成都会读这一份。',
+              border: OutlineInputBorder(),
+            ),
+            style: const TextStyle(fontSize: 13.5),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null) return;
+    await _social.setPlotSummary(value);
+    _reload();
+  }
+
+  Future<void> _editCompressPrompt() async {
+    final controller = TextEditingController(text: _compressPrompt);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('压缩词（填写参考）', style: TextStyle(fontSize: 16)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 12,
+            minLines: 8,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+            ),
+            style: const TextStyle(fontSize: 13.5),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _social.resetCompressPrompt();
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+            child: const Text('恢复预设'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    // 恢复预设时 pop() 没带值 → value==null，此时已 reset，只需 reload。
+    if (value != null) await _social.setCompressPrompt(value);
+    _reload();
+  }
+
+  Future<void> _clearPlotLogs() async {
+    await _social.clearPlotLogs();
+    _reload();
+  }
+
+  void _showPlotLog(PlotLogEntry entry) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          entry.scene,
+          style: const TextStyle(fontSize: 16),
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            '${DateTime.fromMillisecondsSinceEpoch(entry.at)}\n\n${entry.text}',
+            style: const TextStyle(fontSize: 13.5, height: 1.5),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -96,6 +216,145 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
             _modeRow('朋友圈', 'moment'),
             _modeRow('群聊', 'group'),
             _modeRow('私聊', 'dm'),
+            const SizedBox(height: 8),
+            _sectionTitle('剧情概括（手写，三处共用一份）'),
+            Container(
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  InkWell(
+                    onTap: _editPlotSummary,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              _plotSummary.trim().isEmpty
+                                  ? '还没写。点这里写一份剧情概括，摘要模式下三处都会用它。'
+                                  : _plotSummary.trim(),
+                              maxLines: 6,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                height: 1.5,
+                                color: _plotSummary.trim().isEmpty
+                                    ? MomentColors.secondaryText
+                                    : MomentColors.primaryText,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Lucide.ChevronRight, size: 16, color: Color(0xFFC8C8C8)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            _sectionTitle('压缩词（写剧情概括时的填写参考，可清空/恢复预设）'),
+            Container(
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  InkWell(
+                    onTap: _editCompressPrompt,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              _compressPrompt.trim().isEmpty
+                                  ? '（已清空）'
+                                  : _compressPrompt.trim(),
+                              maxLines: 5,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.5,
+                                color: _compressPrompt.trim().isEmpty
+                                    ? MomentColors.secondaryText
+                                    : MomentColors.primaryText,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Lucide.ChevronRight, size: 16, color: Color(0xFFC8C8C8)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            _sectionTitle('剧情控制记录（你写过的剧情）'),
+            Container(
+              color: Colors.white,
+              child: Column(
+                children: <Widget>[
+                  if (_plotLogs.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(18),
+                      child: Text(
+                        '还没有记录。用天意「控制剧情走向」写过的剧情会出现在这里。',
+                        style: TextStyle(fontSize: 13, color: MomentColors.secondaryText),
+                      ),
+                    )
+                  else
+                    for (final entry in _plotLogs)
+                      InkWell(
+                        onTap: () => _showPlotLog(entry),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      entry.scene,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: MomentColors.secondaryText,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      entry.text,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 13.5),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Lucide.ChevronRight, size: 16, color: Color(0xFFC8C8C8)),
+                            ],
+                          ),
+                        ),
+                      ),
+                  if (_plotLogs.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _clearPlotLogs,
+                        child: const Text('清空记录', style: TextStyle(fontSize: 13)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
             const SizedBox(height: 8),
             _sectionTitle('已发给模型的上下文'),
             Container(

@@ -93,6 +93,50 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     await onDone(value);
   }
 
+  /// 多行编辑（群提示词这种长文本）。
+  Future<void> _editLongText({
+    required String title,
+    required String initial,
+    required String hint,
+    required Future<void> Function(String value) onDone,
+  }) async {
+    final controller = TextEditingController(text: initial);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (sheetCtx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(title, style: const TextStyle(fontSize: 16)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 8,
+            minLines: 5,
+            decoration: InputDecoration(
+              hintText: hint,
+              border: const OutlineInputBorder(),
+            ),
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(sheetCtx).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(sheetCtx).pop(controller.text.trim()),
+            child: const Text('好'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null) return;
+    await onDone(value);
+  }
+
   // ---------------- 模型 ----------------
 
   Future<void> _pickModel({
@@ -298,6 +342,40 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                 _meRow(group),
                 for (final member in group.members) _memberRow(member),
                 _addRow(),
+              ]),
+
+              _header('群提示词（这个群的主题/风格）'),
+              _section(<Widget>[
+                _row(
+                  title: '群提示词',
+                  value: group.groupPrompt.trim().isEmpty
+                      ? '没写（默认日常闲聊）'
+                      : group.groupPrompt.trim().replaceAll('\n', ' '),
+                  onTap: () => _editLongText(
+                    title: '群提示词',
+                    initial: group.groupPrompt,
+                    hint: '比如：这是个抓马群，别聊家常，多制造冲突和反转，'
+                        '每个人都要有自己的脾气。',
+                    onDone: (value) async {
+                      await _apply(group.copyWith(groupPrompt: value));
+                    },
+                  ),
+                ),
+                SwitchListTile(
+                  value: group.autoTopic,
+                  title: const Text(
+                    '话题锚',
+                    style: TextStyle(fontSize: 15.5, color: WechatColors.primaryText),
+                  ),
+                  subtitle: const Text(
+                    '开了就围着一个话题聊，不会突然岔去安排琐事',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  activeColor: WechatColors.green,
+                  onChanged: (value) async {
+                    await _apply(group.copyWith(autoTopic: value));
+                  },
+                ),
               ]),
 
               _header('世界书（可以多本）'),

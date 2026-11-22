@@ -240,6 +240,7 @@ class WechatGenerator {
     required this.history,
     this.contacts = const <String, WechatContact>{},
     this.worldPrompt = '',
+    this.groupPrompt = '',
     this.socialContext = '',
     this.directiveKind = '',
     this.directiveWho = '',
@@ -256,6 +257,9 @@ class WechatGenerator {
 
   /// 「我 → 设置 → 世界观」里手写的设定，全局生效。
   final String worldPrompt;
+
+  /// 这个群自己的提示词：主题/风格（比如「要抓马、别聊家常」）。
+  final String groupPrompt;
 
   /// 跨场景记忆 + 当前时间地点处境，拼成一段注入 system。
   final String socialContext;
@@ -290,7 +294,12 @@ class WechatGenerator {
     if (wechatHasNoSpeakMark(result.text)) {
       throw const WechatNoReplyException();
     }
-    final text = cleanReply(result.text, speaker.name);
+    // 控制剧情走向：我写的剧情原样落地，不做任何清洗——
+    // 否则旁白、括号动作、markdown 会被 cleanReply 抹掉，剧情就"不奏效"了。
+    final isPlot = directiveKind == 'plot' && directiveText.trim().isNotEmpty;
+    final text = isPlot
+        ? result.text.trim()
+        : cleanReply(result.text, speaker.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
     }
@@ -321,6 +330,14 @@ class WechatGenerator {
     buffer.writeln('【群名】${group.name}');
     buffer.writeln('【我】这个群里主人叫「${group.effectivePersona}」');
     buffer.writeln();
+
+    // 这个群自己的提示词：定主题/风格，只对这个群生效，优先级最高。
+    final groupSetting = groupPrompt.trim();
+    if (groupSetting.isNotEmpty) {
+      buffer.writeln('【本群设定（最重要，务必照办）】');
+      buffer.writeln(groupSetting);
+      buffer.writeln();
+    }
 
     final books = wechatSelectedBooks(worldBooks, group.bookIds);
     final profiles = _profiles(books);
@@ -369,6 +386,9 @@ class WechatGenerator {
     _writeChatRules(buffer, speaker.name, burstCount: burstCount);
     buffer.writeln('- 群里有好几个人，说话可以接着上面某个人，但不是每次都非得接。');
     buffer.writeln('- 消息里带 @名字 的是专门叫那个人，被 @ 的人优先接这句。');
+    buffer.writeln('- 顺着最近的情绪和冲突往下演：气氛紧张、暧昧、抓马时，'
+        '不要突然转去安排时间地点、记账、报备行程这类日常事务，'
+        '也不要主动把气氛拉回平淡闲聊。要接住这股劲，把戏往下推。');
     _writeDirectiveRules(
       buffer,
       speaker.name,
@@ -496,7 +516,11 @@ class WechatDmGenerator {
         (allowNoReply && wechatHasNoReplyMark(result.text))) {
       throw const WechatNoReplyException();
     }
-    final text = cleanReply(result.text, contact.name);
+    // 控制剧情走向：原文落地，不清洗，保住旁白/动作/多角色。
+    final isPlot = directiveKind == 'plot' && directiveText.trim().isNotEmpty;
+    final text = isPlot
+        ? result.text.trim()
+        : cleanReply(result.text, contact.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
     }

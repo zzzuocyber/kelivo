@@ -201,7 +201,13 @@ class _WechatDmPageState extends State<WechatDmPage> {
 
   /// 隔一会儿他再回，太秒回像机器人。
   /// 等待和生成都交给后台执行器，退出页面也不会停。
-  void _scheduleReply({Duration? summonDelay, bool forceReply = false}) {
+  void _scheduleReply({
+    Duration? summonDelay,
+    bool forceReply = false,
+    bool bypassPending = false,
+  }) {
+    // 控制剧情走向要强制插队：先取消还在等间隔的旧回复，别让剧情被 pending 挡掉。
+    if (bypassPending) WechatDmReplyRunner.instance.cancelPending(_chatKey);
     if (WechatDmReplyRunner.instance.isPending(_chatKey)) return;
     // 冷场期内对方不主动回（召唤/天意强制发起的除外）。
     if (!forceReply &&
@@ -277,7 +283,8 @@ class _WechatDmPageState extends State<WechatDmPage> {
         // 控制剧情走向会结束冷场，立刻让他按剧情接一句。
         await _social.clearCooldown(scope);
         await _social.setDirective(scope, 'plot', text: plot.trim());
-        _scheduleReply(forceReply: true);
+        await _social.addPlotLog(plot.trim(), scene: '私聊');
+        _scheduleReply(forceReply: true, bypassPending: true);
         return;
       case 'switch_topic':
       case 'end_topic':
@@ -623,6 +630,11 @@ class _WechatDmPageState extends State<WechatDmPage> {
         lastSender = null;
         continue;
       }
+      if (message.plot) {
+        items.add(_plotRow(message));
+        lastSender = null;
+        continue;
+      }
       final mineHere = message.mine && !message.divine;
       final sameAsPrevious = lastSender == message.sender && !mineHere;
       items.add(_bubbleRow(message, showHead: !mineHere && !sameAsPrevious));
@@ -636,6 +648,32 @@ class _WechatDmPageState extends State<WechatDmPage> {
       // 底部留出输入栏高度：消息列表不随键盘移动，输入栏浮在上面。
       padding: const EdgeInsets.fromLTRB(0, 12, 0, 72),
       children: items,
+    );
+  }
+
+  /// 「控制剧情走向」落地的旁白：居中卡片，整段剧情、不挂人名。
+  Widget _plotRow(WechatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 22),
+      child: Center(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBF3E4),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFFE8D4A8), width: 0.8),
+          ),
+          child: Text(
+            message.text,
+            style: const TextStyle(
+              fontSize: 13.5,
+              color: Color(0xFF6B5426),
+              height: 1.55,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

@@ -53,6 +53,12 @@ class WechatDmReplyRunner {
   bool isPending(String key) =>
       _timers.containsKey(key) || _inFlight.contains(key);
 
+  /// 取消一个还没开始生成的等待（在等间隔的那句）。用于剧情/召唤强制插队。
+  void cancelPending(String key) {
+    _timers.remove(key)?.cancel();
+    _notify();
+  }
+
   /// 现在该显示「对方正在输入」。
   bool isCueing(String key) => _cueing.contains(key);
 
@@ -144,6 +150,8 @@ class WechatDmReplyRunner {
           memoryLines: memories,
           where: where.promptLine,
           store: social,
+          topic: social.topic(scope).topic,
+          summaryText: social.plotSummary,
         );
         contextText = built.text;
         unawaited(social.addTokens('dm', built.tokens));
@@ -165,7 +173,11 @@ class WechatDmReplyRunner {
         directiveText: directive.text,
       );
       final text = await generator.generate(burstCount: burst);
-      final parts = wechatSplitReply(text, maxParts: burst);
+      final isPlot = directive.kind == 'plot' && directive.text.trim().isNotEmpty;
+      // 控制剧情走向：整段一条旁白，不拆成多条、不挂对方名下。
+      final parts = isPlot
+          ? <String>[text]
+          : wechatSplitReply(text, maxParts: burst);
       if (parts.isEmpty) {
         throw const WechatServiceException('empty');
       }
@@ -180,7 +192,8 @@ class WechatDmReplyRunner {
           contactName,
           text: parsed.text,
           mine: false,
-          withImage: parsed.withImage,
+          withImage: parsed.withImage && !isPlot,
+          plot: isPlot,
         );
       }
       // 真回过一次就把连续不回清零。

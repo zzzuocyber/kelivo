@@ -365,14 +365,16 @@ class WechatStore {
     String? sender,
     bool divine = false,
     bool withImage = false,
+    bool plot = false,
     int? at,
   }) => appendMessage(
     wechatDmKey(name),
-    sender: sender ?? name,
+    sender: plot ? '' : (sender ?? name),
     text: text,
     mine: mine,
     divine: divine,
     withImage: withImage,
+    plot: plot,
     at: at,
   );
 
@@ -575,6 +577,7 @@ class WechatStore {
     bool mine = false,
     bool divine = false,
     bool withImage = false,
+    bool plot = false,
     int? at,
   }) async {
     final message = WechatMessage(
@@ -586,6 +589,7 @@ class WechatStore {
       mine: mine,
       divine: divine,
       withImage: withImage,
+      plot: plot,
     );
     final next = <WechatMessage>[...messages(groupId), message];
     await _writeMessages(groupId, next);

@@ -739,11 +739,13 @@ class _WechatPageState extends State<WechatPage> {
         style: TextStyle(fontSize: 13, color: WechatColors.secondaryText),
       );
     }
-    final who = last.system
-        ? ''
-        : (last.mine && !last.divine
-              ? '我：'
-              : (session.isGroup ? '${last.sender}：' : ''));
+    final who = last.plot
+        ? '剧情：'
+        : (last.system
+              ? ''
+              : (last.mine && !last.divine
+                    ? '我：'
+                    : (session.isGroup ? '${last.sender}：' : '')));
     return Text(
       '$who${last.text}',
       maxLines: 1,
@@ -1178,6 +1180,9 @@ class _WechatChatPageState extends State<WechatChatPage> {
         memoryLines: memories,
         where: whereabouts.promptLine,
         store: _social,
+        // 话题锚开关开了，才把当前话题注入，让角色围着它聊。
+        topic: group.autoTopic ? _social.topic(scope).topic : '',
+        summaryText: _social.plotSummary,
       );
       final generator = WechatGenerator(
         settings: context.read<SettingsProvider>(),
@@ -1186,6 +1191,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
         history: wechatRecentContext(_messages),
         contacts: _contactModels,
         worldPrompt: wechatSettings.worldPrompt,
+        groupPrompt: group.groupPrompt,
         socialContext: built.text,
         directiveKind: directive.kind,
         directiveWho: directive.who,
@@ -1194,8 +1200,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
       unawaited(_social.addTokens('group', built.tokens));
       final text = await generator.generateFor(speaker, burstCount: burst);
       if (!mounted) return;
-      // 抽到几条就按几条拆，一条一个气泡。
-      final parts = wechatSplitReply(text, maxParts: burst);
+      // 控制剧情走向：整段剧情一条落地，不按连发拆成多个气泡、不挂多个角色名下。
+      // 普通发言才按抽到的条数拆，一条一个气泡。
+      final isPlot = directive.kind == 'plot' && directive.text.trim().isNotEmpty;
+      final parts = isPlot
+          ? <String>[text]
+          : wechatSplitReply(text, maxParts: burst);
       if (parts.isEmpty) return;
       // 消息要出来了，才亮一下「正在输入」，到点再落气泡。
       setState(() => _typingName = speakerName);
@@ -1208,9 +1218,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
         added.add(
           await _store.appendMessage(
             group.id,
-            sender: speakerName,
+            // 剧情旁白不挂在某个角色名下；普通发言照旧署名说话人。
+            sender: isPlot ? '' : speakerName,
             text: parsed.text,
             withImage: parsed.withImage,
+            plot: isPlot,
           ),
         );
       }
@@ -1403,6 +1415,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
         }
         await _social.clearCooldown(scope);
         await _social.setDirective(scope, 'plot', text: plot.trim());
+        await _social.addPlotLog(plot.trim(), scene: group.name);
         // 立即演一次，绕过自动回复开关；演完由 _tick 内部按开关决定是否续。
         await _tick(force: true);
         return;
@@ -1800,6 +1813,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
         lastSender = null;
         continue;
       }
+      if (message.plot) {
+        items.add(_plotRow(message));
+        lastSender = null;
+        continue;
+      }
       if (message.system) {
         items.add(_systemRow(message));
         lastSender = null;
@@ -1823,6 +1841,32 @@ class _WechatChatPageState extends State<WechatChatPage> {
       // 底部留出输入栏高度：列表不随键盘移动，输入栏浮在上面。
       padding: const EdgeInsets.fromLTRB(0, 12, 0, 72),
       children: items,
+    );
+  }
+
+  /// 「控制剧情走向」落地的旁白：居中卡片，正文可多行，跟普通气泡区分开。
+  Widget _plotRow(WechatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 22),
+      child: Center(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBF3E4),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFFE8D4A8), width: 0.8),
+          ),
+          child: Text(
+            message.text,
+            style: const TextStyle(
+              fontSize: 13.5,
+              color: Color(0xFF6B5426),
+              height: 1.55,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
