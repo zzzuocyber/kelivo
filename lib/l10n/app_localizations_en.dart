@@ -3171,6 +3171,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Show Deep Thinking and tool cards';
 
   @override
+  String get messageExportSheetExpandAllSteps => 'Expand all steps';
+
+  @override
   String get messageExportSheetShowThinkingContent => 'Show thinking content';
 
   @override

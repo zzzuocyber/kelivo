@@ -3217,6 +3217,9 @@ class AppLocalizationsRu extends AppLocalizations {
       'Показывать карточки рассуждений и инструментов';
 
   @override
+  String get messageExportSheetExpandAllSteps => 'Развернуть все шаги';
+
+  @override
   String get messageExportSheetShowThinkingContent =>
       'Показывать содержимое рассуждений';
 
