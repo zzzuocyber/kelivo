@@ -304,7 +304,7 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
               ),
             ),
             const SizedBox(height: 8),
-            _sectionTitle('已发给模型的上下文'),
+            _sectionTitle('每次发送用了多少上下文 token'),
             Container(
               color: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -315,10 +315,12 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
                   _statLine('群聊', _stats.group),
                   _statLine('私聊', _stats.dm),
                   const Divider(height: 16, thickness: 0.5),
-                  _statLine('合计', _stats.total, bold: true),
+                  _statLine('三场景相加', _stats.total, bold: true),
                   const SizedBox(height: 6),
                   const Text(
-                    '约数。记忆开关改成「摘要」后，之后的消耗会变小。',
+                    '每个场景显示最近一次发送用量，不是累计总和。'
+                    '只是跨场景上下文那一段的约数，不含聊天记录、人设和系统提示词；'
+                    '记忆开关改成「摘要」后单次用量会变小。',
                     style: TextStyle(fontSize: 12, color: MomentColors.secondaryText),
                   ),
                 ],

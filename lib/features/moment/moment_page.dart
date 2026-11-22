@@ -179,7 +179,7 @@ class _MomentPageState extends State<MomentPage> {
       final generator = MomentGenerator(
         settings: settings,
         worldBooks: worldBooks,
-        bookIds: settings.momentBookIds,
+        bookIds: _wechatStore.wechatSettings().bookIds,
         characters: _characters,
         personaName: _personaName(settings),
         recentPosts: _posts,
@@ -199,7 +199,7 @@ class _MomentPageState extends State<MomentPage> {
   }
 
   Future<void> _openCharacters() async {
-    final bookIds = context.read<SettingsProvider>().momentBookIds;
+    final bookIds = _wechatStore.wechatSettings().bookIds;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => MomentCharactersPage(bookIds: bookIds),
@@ -395,7 +395,7 @@ class _MomentPageState extends State<MomentPage> {
       final composer = MomentMentionReplies(
         settings: settings,
         worldBooks: worldBooks,
-        bookIds: settings.momentBookIds,
+        bookIds: _wechatStore.wechatSettings().bookIds,
         characters: _characters,
         personaName: me,
         post: post,
@@ -429,7 +429,7 @@ class _MomentPageState extends State<MomentPage> {
       final composer = MomentReplyComposer(
         settings: settings,
         worldBooks: worldBooks,
-        bookIds: settings.momentBookIds,
+        bookIds: _wechatStore.wechatSettings().bookIds,
         characters: _characters,
         personaName: me,
         post: post,
@@ -615,7 +615,7 @@ class _MomentPageState extends State<MomentPage> {
       final composer = MomentMentionReplies(
         settings: settings,
         worldBooks: worldBooks,
-        bookIds: settings.momentBookIds,
+        bookIds: _wechatStore.wechatSettings().bookIds,
         characters: _characters,
         personaName: _actingName(settings),
         post: post,
@@ -721,7 +721,7 @@ class _MomentPageState extends State<MomentPage> {
       final rewriter = MomentRewriter(
         settings: settings,
         worldBooks: worldBooks,
-        bookIds: settings.momentBookIds,
+        bookIds: _wechatStore.wechatSettings().bookIds,
         characters: _characters,
         personaName: _personaName(settings),
         recentPosts: _posts,
@@ -755,7 +755,7 @@ class _MomentPageState extends State<MomentPage> {
       final rewriter = MomentRewriter(
         settings: settings,
         worldBooks: worldBooks,
-        bookIds: settings.momentBookIds,
+        bookIds: _wechatStore.wechatSettings().bookIds,
         characters: _characters,
         personaName: _personaName(settings),
         recentPosts: _posts,

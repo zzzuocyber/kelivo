@@ -26,6 +26,8 @@ class SocialContextBuilder {
     String topic = '',
     String summaryText = '',
     String? timeLine,
+    String affinityLine = '',
+    List<String> groupPulseLines = const <String>[],
   }) {
     final sections = <String>[];
 
@@ -42,6 +44,22 @@ class SocialContextBuilder {
     final topicTrimmed = topic.trim();
     if (topicTrimmed.isNotEmpty) {
       sections.add('【最近大家在聊】\n$topicTrimmed');
+    }
+
+    // 跟「我」的关系：好感拉满就该明显更护着我、愿意出头，
+    // 不能只用来算粘人概率而模型全程看不见。
+    final affinityTrimmed = affinityLine.trim();
+    if (affinityTrimmed.isNotEmpty) {
+      sections.add('【你和「我」的关系】\n$affinityTrimmed');
+    }
+
+    // 群里此刻正在发生的事（别人说的），补私聊记忆只捞本人发言的缺口。
+    final pulses = groupPulseLines
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (pulses.isNotEmpty) {
+      sections.add('【群里最近发生的事（别人说的）】\n${pulses.join('\n')}');
     }
 
     final lines = memoryLines

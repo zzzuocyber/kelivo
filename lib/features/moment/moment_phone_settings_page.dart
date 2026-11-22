@@ -8,6 +8,8 @@ import '../../icons/lucide_adapter.dart';
 import '../../utils/avatar_files.dart';
 import '../../utils/sandbox_path_resolver.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../wechat/wechat_me_page.dart';
+import '../wechat/wechat_world_page.dart';
 import 'moment_phone_theme_store.dart';
 import 'moment_social_memory_page.dart';
 import 'moment_widgets.dart';
@@ -38,6 +40,24 @@ class MomentPhoneSettingsPage extends StatelessWidget {
               onTap: () => Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(
                   builder: (_) => const MomentSocialMemoryPage(),
+                ),
+              ),
+            ),
+            _SettingsRow(
+              icon: Lucide.Globe,
+              label: '世界观',
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const WechatWorldPage(),
+                ),
+              ),
+            ),
+            _SettingsRow(
+              icon: Lucide.User,
+              label: '角色管理',
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const WechatCharactersPage(),
                 ),
               ),
             ),

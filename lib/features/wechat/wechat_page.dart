@@ -147,17 +147,17 @@ class _WechatPageState extends State<WechatPage> {
         ),
       );
     }
-    for (final key in _store.dmKeysWithMessages()) {
-      final name = key.substring(3);
+    for (final name in _store.dmSessionNames()) {
+      final key = WechatStore.dmKey(name);
       final messages = _store.messages(key);
-      if (messages.isEmpty) continue;
+      // 窗口不再依赖消息：删空记录后这里照样留着一个空会话。
       out.add(
         _WechatSession(
           key: key,
           title: name,
           isGroup: false,
           memberNames: <String>[name],
-          last: messages.last,
+          last: messages.isEmpty ? null : messages.last,
           unread: _store.unreadOf(key),
         ),
       );
@@ -232,6 +232,26 @@ class _WechatPageState extends State<WechatPage> {
                 ),
                 onTap: () => Navigator.of(sheetCtx).pop('delete'),
               ),
+              if (!isGroup)
+                ListTile(
+                  leading: const Icon(
+                    Lucide.X,
+                    size: 20,
+                    color: WechatColors.red,
+                  ),
+                  title: const Text(
+                    '移除会话',
+                    style: TextStyle(fontSize: 15, color: WechatColors.red),
+                  ),
+                  subtitle: const Text(
+                    '连窗口带记录一起挪走，通讯录里的人还在',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: WechatColors.secondaryText,
+                    ),
+                  ),
+                  onTap: () => Navigator.of(sheetCtx).pop('remove'),
+                ),
             ],
           ),
         ),
@@ -243,12 +263,18 @@ class _WechatPageState extends State<WechatPage> {
         context: context,
         builder: (dialogCtx) => AlertDialog(
           backgroundColor: Colors.white,
-          title: const Text('清空聊天记录？', style: TextStyle(fontSize: 16)),
-          content: Text('和「${session.title}」的聊天记录会全部清掉，群和人都留着，删了拿不回来。'),
+          title: const Text(
+            '清空聊天记录？',
+            style: TextStyle(fontSize: 16, color: WechatColors.primaryText),
+          ),
+          content: Text(
+            '和「${session.title}」的聊天记录会全部清掉，群和人都留着，删了拿不回来。',
+            style: const TextStyle(color: WechatColors.primaryText),
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: const Text('算了'),
+              child: const Text('算了', style: TextStyle(color: wechatMenuInk)),
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(true),
@@ -268,6 +294,40 @@ class _WechatPageState extends State<WechatPage> {
       _reload();
       return;
     }
+    if (action == 'remove') {
+      // 只出现在私聊：把窗口连同记录一起挪走，通讯录的人保留。
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            '移除这个会话？',
+            style: TextStyle(fontSize: 16, color: WechatColors.primaryText),
+          ),
+          content: Text(
+            '「${session.title}」的窗口和聊天记录都会从首页挪走，人还留在通讯录里，删了拿不回来。',
+            style: const TextStyle(color: WechatColors.primaryText),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('算了', style: TextStyle(color: wechatMenuInk)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('移除', style: TextStyle(color: WechatColors.red)),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || ok != true) return;
+      await _store.removeDmSession(session.title);
+      // 连根清：让对方忘掉这一刻之前说过的话，连同这个私聊的话题一起抹掉。
+      await _forgetForSession(session);
+      if (!mounted) return;
+      _reload();
+      return;
+    }
     if (action != 'delete') return;
     final ok = await showDialog<bool>(
       context: context,
@@ -275,17 +335,18 @@ class _WechatPageState extends State<WechatPage> {
         backgroundColor: Colors.white,
         title: Text(
           isGroup ? '删除这个群？' : '删除聊天记录？',
-          style: const TextStyle(fontSize: 16),
+          style: const TextStyle(fontSize: 16, color: WechatColors.primaryText),
         ),
         content: Text(
           isGroup
               ? '「${session.title}」和里面的聊天记录都会删掉，删了拿不回来。'
               : '和「${session.title}」的聊天记录会全部删掉，人还留在通讯录里。',
+          style: const TextStyle(color: WechatColors.primaryText),
         ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(false),
-            child: const Text('算了'),
+            child: const Text('算了', style: TextStyle(color: wechatMenuInk)),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(true),
@@ -447,7 +508,8 @@ class _WechatPageState extends State<WechatPage> {
     // 群主只是名义——拉人/踢人以他的名字发系统消息，权限不变。
     final owner = await _pickOwner();
     if (!mounted || owner == null) return;
-    // 新群默认用微信设置里那几本世界书，不选也能马上有人设。
+    // 世界书统一走微信设置里的全局书单，群本身不再单独存书单；
+    // bookIds 只是老字段，传个全局值留作兼容，生成侧不再读它。
     final group = await _store.createGroup(
       name: '新群聊',
       bookIds: _store.wechatSettings().bookIds,
@@ -1259,6 +1321,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
         worldBooks: context.read<WorldBookProvider>(),
         group: group,
         history: wechatRecentContext(_messages),
+        bookIds: wechatSettings.bookIds,
         contacts: _contactModels,
         worldPrompt: wechatSettings.worldPrompt,
         groupPrompt: group.groupPrompt,
@@ -1960,6 +2023,28 @@ class _WechatChatPageState extends State<WechatChatPage> {
     );
   }
 
+  /// 气泡内容：转发的聊天截图渲染成模拟界面卡片（点开看大图），其余照旧。
+  Widget _buildMessageBody(WechatMessage message) {
+    final snapshot = WechatSnapshot.decode(message.snapshot);
+    if (snapshot != null) {
+      return GestureDetector(
+        onTap: () => showWechatSnapshotViewer(context, snapshot),
+        child: WechatChatSnapshotCard(snapshot: snapshot),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _bubbleText(message.text),
+        if (message.withImage) ...<Widget>[
+          const SizedBox(height: 6),
+          WechatEmojiImage(text: message.text, seed: message.id),
+        ],
+      ],
+    );
+  }
+
   Widget _bubbleRow(
     WechatGroup group,
     WechatMessage message, {
@@ -1978,17 +2063,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
             ? Border.all(color: const Color(0xFF07C160), width: 1)
             : null,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _bubbleText(message.text),
-          if (message.withImage) ...<Widget>[
-            const SizedBox(height: 6),
-            WechatEmojiImage(text: message.text, seed: message.id),
-          ],
-        ],
-      ),
+      child: _buildMessageBody(message),
     );
     // 气泡上接长按菜单（以前是空手势，纯粹为了吞掉空白菜单）。
     final guardedBubble = GestureDetector(
@@ -2104,6 +2179,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
                 ),
               _messageMenuItem(
                 sheetCtx,
+                icon: Lucide.Camera,
+                label: '做成截图转发',
+                value: 'snapshot',
+              ),
+              _messageMenuItem(
+                sheetCtx,
                 icon: Lucide.History,
                 label: '撤回',
                 value: 'recall',
@@ -2133,6 +2214,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
         await _editMessage(group, message);
       case 'regen':
         await _regenerateMessage(group, message);
+      case 'snapshot':
+        await _forwardAsSnapshot(message, fromLabel: group.name);
       case 'recall':
         await _store.recallMessage(group.id, message.id);
         if (!mounted) return;
@@ -2144,6 +2227,58 @@ class _WechatChatPageState extends State<WechatChatPage> {
         if (!mounted) return;
         setState(() => _messages = _store.messages(group.id));
     }
+  }
+
+  /// 把选中这条做成模拟聊天截图，选一个群/私聊转过去。
+  /// 发出去的是一条图片消息，AI 上下文里会标明这是转发的截图。
+  Future<void> _forwardAsSnapshot(
+    WechatMessage message, {
+    required String fromLabel,
+  }) async {
+    final speaker = _isMine(message)
+        ? _store.wechatSettings().effectivePersona
+        : (message.sender.trim().isEmpty ? '某人' : message.sender.trim());
+    final snapshot = WechatSnapshot(
+      from: '转自：$fromLabel',
+      lines: <String>['$speaker：${message.text}'],
+    );
+    final targets = <(bool, String, String)>[
+      for (final group in _store.groups())
+        (true, group.id, '群 · ${group.name}'),
+      for (final name in _store.dmSessionNames())
+        (false, name, '私聊 · $name'),
+    ];
+    if (targets.isEmpty) {
+      _toast('还没有可以转发的群或私聊');
+      return;
+    }
+    final target = await showSnapshotTargetSheet(context, targets: targets);
+    if (!mounted || target == null) return;
+    final encoded = snapshot.encode();
+    // 正文给个说明，AI 侧主要看 snapshot（wechatHistoryLine 会转成截图提示）。
+    const note = '转发了一张聊天截图';
+    if (target.isGroup) {
+      await _store.appendMessage(
+        target.id,
+        sender: _store.wechatSettings().effectivePersona,
+        text: note,
+        mine: true,
+        snapshot: encoded,
+      );
+      if (target.id == widget.groupId) {
+        if (!mounted) return;
+        setState(() => _messages = _store.messages(target.id));
+      }
+    } else {
+      await _store.appendDmMessage(
+        target.id,
+        text: note,
+        mine: true,
+        snapshot: encoded,
+      );
+    }
+    if (!mounted) return;
+    _toast('截图已转发到${target.isGroup ? '群' : '私聊'}');
   }
 
   Widget _messageMenuItem(
@@ -2222,6 +2357,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
         worldBooks: context.read<WorldBookProvider>(),
         group: group,
         history: wechatRecentContext(before),
+        bookIds: _store.wechatSettings().bookIds,
         contacts: _contactModels,
         worldPrompt: _store.wechatSettings().worldPrompt,
         heartVoiceOn: _social.heartVoiceOn(speaker.name),

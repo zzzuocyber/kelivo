@@ -668,16 +668,18 @@ class SocialStore {
   SocialTokenStats tokenStats() =>
       SocialTokenStats.fromJson(_extras[socialTokensKey]);
 
-  /// [scene] 传 moment / group / dm。累计每次实际喂给模型的上下文 token。
+  /// [scene] 传 moment / group / dm。
+  /// 记「最近一次」该场景发出的上下文 token（覆盖，不再累加）——
+  /// 累计总量没用，用户要看的是单次发多少。
   Future<void> addTokens(String scene, int count) async {
     if (count <= 0) return;
     await _update((extras) {
       final next = Map<String, dynamic>.from(extras);
       final current = SocialTokenStats.fromJson(next[socialTokensKey]);
       final updated = SocialTokenStats(
-        moment: current.moment + (scene == 'moment' ? count : 0),
-        group: current.group + (scene == 'group' ? count : 0),
-        dm: current.dm + (scene == 'dm' ? count : 0),
+        moment: scene == 'moment' ? count : current.moment,
+        group: scene == 'group' ? count : current.group,
+        dm: scene == 'dm' ? count : current.dm,
       );
       next[socialTokensKey] = updated.toJson();
       return next;

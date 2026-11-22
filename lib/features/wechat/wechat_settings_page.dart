@@ -14,7 +14,7 @@ import 'wechat_models.dart';
 import 'wechat_store.dart';
 import 'wechat_ui.dart';
 
-/// 群设置：改名、拉人、踢人、选世界书、调间隔、绑模型、删群。
+/// 群设置：改名、拉人、踢人、调间隔、绑模型、删群。世界书统一走设置里的。
 /// 返回 true 表示动过东西（列表页拿它决定要不要直接进群）。
 class WechatSettingsPage extends StatefulWidget {
   const WechatSettingsPage({super.key, required this.groupId});
@@ -170,19 +170,36 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
   Future<void> _invite() async {
     final group = _group;
     if (group == null) return;
-    // 拉人只从通讯录里挑：世界书里有人但没加进通讯录的，这里看不到。
-    final contacts = sortedByPinyin(_store.contacts(), (c) => c.name);
-    if (contacts.isEmpty) {
-      _toast('通讯录里还没人，先去通讯录取加几个');
+    // 拉人只从「设置里选中的世界书」角色里挑，跟通讯录加人同一份范围。
+    final settings = _store.wechatSettings();
+    final provider = context.read<WorldBookProvider>();
+    final books = <WorldBook>[
+      for (final id in settings.bookIds)
+        if (provider.getById(id) != null) provider.getById(id)!,
+    ];
+    if (books.isEmpty) {
+      _toast('还没选世界书。先去「设置 → 世界观」选几本');
       return;
     }
     final existing = <String>{for (final m in group.members) m.name};
-    final pool = <WechatContact>[
-      for (final contact in contacts)
-        if (!existing.contains(contact.name)) contact,
-    ];
+    // 名字 → 条目；同名只留第一个（先选的书优先），已在群里的跳过。
+    final candidates = <String, WechatContact>{};
+    for (final book in books) {
+      for (final entry in book.entries) {
+        final name = entry.name.trim();
+        if (name.isEmpty) continue;
+        if (existing.contains(name)) continue;
+        if (candidates.containsKey(name)) continue;
+        candidates[name] = WechatContact(
+          name: name,
+          entryId: entry.id,
+          bookId: book.id,
+        );
+      }
+    }
+    final pool = sortedByPinyin(candidates.values.toList(), (c) => c.name);
     if (pool.isEmpty) {
-      _toast('通讯录里的人都已经在群里了');
+      _toast('选中的世界书里没有新人可以拉了');
       return;
     }
     final picked = await showModalBottomSheet<List<WechatContact>>(
@@ -386,9 +403,6 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
                   },
                 ),
               ]),
-
-              _header('世界书（可以多本）'),
-              _bookSection(group),
 
               _header('发言间隔'),
               WechatIntervalPicker(
@@ -633,82 +647,6 @@ class _WechatSettingsPageState extends State<WechatSettingsPage> {
     );
   }
 
-  Widget _bookSection(WechatGroup group) {
-    final books = context.watch<WorldBookProvider>().books;
-    if (books.isEmpty) {
-      return _section(<Widget>[
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          alignment: Alignment.centerLeft,
-          child: const Text(
-            '还没有世界书，先去建一本',
-            style: TextStyle(fontSize: 13, color: WechatColors.secondaryText),
-          ),
-        ),
-      ]);
-    }
-    return _section(<Widget>[for (final book in books) _bookRow(group, book)]);
-  }
-
-  Widget _bookRow(WechatGroup group, WorldBook book) {
-    final checked = group.bookIds.contains(book.id);
-    return InkWell(
-      onTap: () async {
-        final next = <String>[...group.bookIds];
-        if (checked) {
-          next.remove(book.id);
-        } else {
-          next.add(book.id);
-        }
-        await _apply(group.copyWith(bookIds: next));
-      },
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Color(0xFFEEEEEE), width: 0.5),
-          ),
-        ),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    book.name,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: WechatColors.primaryText,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${book.entries.length} 个条目',
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: WechatColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (checked)
-              const Icon(Lucide.Check, size: 21, color: WechatColors.green)
-            else
-              Container(
-                width: 19,
-                height: 19,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Color(0xFFCFCFCF), width: 1.4),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ============================================================

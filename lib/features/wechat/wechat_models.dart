@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 /// 微信的全部数据挂在一条隐藏对话的 extras 里。键都带 wechat. 前缀，
@@ -9,6 +10,10 @@ const String wechatContactsKey = 'wechat.contacts';
 
 /// 每个会话读到哪了（毫秒时间戳），键跟 [wechatMessagesKey] 一致。
 const String wechatReadsKey = 'wechat.reads';
+
+/// 私聊会话窗口名单（联系人名字），跟消息是否为空解耦。
+/// 删聊天记录只删消息，窗口靠这份名单留在首页；长按「移除会话」才从这里删。
+const String wechatDmSessionsKey = 'wechat.dmsessions';
 
 /// 私聊记录在 [wechatMessagesKey] 里的键：群用群 id，私聊用 dm:名字。
 String wechatDmKey(String name) => 'dm:${name.trim()}';
@@ -775,6 +780,7 @@ class WechatMessage {
     this.withImage = false,
     this.plot = false,
     this.heartVoice = '',
+    this.snapshot = '',
   });
 
   final String id;
@@ -806,6 +812,10 @@ class WechatMessage {
   /// 这条消息生成时一并存下的心声（口是心非的真实想法）。空 = 没有。
   /// 只有开了心声的角色、且是角色本人发的才有；我发的/夺舍替人说的没有。
   final String heartVoice;
+
+  /// 转发的「模拟聊天截图」内容（JSON 字符串：来源 + 若干对话行）。
+  /// 非空时这条消息渲染成一张聊天截图卡片，AI 上下文里标明这是转发的截图。
+  final String snapshot;
 
   WechatMessage copyWith({
     String? sender,
@@ -842,6 +852,7 @@ class WechatMessage {
     if (withImage) 'img': true,
     if (plot) 'plot': true,
     if (heartVoice.isNotEmpty) 'heart': heartVoice,
+    if (snapshot.isNotEmpty) 'snap': snapshot,
   };
 
   static WechatMessage? fromJson(Object? raw) {
@@ -860,7 +871,51 @@ class WechatMessage {
       withImage: raw['img'] == true,
       plot: raw['plot'] == true,
       heartVoice: (raw['heart'] ?? '').toString(),
+      snapshot: (raw['snap'] ?? '').toString(),
     );
+  }
+}
+
+/// 一条转发的模拟聊天截图内容。
+/// [from] 是来源标注（例：转自「相亲群」/ 转自「张三」），[lines] 是画面里的对话行。
+class WechatSnapshot {
+  const WechatSnapshot({required this.from, required this.lines});
+
+  final String from;
+  final List<String> lines;
+
+  String encode() => jsonEncode(<String, dynamic>{
+        'from': from,
+        'lines': lines,
+      });
+
+  static WechatSnapshot? decode(Object? raw) {
+    if (raw is! String || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final lines = <String>[];
+      final rawLines = decoded['lines'];
+      if (rawLines is List) {
+        for (final line in rawLines) {
+          final text = line.toString();
+          if (text.trim().isNotEmpty) lines.add(text);
+        }
+      }
+      if (lines.isEmpty) return null;
+      return WechatSnapshot(
+        from: (decoded['from'] ?? '').toString(),
+        lines: lines,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 给模型看的那一句：明确这是转发的截图，不是当场说的话。
+  String toPromptLine() {
+    final source = from.trim().isEmpty ? '' : '（$from）';
+    return '发来一张聊天截图$source，截图里是：${lines.join(' / ')}';
   }
 }
 

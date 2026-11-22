@@ -203,6 +203,13 @@ void _writeChatRules(
 
 /// 把一条历史消息写成给模型看的那行字。带图的补一句，让模型知道那是图。
 String wechatHistoryLine(WechatMessage message, {required String who}) {
+  // 转发的聊天截图：明确告诉模型这是转发的画面，不是在场角色此刻说的话，
+  // 别当成刚发生的事实、也别当成对我说的。
+  final snapshot = WechatSnapshot.decode(message.snapshot);
+  if (snapshot != null) {
+    return '$who${snapshot.toPromptLine()}。注意：这是转发的截图画面，'
+        '不是此刻在场的人刚说的话，别当成刚发生的事，也别默认是在跟我说话。';
+  }
   final tail = message.withImage ? '（配了一张图）' : '';
   return '$who：${message.text}$tail';
 }
@@ -218,6 +225,7 @@ class WechatGenerator {
     required this.worldBooks,
     required this.group,
     required this.history,
+    required this.bookIds,
     this.contacts = const <String, WechatContact>{},
     this.worldPrompt = '',
     this.groupPrompt = '',
@@ -231,6 +239,9 @@ class WechatGenerator {
   final WorldBookProvider worldBooks;
   final WechatGroup group;
   final List<WechatMessage> history;
+
+  /// 群聊用哪几本世界书：统一走设置里勾的全局书单，不再按群各选各的。
+  final List<String> bookIds;
 
   /// 这个角色开了心声才让模型附带；没开就完全不提心声这回事。
   final bool heartVoiceOn;
@@ -316,7 +327,18 @@ class WechatGenerator {
     buffer.writeln('【我】这个群里主人叫「${group.effectivePersona}」');
     buffer.writeln();
 
-    // 这个群自己的提示词：定主题/风格，只对这个群生效，优先级最高。
+    // 世界观放最前，并撑腰成铁律：角色不认世界观，多半是它夹在中间
+    // 又被后面「本群设定/这次的规矩」的狠话压过去了。
+    final worldSetting = worldPrompt.trim();
+    if (worldSetting.isNotEmpty) {
+      buffer.writeln('【世界观（最高优先级·铁律）】');
+      buffer.writeln(worldSetting);
+      buffer.writeln('——上面这段世界观是铁律：所有角色必须遵守；'
+          '它跟下面任何设定、人设、规矩冲突时，一律以世界观为准，不得违背。');
+      buffer.writeln();
+    }
+
+    // 这个群自己的提示词：定主题/风格，只对这个群生效。
     final groupSetting = groupPrompt.trim();
     if (groupSetting.isNotEmpty) {
       buffer.writeln('【本群设定（最重要，务必照办）】');
@@ -324,7 +346,7 @@ class WechatGenerator {
       buffer.writeln();
     }
 
-    final books = wechatSelectedBooks(worldBooks, group.bookIds);
+    final books = wechatSelectedBooks(worldBooks, bookIds);
     final profiles = _profiles(books);
 
     buffer.writeln('【群里的人】');
@@ -350,13 +372,6 @@ class WechatGenerator {
     if (worldText.isNotEmpty) {
       buffer.writeln('【世界背景】');
       buffer.writeln(worldText);
-      buffer.writeln();
-    }
-
-    final worldSetting = worldPrompt.trim();
-    if (worldSetting.isNotEmpty) {
-      buffer.writeln('【世界观】');
-      buffer.writeln(worldSetting);
       buffer.writeln();
     }
 
@@ -527,6 +542,17 @@ class WechatDmGenerator {
     buffer.writeln();
     buffer.writeln('【我】对面这个人叫「$persona」');
     buffer.writeln();
+
+    // 世界观放最前并撑腰成铁律，别让它夹在中间被后面的规矩压过去。
+    final worldSetting = worldPrompt.trim();
+    if (worldSetting.isNotEmpty) {
+      buffer.writeln('【世界观（最高优先级·铁律）】');
+      buffer.writeln(worldSetting);
+      buffer.writeln('——上面这段世界观是铁律：所有角色必须遵守；'
+          '它跟下面任何设定、人设、规矩冲突时，一律以世界观为准，不得违背。');
+      buffer.writeln();
+    }
+
     buffer.writeln('【你是】');
     buffer.writeln('### ${contact.name}');
 
@@ -556,13 +582,6 @@ class WechatDmGenerator {
       buffer.writeln();
     }
 
-    final worldSetting = worldPrompt.trim();
-    if (worldSetting.isNotEmpty) {
-      buffer.writeln('【世界观】');
-      buffer.writeln(worldSetting);
-      buffer.writeln();
-    }
-
     final context = socialContext.trim();
     if (context.isNotEmpty) {
       buffer.writeln('【此刻的处境与记忆】');
@@ -572,7 +591,10 @@ class WechatDmGenerator {
 
     buffer.writeln('【这次的规矩】');
     _writeChatRules(buffer, contact.name, burstCount: burstCount);
-    buffer.writeln('- 这是两个人的私聊，没有别人在场，说话可以更随意一点。');
+    buffer.writeln('- 这是你跟「$persona」两个人的私聊，眼前没别人，说话可以更随意。'
+        '但群里发生的事、别人怎么对「我」照样算数：'
+        '「我」在群里受了委屈、要你去群里帮忙出头时，你要当回事，'
+        '别当成"跟你无关"或把话岔开。');
     _writeDirectiveRules(
       buffer,
       contact.name,

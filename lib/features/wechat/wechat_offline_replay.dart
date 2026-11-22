@@ -190,6 +190,7 @@ class WechatOfflineReplay {
           worldBooks: worldBooks,
           group: group,
           history: wechatRecentContext(store.messages(group.id)),
+          bookIds: wechatSettings.bookIds,
           contacts: <String, WechatContact>{
             for (final c in store.contacts()) c.name: c,
           },

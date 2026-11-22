@@ -967,6 +967,265 @@ List<String> wechatEmojisFor(String text, String seed) {
   return picked;
 }
 
+/// 截图转发的目标：群（groupId）或私聊（contactName）。
+typedef SnapshotTarget = ({bool isGroup, String id});
+
+/// 选一个转发目标：列出所有群 + 所有私聊窗口。取消返回 null。
+Future<SnapshotTarget?> showSnapshotTargetSheet(
+  BuildContext context, {
+  required List<(bool, String, String)> targets,
+}) async {
+  final picked = await showModalBottomSheet<int>(
+    context: context,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+    ),
+    builder: (sheetCtx) => Theme(
+      data: wechatLightTheme(),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '转发截图到',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: targets.length,
+                itemBuilder: (context, index) {
+                  final (isGroup, id, label) = targets[index];
+                  return ListTile(
+                    leading: Icon(
+                      isGroup ? Lucide.MessageCircle : Lucide.User,
+                      size: 20,
+                      color: wechatMenuInk,
+                    ),
+                    title: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: WechatColors.primaryText,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(sheetCtx).pop(index),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (picked == null || picked < 0 || picked >= targets.length) return null;
+  final (isGroup, id, _) = targets[picked];
+  return (isGroup: isGroup, id: id);
+}
+
+/// 转发的模拟聊天截图：把几条对话画成一张微信聊天界面的样子。
+/// 点开看大图由外层处理；这里只负责把"截图卡片"画出来。
+class WechatChatSnapshotCard extends StatelessWidget {
+  const WechatChatSnapshotCard({
+    super.key,
+    required this.snapshot,
+    this.width = 220,
+  });
+
+  final WechatSnapshot snapshot;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: WechatColors.hairline),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          // 仿微信顶栏：返回箭头 + 标题（转自哪）。
+          Container(
+            height: 30,
+            color: const Color(0xFFEDEDED),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: <Widget>[
+                const Icon(Icons.arrow_back_ios, size: 13, color: Color(0xFF333333)),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    snapshot.from.trim().isEmpty ? '聊天截图' : snapshot.from,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF222222),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 对话行：每条一个小灰头像 + 绿色气泡。
+          Padding(
+            padding: const EdgeInsets.all(7),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                for (final line in snapshot.lines.take(4))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD9D9D9),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF95EC69),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              line,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF1A1A1A),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (snapshot.lines.length > 4)
+                  Text(
+                    '……还有 ${snapshot.lines.length - 4} 条',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Color(0xFF999999),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 点开截图看大图：整屏灰底，卡片放大展示全部对话行。
+void showWechatSnapshotViewer(
+  BuildContext context,
+  WechatSnapshot snapshot,
+) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 560),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              height: 44,
+              color: const Color(0xFFEDEDED),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      snapshot.from.trim().isEmpty ? '聊天截图' : snapshot.from,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF222222),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    icon: const Icon(Icons.close, color: Color(0xFF333333)),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    for (final line in snapshot.lines)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF95EC69),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          line,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// 微信消息配图：白底圆角，一个大 emoji + 最多两个小的，位置按消息 id 定死。
 class WechatEmojiImage extends StatelessWidget {
   const WechatEmojiImage({

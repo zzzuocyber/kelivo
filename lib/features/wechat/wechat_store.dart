@@ -367,25 +367,106 @@ class WechatStore {
     bool withImage = false,
     bool plot = false,
     String heartVoice = '',
+    String snapshot = '',
     int? at,
-  }) => appendMessage(
-    wechatDmKey(name),
-    sender: plot ? '' : (sender ?? name),
-    text: text,
-    mine: mine,
-    divine: divine,
-    withImage: withImage,
-    plot: plot,
-    heartVoice: heartVoice,
-    at: at,
-  );
+  }) async {
+    // 发私聊消息就登记一个窗口，之后删记录窗口也留着。
+    await _registerDmSession(name);
+    return appendMessage(
+      wechatDmKey(name),
+      sender: plot ? '' : (sender ?? name),
+      text: text,
+      mine: mine,
+      divine: divine,
+      withImage: withImage,
+      plot: plot,
+      heartVoice: heartVoice,
+      snapshot: snapshot,
+      at: at,
+    );
+  }
 
-  /// 删掉跟某个人的私聊记录（通讯录里那人还在）。
+  /// 私聊窗口名单：独立于消息是否存在。
+  /// 并上「还有消息的 dm key」是为了兼容老数据——升级前没有这份名单，
+  /// 但那些会话本来就有消息，升级后窗口不该凭空消失。
+  List<String> dmSessionNames() {
+    final extras = _extras();
+    final out = <String>{};
+    final raw = extras[wechatDmSessionsKey];
+    if (raw is List) {
+      for (final item in raw) {
+        final name = item.toString().trim();
+        if (name.isNotEmpty) out.add(name);
+      }
+    }
+    // 老数据兜底：任何还有消息的私聊都算一个窗口。
+    final all = extras[wechatMessagesKey];
+    if (all is Map) {
+      const prefix = 'dm:';
+      for (final key in all.keys) {
+        final text = key.toString();
+        if (!text.startsWith(prefix)) continue;
+        final name = text.substring(prefix.length);
+        if (name.trim().isEmpty) continue;
+        final list = all[key];
+        if (list is List && list.isNotEmpty) out.add(name);
+      }
+    }
+    return out.toList(growable: false);
+  }
+
+  /// 把一个私聊对象登记进窗口名单（幂等）。删记录时也要留着窗口，
+  /// 所以在发消息和删除消息两处都会调。
+  Future<void> _registerDmSession(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final current = _extras()[wechatDmSessionsKey];
+    if (current is List &&
+        current.any((item) => item.toString().trim() == trimmed)) {
+      return;
+    }
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final next = <String>[...dmSessionNames(), trimmed];
+      final map = Map<String, dynamic>.from(extras);
+      map[wechatDmSessionsKey] = next;
+      return map;
+    });
+  }
+
+  /// 删掉跟某个人的私聊记录（窗口和通讯录里那人都还在）。
   Future<void> deleteDm(String name) async {
+    // 先登记窗口，保证删完记录窗口还留在首页。
+    await _registerDmSession(name);
     final key = wechatDmKey(name);
     final id = await ensureConversation();
     await chat.updateConversationExtras(id, (extras) {
       final map = Map<String, dynamic>.from(extras);
+      final all = map[wechatMessagesKey];
+      if (all is Map) {
+        map[wechatMessagesKey] = Map<String, dynamic>.from(all)..remove(key);
+      }
+      final reads = map[wechatReadsKey];
+      if (reads is Map) {
+        map[wechatReadsKey] = Map<String, dynamic>.from(reads)..remove(key);
+      }
+      return map;
+    });
+  }
+
+  /// 移除整个私聊窗口：名单、消息、未读一起删。长按会话菜单专用。
+  Future<void> removeDmSession(String name) async {
+    final trimmed = name.trim();
+    final key = wechatDmKey(trimmed);
+    final id = await ensureConversation();
+    await chat.updateConversationExtras(id, (extras) {
+      final map = Map<String, dynamic>.from(extras);
+      final raw = map[wechatDmSessionsKey];
+      if (raw is List) {
+        map[wechatDmSessionsKey] = raw
+            .where((item) => item.toString().trim() != trimmed)
+            .toList(growable: false);
+      }
       final all = map[wechatMessagesKey];
       if (all is Map) {
         map[wechatMessagesKey] = Map<String, dynamic>.from(all)..remove(key);
@@ -500,6 +581,10 @@ class WechatStore {
   /// 只清一个会话的聊天记录，群/人/设置都留着。
   /// 私聊也能用（键是 `dm:名字`），未读一起清掉。
   Future<void> clearMessages(String key) async {
+    // 私聊清空记录也把窗口登记下来，清完首页还看得见这个人。
+    if (key.startsWith('dm:')) {
+      await _registerDmSession(key.substring(3));
+    }
     final id = await ensureConversation();
     await chat.updateConversationExtras(id, (extras) {
       final map = Map<String, dynamic>.from(extras);
@@ -562,6 +647,50 @@ class WechatStore {
     return out;
   }
 
+  /// 群里「别人」最近说过的话，给私聊补上"群里正在发生什么"。
+  /// 私聊的跨场景记忆只捞这个人自己说的话，别人在群里欺负/议论「我」的话
+  /// 他一句都看不见，于是在私聊里让他去群里帮忙时只会扯别的。
+  /// 这里扫所有群最后若干条、非我发的消息，带群名和说话人。
+  /// [since] 同样是当前联系人（或我）的记忆水位线，删记录之前的旧话不喂。
+  List<String> recentGroupLines({int limit = 20, int since = 0}) {
+    final extras = _extras();
+    final raw = extras[wechatMessagesKey];
+    final out = <String>[];
+    if (raw is! Map) return out;
+    final myName = wechatSettings().effectivePersona;
+    // 所有群（非 dm: 键）的消息，按时间从新到旧扫。
+    final groups = <MapEntry<String, List<WechatMessage>>>[];
+    for (final entry in raw.entries) {
+      final key = entry.key.toString();
+      if (key.startsWith('dm:')) continue;
+      final list = wechatMessagesFromExtras(<String, dynamic>{
+        wechatMessagesKey: <String, dynamic>{key: entry.value},
+      }, key);
+      groups.add(MapEntry<String, List<WechatMessage>>(key, list));
+    }
+    final groupNames = <String, String>{};
+    for (final group in groups()) {
+      groupNames[group.id] = group.name;
+    }
+    final all = <({String label, WechatMessage msg})>[];
+    for (final entry in groups) {
+      final label = groupNames[entry.key] ?? '群里';
+      for (final message in entry.value) {
+        if (message.system || message.text.trim().isEmpty) continue;
+        if (message.mine && !message.divine) continue; // 只要别人说的
+        if (since > 0 && message.at > 0 && message.at < since) continue;
+        all.add((label: label, msg: message));
+      }
+    }
+    all.sort((a, b) => b.msg.at.compareTo(a.msg.at));
+    for (final item in all) {
+      final speaker = item.msg.sender.trim().isEmpty ? '某人' : item.msg.sender.trim();
+      out.add('${item.label}·$speaker：${item.msg.text}');
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
   Future<void> _writeMessages(String groupId, List<WechatMessage> next) async {
     final containerId = await ensureConversation();
     await chat.updateConversationExtras(containerId, (extras) {
@@ -591,6 +720,7 @@ class WechatStore {
     bool withImage = false,
     bool plot = false,
     String heartVoice = '',
+    String snapshot = '',
     int? at,
   }) async {
     final message = WechatMessage(
@@ -604,6 +734,7 @@ class WechatStore {
       withImage: withImage,
       plot: plot,
       heartVoice: heartVoice,
+      snapshot: snapshot,
     );
     final next = <WechatMessage>[...messages(groupId), message];
     await _writeMessages(groupId, next);

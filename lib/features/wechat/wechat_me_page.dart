@@ -3,7 +3,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/providers/settings_provider.dart';
-import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
 import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
@@ -14,7 +13,6 @@ import '../moment/moment_store.dart';
 import 'wechat_models.dart';
 import 'wechat_store.dart';
 import 'wechat_ui.dart';
-import 'wechat_world_page.dart';
 
 /// 「我」这一页：头像、马甲名、设置入口。
 ///
@@ -423,20 +421,6 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
 
   @override
   Widget build(BuildContext context) {
-    final books = context.watch<WorldBookProvider>();
-    final names = <String>[];
-    for (final id in _settings.bookIds) {
-      final book = books.getById(id);
-      if (book == null) continue;
-      final name = book.name.trim();
-      names.add(name.isEmpty ? '未命名世界书' : name);
-    }
-    // 世界观那行的摘要：写没写设定，勾了几本书。
-    final worldParts = <String>[
-      if (_settings.worldPrompt.trim().isNotEmpty) '已写设定',
-      if (names.isNotEmpty) '${names.length} 本世界书',
-    ];
-    final worldText = worldParts.isEmpty ? '未设置' : worldParts.join(' · ');
     final intervalText = wechatIntervalLabel(
       _settings.intervalPreset,
       customMinSeconds: _settings.customMinSeconds,
@@ -474,20 +458,6 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
           children: <Widget>[
             const SizedBox(height: 10),
             _settingRow(
-              title: '世界观',
-              value: worldText,
-              onTap: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const WechatWorldPage(),
-                  ),
-                );
-                if (!mounted) return;
-                _reload();
-              },
-            ),
-            const SizedBox(height: 10),
-            _settingRow(
               title: '群聊默认间隔',
               value: intervalText,
               onTap: _pickGlobalInterval,
@@ -497,20 +467,6 @@ class _WechatSettingsSubPageState extends State<WechatSettingsSubPage> {
               title: '连发条数概率',
               value: _settings.burstPreset.label,
               onTap: _pickBurstPreset,
-            ),
-            const SizedBox(height: 10),
-            _settingRow(
-              title: '角色管理',
-              value: '头像、模型',
-              onTap: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const WechatCharactersPage(),
-                  ),
-                );
-                if (!mounted) return;
-                _reload();
-              },
             ),
           ],
         ),

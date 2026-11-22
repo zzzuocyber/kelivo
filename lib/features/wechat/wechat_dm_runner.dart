@@ -154,6 +154,13 @@ class WechatDmReplyRunner {
           ),
         ];
         final where = social.whereabouts(contactName);
+        // 把好感度/关系状态写进提示词：拉满了就该明显更护着「我」。
+        final aff = social.affinity(contactName);
+        final spec = aff.specials.isNotEmpty ? '，特殊状态：${aff.specials.join('、')}' : '';
+        final affinityLine =
+            '你们的关系是「${aff.status}」（好感 ${aff.score.toStringAsFixed(1)}$spec）。'
+            '好感越高越护着「我」——「我」在群里被人欺负、需要出头时，'
+            '要站出来帮「我」说话，别岔开话题或敷衍。';
         final built = SocialContextBuilder.build(
           name: contactName,
           scene: 'dm',
@@ -162,6 +169,8 @@ class WechatDmReplyRunner {
           store: social,
           topic: social.topic(scope).topic,
           summaryText: social.plotSummary,
+          affinityLine: affinityLine,
+          groupPulseLines: store.recentGroupLines(since: forgetFloor),
         );
         contextText = built.text;
         unawaited(social.addTokens('dm', built.tokens));

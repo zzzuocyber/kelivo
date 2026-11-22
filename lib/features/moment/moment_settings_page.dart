@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/models/model_spec.dart';
 import '../../core/providers/settings_provider.dart';
-import '../../core/providers/world_book_provider.dart';
 import '../../core/services/model_spec/model_spec_resolver.dart';
 import '../../icons/lucide_adapter.dart';
 import '../../l10n/app_localizations.dart';
@@ -12,8 +11,8 @@ import '../model/widgets/model_select_sheet.dart';
 import 'moment_service.dart';
 import 'moment_widgets.dart';
 
-/// 朋友圈设置：选一本世界书、填系统提示词和附加指令、选定一个模型。
-/// 这些值都存进设置里，跟着备份走。
+/// 朋友圈设置：填系统提示词和附加指令、选定一个模型。
+/// 世界书统一走微信设置里那一份，这里不再单设。这些值都存进设置里，跟着备份走。
 class MomentSettingsPage extends StatefulWidget {
   const MomentSettingsPage({super.key});
 
@@ -53,114 +52,6 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
     _personaController.dispose();
     _contextCharsController.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickBook() async {
-    final settings = context.read<SettingsProvider>();
-    final books = context.read<WorldBookProvider>().books;
-    if (books.isEmpty) {
-      _toast('还没有世界书');
-      return;
-    }
-    final selected = <String>{...settings.momentBookIds};
-    final picked = await showModalBottomSheet<List<String>>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
-                child: Row(
-                  children: <Widget>[
-                    const Expanded(
-                      child: Text(
-                        '选择世界书（可以多本）',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: MomentColors.primaryText,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(selected.toList()),
-                      child: const Text('完成'),
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: <Widget>[
-                    for (final book in books)
-                      InkWell(
-                        onTap: () => setSheetState(() {
-                          if (!selected.remove(book.id)) selected.add(book.id);
-                        }),
-                        child: Container(
-                          color: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          child: Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  book.name.trim().isEmpty
-                                      ? '未命名世界书'
-                                      : book.name,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    color: MomentColors.primaryText,
-                                  ),
-                                ),
-                              ),
-                              if (selected.contains(book.id))
-                                const Icon(
-                                  Lucide.Check,
-                                  size: 18,
-                                  color: MomentColors.name,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (picked == null) return;
-    await settings.setMomentBookIds(picked);
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  /// 把选中的几本世界书拼成一行字给设置页显示。
-  String _booksText(List<String> ids, WorldBookProvider provider) {
-    if (ids.isEmpty) return '未选择';
-    final names = <String>[];
-    for (final id in ids) {
-      final book = provider.getById(id);
-      if (book == null) continue;
-      final name = book.name.trim();
-      names.add(name.isEmpty ? '未命名世界书' : name);
-    }
-    if (names.isEmpty) return '未选择';
-    if (names.length <= 2) return names.join('、');
-    return '${names.take(2).join('、')} 等 ${names.length} 本';
   }
 
   Future<void> _pickModel() async {
@@ -280,8 +171,6 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-    final booksProvider = context.watch<WorldBookProvider>();
-    final bookText = _booksText(settings.momentBookIds, booksProvider);
     final providerKey =
         settings.momentModelProvider ?? settings.currentModelProvider;
     final modelId = settings.momentModelId ?? settings.currentModelId;
@@ -308,7 +197,6 @@ class _MomentSettingsPageState extends State<MomentSettingsPage> {
         body: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: <Widget>[
-            _Row(label: '世界书', value: bookText, onTap: _pickBook),
             _Row(label: '模型', value: modelText, onTap: _pickModel),
             _Row(
               label: '深度思考',

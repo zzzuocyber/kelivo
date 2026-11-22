@@ -737,6 +737,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
                 _menuItem(sheetCtx, Lucide.Pencil, '编辑', 'edit')
               else
                 _menuItem(sheetCtx, Lucide.RefreshCw, '重新生成', 'regen'),
+              _menuItem(sheetCtx, Lucide.Camera, '做成截图转发', 'snapshot'),
               _menuItem(sheetCtx, Lucide.History, '撤回', 'recall'),
               _menuItem(sheetCtx, Lucide.Trash2, '删除', 'delete', danger: true),
               const SizedBox(height: 8),
@@ -757,6 +758,8 @@ class _WechatDmPageState extends State<WechatDmPage> {
         await _editMessage(message);
       case 'regen':
         await _regenerateMessage(message);
+      case 'snapshot':
+        await _forwardAsSnapshot(message);
       case 'recall':
         await _store.recallMessage(_chatKey, message.id);
         if (!mounted) return;
@@ -788,6 +791,53 @@ class _WechatDmPageState extends State<WechatDmPage> {
         if (!mounted) return;
         setState(() => _messages = _store.dmMessages(widget.contactName));
     }
+  }
+
+  /// 选中消息做成模拟聊天截图，选一个群/私聊转过去。
+  Future<void> _forwardAsSnapshot(WechatMessage message) async {
+    final mine = message.mine && !message.divine;
+    final persona = _store.wechatSettings().effectivePersona;
+    final speaker = mine
+        ? persona
+        : (message.sender.trim().isEmpty
+            ? widget.contactName
+            : message.sender.trim());
+    final snapshot = WechatSnapshot(
+      from: '转自：与${widget.contactName}的私聊',
+      lines: <String>['$speaker：${message.text}'],
+    );
+    final targets = <(bool, String, String)>[
+      for (final group in _store.groups())
+        (true, group.id, '群 · ${group.name}'),
+      for (final name in _store.dmSessionNames())
+        (false, name, '私聊 · $name'),
+    ];
+    if (targets.isEmpty) {
+      _toast('还没有可以转发的群或私聊');
+      return;
+    }
+    final target = await showSnapshotTargetSheet(context, targets: targets);
+    if (!mounted || target == null) return;
+    final encoded = snapshot.encode();
+    const note = '转发了一张聊天截图';
+    if (target.isGroup) {
+      await _store.appendMessage(
+        target.id,
+        sender: persona,
+        text: note,
+        mine: true,
+        snapshot: encoded,
+      );
+    } else {
+      await _store.appendDmMessage(
+        target.id,
+        text: note,
+        mine: true,
+        snapshot: encoded,
+      );
+    }
+    if (!mounted) return;
+    _toast('截图已转发到${target.isGroup ? '群' : '私聊'}');
   }
 
   Widget _menuItem(
@@ -883,6 +933,35 @@ class _WechatDmPageState extends State<WechatDmPage> {
     }
   }
 
+  /// 截图消息渲染成模拟聊天卡片，点开看大图。
+  Widget _buildDmMessageBody(WechatMessage message) {
+    final snapshot = WechatSnapshot.decode(message.snapshot);
+    if (snapshot != null) {
+      return GestureDetector(
+        onTap: () => showWechatSnapshotViewer(context, snapshot),
+        child: WechatChatSnapshotCard(snapshot: snapshot, width: 200),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          message.text,
+          style: const TextStyle(
+            fontSize: 15,
+            height: 1.42,
+            color: WechatColors.primaryText,
+          ),
+        ),
+        if (message.withImage) ...<Widget>[
+          const SizedBox(height: 6),
+          WechatEmojiImage(text: message.text, seed: message.id),
+        ],
+      ],
+    );
+  }
+
   Widget _bubbleRow(WechatMessage message, {required bool showHead}) {
     final mine = message.mine && !message.divine;
     final maxWidth = MediaQuery.of(context).size.width * 0.68;
@@ -893,24 +972,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
         color: mine ? WechatColors.mineBubble : WechatColors.otherBubble,
         borderRadius: BorderRadius.circular(5),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            message.text,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.42,
-              color: WechatColors.primaryText,
-            ),
-          ),
-          if (message.withImage) ...<Widget>[
-            const SizedBox(height: 6),
-            WechatEmojiImage(text: message.text, seed: message.id),
-          ],
-        ],
-      ),
+      child: _buildDmMessageBody(message),
     );
 
     // 长按出菜单：自己的能改，他的能重写。
