@@ -142,13 +142,42 @@ class _WechatDmPageState extends State<WechatDmPage> {
   // ---------------- 发 ----------------
 
   Future<void> _send() async {
-    final text = _input.text.trim();
-    if (text.isEmpty) return;
+    final raw = _input.text.trim();
+    if (raw.isEmpty) return;
     if (_contact == null) return;
-    _input.clear();
     final contact = _contact;
+    final otherName = contact?.name ?? widget.contactName;
+    // 打字框快捷夺舍：「对方名>xxx」这条用他身份，「我>xxx」用我自己。
+    // 私聊只有对方一个角色，名字精确匹配对方名；只作用这一条，不动 _asDivine 持久状态。
+    String? quickName;
+    var text = raw;
+    final idx = raw.indexOf('>');
+    if (idx > 0) {
+      final name = raw.substring(0, idx).trim();
+      final body = raw.substring(idx + 1).trim();
+      if (body.isNotEmpty &&
+          (name == '我' || name == otherName || name == widget.contactName)) {
+        quickName = name;
+        text = body;
+      }
+    }
+    if (text.isEmpty) return;
+    _input.clear();
+    // 优先级：我> 用我自己 > 对方名> 用对方 > 持久 _asDivine 状态。
+    final bool asDivine;
+    final String senderName;
+    if (quickName == '我') {
+      asDivine = false;
+      senderName = _settings.effectivePersona;
+    } else if (quickName != null) {
+      asDivine = true;
+      senderName = otherName;
+    } else {
+      asDivine = _asDivine;
+      senderName = asDivine ? otherName : _settings.effectivePersona;
+    }
     // 夺舍回复会结束冷场：以他的身份开口，就是要打破「先别回」。
-    if (_asDivine) unawaited(_social.clearCooldown(socialDmScope(widget.contactName)));
+    if (asDivine) unawaited(_social.clearCooldown(socialDmScope(widget.contactName)));
     // 夺舍：以他的身份发，气泡落在左边、署名他的。
     // 一般情况：署我的马甲名——**不能**用默认值（默认会填成对方的名字，
     // 于是对方下一句就成了“同一个人连发”，头像会被判成连发而不显示）。
@@ -156,14 +185,12 @@ class _WechatDmPageState extends State<WechatDmPage> {
       widget.contactName,
       text: text,
       mine: true,
-      sender: _asDivine
-          ? (contact?.name ?? widget.contactName)
-          : _settings.effectivePersona,
-      divine: _asDivine,
+      sender: senderName,
+      divine: asDivine,
       withImage: _attachImage,
     );
     // 我主动找他：好感度按「我→他」事件微涨（夺舍不算，那是替他说话）。
-    if (!_asDivine) {
+    if (!asDivine) {
       unawaited(_social.applyAffinityEvent(
         widget.contactName,
         AffinityEvent.meToThem,

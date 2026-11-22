@@ -983,19 +983,42 @@ class _WechatChatPageState extends State<WechatChatPage> {
   Future<void> _send() async {
     final group = _group;
     if (group == null) return;
-    final text = _input.text.trim();
+    var text = _input.text.trim();
     if (text.isEmpty) return;
+    // 打字框快捷夺舍：「角色名>xxx」这条用该成员身份，「我>xxx」用我自己。
+    // 只作用这一条，不动 group.divine 持久状态；名字必须精确匹配群成员，防误伤。
+    final quick = _parseQuickDivine(text, group);
+    if (quick != null) {
+      text = quick.body.trim();
+      if (text.isEmpty) return;
+    }
     // @ 要在文本里认，不能只靠点 @ 按钮时那个临时状态：
     // 计时器抢先跑、退出重进、历史消息重发，都会把临时状态弄丢。
     final mentioned = _mentionsInGroupText(text, group);
     _input.clear();
-    final divine = group.divine.trim();
-    final asDivine = divine.isNotEmpty;
+    final persistentDivine = group.divine.trim();
+    // 优先级：我> 用我自己 > 角色名> 用那个人 > 持久夺舍状态。
+    final quickName = quick?.name;
+    final bool asDivine;
+    final String senderName;
+    if (quickName == '我') {
+      asDivine = false;
+      senderName = group.effectivePersona;
+    } else if (quickName != null) {
+      asDivine = true;
+      senderName = quickName;
+    } else if (persistentDivine.isNotEmpty) {
+      asDivine = true;
+      senderName = persistentDivine;
+    } else {
+      asDivine = false;
+      senderName = group.effectivePersona;
+    }
     // 夺舍回复会结束冷场：以别人身份开口，就是要打破「先别说话」。
     if (asDivine) unawaited(_social.clearCooldown(socialGroupScope(group.id)));
     final message = await _store.appendMessage(
       group.id,
-      sender: asDivine ? divine : group.effectivePersona,
+      sender: senderName,
       text: text,
       mine: true,
       divine: asDivine,
@@ -1020,6 +1043,22 @@ class _WechatChatPageState extends State<WechatChatPage> {
     }
     _jumpToBottom();
     _restartLoop();
+  }
+
+  /// 解析打字框快捷夺舍语法「角色名>xxx」/「我>xxx」。
+  /// 只认当前群成员或「我」，名字必须精确匹配 > 前的整段，防误伤 a>b 这类普通文本。
+  /// 返回 (身份名, 去掉前缀后的正文)；没命中返回 null。
+  ({String name, String body})? _parseQuickDivine(String text, WechatGroup group) {
+    final idx = text.indexOf('>');
+    if (idx <= 0) return null;
+    final name = text.substring(0, idx).trim();
+    if (name.isEmpty) return null;
+    if (name != '我' && !group.members.any((m) => m.name.trim() == name)) {
+      return null;
+    }
+    final body = text.substring(idx + 1);
+    if (body.trim().isEmpty) return null;
+    return (name: name, body: body);
   }
 
   /// 从群消息文本里挑出 @ 了谁。只认当前群成员，长名字优先，避免短名截断。
@@ -1684,6 +1723,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   await _handleSkyAction(group, 'toggle_auto');
                 } else if (value == 'divine') {
                   await _pickDivine(group);
+                } else if (value == 'reset') {
+                  await _handleSkyAction(group, 'reset');
                 } else if (value == 'summon' ||
                     value == 'plot' ||
                     value == 'switch_topic' ||
@@ -1726,6 +1767,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   value: 'divine',
                   child: Text('切换天意：用他的身份说话'),
                 ),
+                if (group.divine.trim().isNotEmpty)
+                  const PopupMenuItem<String>(
+                    value: 'reset',
+                    child: Text('恢复成我自己'),
+                  ),
                 const PopupMenuItem<String>(
                   value: 'clear',
                   child: Text('清空聊天记录'),
