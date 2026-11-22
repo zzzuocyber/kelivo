@@ -437,6 +437,134 @@ class _WechatEditMessageDialogState extends State<WechatEditMessageDialog> {
   }
 }
 
+/// 控制剧情走向：直接手写一段剧情，作为最高指令喂给模型这一次。
+/// 取消返回 null，确定返回非空文字。
+class WechatPlotDialog extends StatefulWidget {
+  const WechatPlotDialog({super.key});
+
+  @override
+  State<WechatPlotDialog> createState() => _WechatPlotDialogState();
+}
+
+class _WechatPlotDialogState extends State<WechatPlotDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    Navigator.of(context).pop(value.isEmpty ? null : value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text(
+        '控制剧情走向',
+        style: TextStyle(fontSize: 16, color: wechatMenuInk),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          minLines: 4,
+          maxLines: 10,
+          style: const TextStyle(fontSize: 15, color: WechatColors.primaryText),
+          decoration: const InputDecoration(
+            hintText:
+                '直接写要发生的剧情：旁白、某个角色在想什么做什么、'
+                '话题怎么转、要不要收尾……自由度最高。',
+            hintStyle: TextStyle(color: WechatColors.secondaryText),
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text(
+            '取消',
+            style: TextStyle(color: WechatColors.secondaryText),
+          ),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: const Text('定下这条剧情', style: TextStyle(color: WechatColors.green)),
+        ),
+      ],
+    );
+  }
+}
+
+/// 冷场多久：手动填分钟数。取消返回 null，确定返回正数分钟。
+class WechatMinutesDialog extends StatefulWidget {
+  const WechatMinutesDialog({super.key, this.initial = 1});
+
+  final double initial;
+
+  @override
+  State<WechatMinutesDialog> createState() => _WechatMinutesDialogState();
+}
+
+class _WechatMinutesDialogState extends State<WechatMinutesDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: '${widget.initial}',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = double.tryParse(_controller.text.trim());
+    Navigator.of(context).pop(value != null && value > 0 ? value : null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text(
+        '冷场多久',
+        style: TextStyle(fontSize: 16, color: wechatMenuInk),
+      ),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        style: const TextStyle(fontSize: 15, color: WechatColors.primaryText),
+        decoration: const InputDecoration(
+          hintText: '填分钟数，例如 2 或 0.5',
+          hintStyle: TextStyle(color: WechatColors.secondaryText),
+          suffixText: '分钟',
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text(
+            '取消',
+            style: TextStyle(color: WechatColors.secondaryText),
+          ),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: const Text('确定', style: TextStyle(color: WechatColors.green)),
+        ),
+      ],
+    );
+  }
+}
+
 // ============================================================
 // 发图：跟朋友圈同一套 emoji 拼图逻辑
 // ============================================================

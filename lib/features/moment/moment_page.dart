@@ -482,7 +482,7 @@ class _MomentPageState extends State<MomentPage> {
     await _rewriteComment(post, index, comment);
   }
 
-  /// 点评论气泡：不用先选评论，直接挑人。有评论就回最新那条，没评论就回帖子本身。
+  /// 长按评论气泡图标：不用先选评论，直接挑人。有评论就回最新那条，没评论就回帖子本身。
   Future<void> _pickSummonForPost(MomentPost post) async {
     final comment = post.comments.isEmpty
         ? MomentComment(
@@ -1022,7 +1022,9 @@ class _MomentPageState extends State<MomentPage> {
             likedByMe: post.likes.contains(acting),
             onTapAvatar: () => _openAuthor(post.author),
             onTapLike: () => _toggleLike(post),
-            onTapComment: () => _pickSummonForPost(post),
+            // 评论气泡：单击=我评论；长按=召唤角色来回。
+            onTapComment: () => _openComposer(post),
+            onLongPressCommentIcon: () => _pickSummonForPost(post),
             onTapCommentLine: (comment) =>
                 _openComposer(post, replyTo: comment.author),
             onLongPressPost: _rewritingPostId == post.id

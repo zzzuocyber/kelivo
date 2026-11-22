@@ -160,6 +160,7 @@ class MomentPostCard extends StatelessWidget {
     this.onTapAvatar,
     this.onTapLike,
     this.onTapComment,
+    this.onLongPressCommentIcon,
     this.onTapCommentLine,
     this.onLongPressPost,
     this.onLongPressComment,
@@ -174,6 +175,9 @@ class MomentPostCard extends StatelessWidget {
   final VoidCallback? onTapAvatar;
   final VoidCallback? onTapLike;
   final VoidCallback? onTapComment;
+
+  /// 长按评论气泡图标：召唤菜单（单击仍是「我评论」）。
+  final VoidCallback? onLongPressCommentIcon;
 
   /// 点评论区里的某一条，就回复那个人。
   final void Function(MomentComment comment)? onTapCommentLine;
@@ -275,6 +279,7 @@ class MomentPostCard extends StatelessWidget {
                     const SizedBox(width: 16),
                     _TapIcon(
                       onTap: onTapComment,
+                      onLongPress: onLongPressCommentIcon,
                       icon: Lucide.MessageCircle,
                       color: MomentColors.secondaryText,
                     ),
@@ -472,19 +477,26 @@ class MomentPostCard extends StatelessWidget {
 }
 
 class _TapIcon extends StatelessWidget {
-  const _TapIcon({required this.icon, required this.color, this.onTap});
+  const _TapIcon({
+    required this.icon,
+    required this.color,
+    this.onTap,
+    this.onLongPress,
+  });
 
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final child = Icon(icon, size: 16, color: color);
-    if (onTap == null) return child;
+    if (onTap == null && onLongPress == null) return child;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
         child: child,

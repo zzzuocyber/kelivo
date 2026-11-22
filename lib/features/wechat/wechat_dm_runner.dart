@@ -162,6 +162,7 @@ class WechatDmReplyRunner {
         socialContext: contextText,
         directiveKind: directive.kind,
         directiveWho: directive.who,
+        directiveText: directive.text,
       );
       final text = await generator.generate(burstCount: burst);
       final parts = wechatSplitReply(text, maxParts: burst);

@@ -940,6 +940,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
     _input.clear();
     final divine = group.divine.trim();
     final asDivine = divine.isNotEmpty;
+    // 夺舍回复会结束冷场：以别人身份开口，就是要打破「先别说话」。
+    if (asDivine) unawaited(_social.clearCooldown(socialGroupScope(group.id)));
     final message = await _store.appendMessage(
       group.id,
       sender: asDivine ? divine : group.effectivePersona,
@@ -1132,6 +1134,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
         socialContext: built.text,
         directiveKind: directive.kind,
         directiveWho: directive.who,
+        directiveText: directive.text,
       );
       unawaited(_social.addTokens('group', built.tokens));
       final text = await generator.generateFor(speaker, burstCount: burst);
@@ -1243,6 +1246,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
               ),
               _skyTile(
                 sheetCtx,
+                icon: Lucide.SquarePen,
+                label: '控制剧情走向',
+                value: 'plot',
+              ),
+              _skyTile(
+                sheetCtx,
                 icon: Lucide.Shuffle,
                 label: '切换话题',
                 value: 'switch_topic',
@@ -1258,6 +1267,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
                 icon: Lucide.Moon,
                 label: '冷场一会儿',
                 value: 'cooldown',
+              ),
+              _skyTile(
+                sheetCtx,
+                icon: Lucide.Sun,
+                label: '结束冷场',
+                value: 'clear_cooldown',
               ),
               _skyTile(
                 sheetCtx,
@@ -1319,6 +1334,23 @@ class _WechatChatPageState extends State<WechatChatPage> {
       case 'summon':
         await _summon(group);
         return;
+      case 'plot':
+        // 控制剧情走向：手写一段剧情，作为最高指令演这一次。
+        // 输入期间把自动循环停一下，免得计时器抢先把剧情指令取走。
+        _timer?.cancel();
+        final plot = await showDialog<String>(
+          context: context,
+          builder: (_) => const WechatPlotDialog(),
+        );
+        if (!mounted || plot == null || plot.trim().isEmpty) {
+          _restartLoop();
+          return;
+        }
+        await _social.clearCooldown(scope);
+        await _social.setDirective(scope, 'plot', text: plot.trim());
+        // 立即演一次，绕过自动回复开关；演完由 _tick 内部按开关决定是否续。
+        await _tick(force: true);
+        return;
       case 'switch_topic':
       case 'end_topic':
         await _social.setDirective(scope, action);
@@ -1329,11 +1361,27 @@ class _WechatChatPageState extends State<WechatChatPage> {
         if (_social.autoReply(group.id)) _tick();
         return;
       case 'cooldown':
-        // 冷场：这段时间不主动说话，到点自动恢复。
-        await _social.setCooldown(scope, const Duration(seconds: 60));
+        // 冷场：手动填分钟数，这段时间不主动说话，到点自动恢复。
         _timer?.cancel();
-        _toast('天意已定：先冷场一会儿（约 1 分钟）');
-        _timer = Timer(const Duration(seconds: 61), () => _restartLoop());
+        final minutes = await showDialog<double>(
+          context: context,
+          builder: (_) => const WechatMinutesDialog(),
+        );
+        if (!mounted || minutes == null) {
+          _restartLoop();
+          return;
+        }
+        final cool = Duration(milliseconds: (minutes * 60 * 1000).round());
+        await _social.setCooldown(scope, cool);
+        _toast('天意已定：冷场 $minutes 分钟');
+        _timer = Timer(cool + const Duration(seconds: 1), () => _restartLoop());
+        return;
+      case 'clear_cooldown':
+        // 结束冷场：立刻清掉冷却，恢复主动发言。
+        await _social.clearCooldown(scope);
+        _toast('天意已定：冷场结束');
+        _timer?.cancel();
+        _restartLoop();
         return;
       case 'toggle_auto':
         final next = !_social.autoReply(group.id);
@@ -1402,8 +1450,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
       ),
     );
     if (!mounted || picked == null) return;
+    final scope = socialGroupScope(group.id);
+    // 召唤会结束冷场：冷场是「先别说话」，现在是天意要他开口。
+    await _social.clearCooldown(scope);
     await _social.setDirective(
-      socialGroupScope(group.id),
+      scope,
       'summon',
       who: picked,
     );
@@ -1575,9 +1626,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
                 } else if (value == 'divine') {
                   await _pickDivine(group);
                 } else if (value == 'summon' ||
+                    value == 'plot' ||
                     value == 'switch_topic' ||
                     value == 'end_topic' ||
-                    value == 'cooldown') {
+                    value == 'cooldown' ||
+                    value == 'clear_cooldown') {
                   await _handleSkyAction(group, value);
                 }
               },
@@ -1591,6 +1644,10 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   child: Text('召唤角色发言'),
                 ),
                 const PopupMenuItem<String>(
+                  value: 'plot',
+                  child: Text('控制剧情走向'),
+                ),
+                const PopupMenuItem<String>(
                   value: 'switch_topic',
                   child: Text('切换话题'),
                 ),
@@ -1601,6 +1658,10 @@ class _WechatChatPageState extends State<WechatChatPage> {
                 const PopupMenuItem<String>(
                   value: 'cooldown',
                   child: Text('冷场一会儿'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'clear_cooldown',
+                  child: Text('结束冷场'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'divine',

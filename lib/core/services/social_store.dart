@@ -164,21 +164,28 @@ class SocialTopicState {
 /// 一次性天意指令：写进去后，下一次生成时取走并清掉。
 /// [kind] 是 summon / switch_topic / end_topic / cooldown / none；
 /// [who] 是召唤时指定的角色，其他指令留空。
+/// [text] 是「控制剧情走向」时我手写的剧情文字，只有 plot 这类指令用。
 class SocialDirective {
-  const SocialDirective({this.kind = 'none', this.who = ''});
+  const SocialDirective({this.kind = 'none', this.who = '', this.text = ''});
 
   final String kind;
   final String who;
+  final String text;
 
   bool get isNone => kind.isEmpty || kind == 'none';
 
-  Map<String, dynamic> toJson() => <String, dynamic>{'kind': kind, 'who': who};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'kind': kind,
+        'who': who,
+        'text': text,
+      };
 
   static SocialDirective? fromJson(Object? raw) {
     if (raw is! Map) return null;
     return SocialDirective(
       kind: (raw['kind'] ?? 'none').toString(),
       who: (raw['who'] ?? '').toString(),
+      text: (raw['text'] ?? '').toString(),
     );
   }
 
@@ -429,6 +436,25 @@ class SocialStore {
     });
   }
 
+  /// 结束冷场：立刻清掉冷却，恢复主动发言。
+  /// 「结束冷场」按钮、召唤、夺舍回复都会走这里。
+  Future<void> clearCooldown(String scope) async {
+    await _update((extras) {
+      final next = Map<String, dynamic>.from(extras);
+      final raw = Map<String, dynamic>.from(
+        next[socialTopicsKey] is Map ? next[socialTopicsKey] as Map : {},
+      );
+      final previous = SocialTopicState.fromJson(raw[scope]) ?? const SocialTopicState();
+      raw[scope] = SocialTopicState(
+        topic: previous.topic,
+        active: previous.active,
+        cooldownUntil: 0,
+      ).toJson();
+      next[socialTopicsKey] = raw;
+      return next;
+    });
+  }
+
   // ---------------- 自动回复（按群，单群生效） ----------------
 
   Map<String, bool> autoReplyMap() {
@@ -490,13 +516,19 @@ class SocialStore {
       SocialDirective.none;
 
   /// 写入一条一次性指令，等下一次生成取走。
-  Future<void> setDirective(String scope, String kind, {String who = ''}) async {
+  /// [text] 只有「控制剧情走向」(plot) 用，传我手写的剧情文字。
+  Future<void> setDirective(
+    String scope,
+    String kind, {
+    String who = '',
+    String text = '',
+  }) async {
     await _update((extras) {
       final next = Map<String, dynamic>.from(extras);
       final raw = Map<String, dynamic>.from(
         next[socialDirectiveKey] is Map ? next[socialDirectiveKey] as Map : {},
       );
-      raw[scope] = SocialDirective(kind: kind, who: who).toJson();
+      raw[scope] = SocialDirective(kind: kind, who: who, text: text).toJson();
       next[socialDirectiveKey] = raw;
       return next;
     });
