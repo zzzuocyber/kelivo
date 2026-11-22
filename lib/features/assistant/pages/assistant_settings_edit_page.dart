@@ -68,6 +68,7 @@ import '../../../utils/avatar_cache.dart';
 import '../../../utils/platform_utils.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 import '../utils/assistant_edit_tab_layout.dart';
+import '../../group_chat/group_chat_tab.dart' show buildGroupChatTab;
 import 'assistant_regex_tab.dart';
 import 'avatar_crop_page.dart';
 import 'assistant_settings_edit_skills_tab.dart';
@@ -163,6 +164,12 @@ List<_AssistantEditTabSpec> _assistantEditTabSpecs(
       label: l10n.assistantEditPageRegexTab,
       icon: Lucide.CaseSensitive,
       child: AssistantRegexTab(assistantId: assistantId),
+    ),
+    _AssistantEditTabSpec(
+      id: assistantEditTabGroupChat,
+      label: '群聊',
+      icon: Lucide.MessagesSquare,
+      child: buildGroupChatTab(assistantId),
     ),
   ];
 }
