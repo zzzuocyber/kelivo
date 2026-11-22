@@ -1,5 +1,4 @@
 import 'dart:convert';
-import '../features/group_chat/group_chat_models.dart';
 import 'assistant_regex.dart';
 import 'health_data_type.dart';
 import 'memory_entry.dart';
@@ -104,9 +103,6 @@ class Assistant {
   // Regex replacement rules
   final List<AssistantRegex> regexRules;
 
-  /// 助手的群聊模式配置（默认关闭）。独立结构，不影响原有任何字段。
-  final GroupChatConfig groupChat;
-
   const Assistant({
     required this.id,
     required this.name,
@@ -157,7 +153,6 @@ class Assistant {
     this.useIso8601TimeFormat = false,
     this.presetMessages = const <PresetMessage>[],
     this.regexRules = const <AssistantRegex>[],
-    this.groupChat = const GroupChatConfig(),
   });
 
   Assistant copyWith({
@@ -209,7 +204,6 @@ class Assistant {
     bool? useIso8601TimeFormat,
     List<PresetMessage>? presetMessages,
     List<AssistantRegex>? regexRules,
-    GroupChatConfig? groupChat,
     bool clearChatModel = false,
     bool clearDefaultWorkspaceId = false,
     bool clearSkillIds = false,
@@ -301,7 +295,6 @@ class Assistant {
       useIso8601TimeFormat: useIso8601TimeFormat ?? this.useIso8601TimeFormat,
       presetMessages: presetMessages ?? this.presetMessages,
       regexRules: regexRules ?? this.regexRules,
-      groupChat: groupChat ?? this.groupChat,
     );
   }
 
@@ -357,7 +350,6 @@ class Assistant {
     'useIso8601TimeFormat': useIso8601TimeFormat,
     'presetMessages': PresetMessage.encodeList(presetMessages),
     'regexRules': regexRules.map((e) => e.toJson()).toList(),
-    'groupChat': groupChat.toJson(),
   };
 
   static ReasoningRequest? _readReasoning(Object? value) {
@@ -519,7 +511,6 @@ class Assistant {
       }
       return const <AssistantRegex>[];
     })(),
-    groupChat: GroupChatConfig.fromJson(json['groupChat']),
   );
 
   static String memorySmartAddModeToString(MemorySmartAddMode mode) {

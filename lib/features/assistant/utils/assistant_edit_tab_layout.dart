@@ -7,7 +7,6 @@ const String assistantEditTabSkills = 'skills';
 const String assistantEditTabQuickPhrase = 'quickPhrase';
 const String assistantEditTabCustom = 'custom';
 const String assistantEditTabRegex = 'regex';
-const String assistantEditTabGroupChat = 'groupChat';
 
 const List<String> defaultAssistantEditTabIds = [
   assistantEditTabBasic,
@@ -19,7 +18,6 @@ const List<String> defaultAssistantEditTabIds = [
   assistantEditTabQuickPhrase,
   assistantEditTabCustom,
   assistantEditTabRegex,
-  assistantEditTabGroupChat,
 ];
 
 List<String> orderAssistantEditTabIds({
