@@ -1417,7 +1417,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
               const Padding(
                 padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
                 child: Text(
-                  '天意：等会儿谁会自己冒出来说话',
+                  '天意：选谁立刻冒出来说话',
                   style: TextStyle(
                     fontSize: 13,
                     color: WechatColors.secondaryText,
@@ -1458,21 +1458,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
       'summon',
       who: picked,
     );
-    _toast('天意已定：$picked 一会儿会自己开口');
-    // 召唤要立刻见效：自动回复开着就马上催一轮，关着也破例让他冒这一句。
-    if (_social.autoReply(group.id)) {
-      _tick();
-    } else {
-      await _tickOnceForced(picked);
-    }
-  }
-
-  /// 自动回复关着时，召唤仍然让他冒一句：用 force 绕过开关，跑完不续循环。
-  Future<void> _tickOnceForced(String who) async {
-    if (_group == null) return;
-    await _tick(force: true);
-    if (!mounted) return;
+    _toast('天意已定：$picked 这就开口');
+    // 召唤必须即时生效：无条件 force 跑一轮，绕过自动回复开关和页面总开关。
+    // 先掐掉在等的计时器，免得这一轮刚生成、定时器又紧接着补一句。
+    // 跑完由 _tick 内部按开关决定要不要续上循环，别在这里手动 cancel。
     _timer?.cancel();
+    await _tick(force: true);
   }
 
   Future<void> _pickDivine(WechatGroup group) async {
