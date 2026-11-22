@@ -117,6 +117,60 @@ String wechatWorldText(
   throw const WechatServiceException('model_missing');
 }
 
+/// 天意指令的标记。冷场/拒绝时模型只输出它，外面认出来就不建消息。
+const String wechatNoSpeakMark = '[[冷场]]';
+
+bool wechatHasNoSpeakMark(String text) =>
+    text.replaceAll(RegExp(r'\s'), '') == wechatNoSpeakMark;
+
+/// 把一次性天意指令写进「这次的规矩」。
+///
+/// 召唤走天意叙事：被叫的人完全不知道有人叫他，只当自己忽然想开口。
+/// 切话题/结束/冷场也都是「他自己念头一转」，不许提是系统安排的。
+void _writeDirectiveRules(
+  StringBuffer buffer,
+  String speakerName, {
+  String kind = '',
+  String who = '',
+}) {
+  if (kind.isEmpty || kind == 'none') return;
+  switch (kind) {
+    case 'summon':
+      buffer.writeln(
+        '- 这一轮，你忽然很想开口说点什么，就当是自己一念之间冒出来的念头。'
+        '绝对不要提「被叫来」「有人叫我」「谁喊我」「召唤」这类话，'
+        '也不要表现出是被人安排的——你根本不知道有人在等你说话。',
+      );
+      buffer.writeln(
+        '- 如果你此刻确实在忙、在休息或在做别的事，可以只说一句很短的话婉拒，'
+        '比如「在忙晚点说」「刚睡下」之类，同样别提是谁叫你的。',
+      );
+      if (who.trim().isNotEmpty && who.trim() != speakerName) {
+        buffer.writeln(
+          '- 你接下来很想跟「${who.trim()}」说两句，自然地朝他开口，别点破原因。',
+        );
+      }
+      break;
+    case 'switch_topic':
+      buffer.writeln(
+        '- 这一轮，你忽然想到另一件事，自然地把话题岔开，聊点新的。'
+        '不要说「我们换个话题吧」这种生硬的话，就像随口提了一嘴别的。',
+      );
+      break;
+    case 'end_topic':
+      buffer.writeln(
+        '- 这一轮，这个话题差不多聊到头了，你随口收个尾，'
+        '像「行吧」「先这样」「不说了」这种自然收场，不要总结、不要正式告别。',
+      );
+      break;
+    case 'cooldown':
+      buffer.writeln(
+        '- 这一轮，你此刻没什么想说的，就只输出 $wechatNoSpeakMark，一个字都别多写。',
+      );
+      break;
+  }
+}
+
 /// 群里共用的说话规矩。
 ///
 /// [burstCount] 是这次抽到的条数（1~7）：抽到几条就写几行，一行一条。
@@ -165,6 +219,9 @@ class WechatGenerator {
     required this.history,
     this.contacts = const <String, WechatContact>{},
     this.worldPrompt = '',
+    this.socialContext = '',
+    this.directiveKind = '',
+    this.directiveWho = '',
   });
 
   final SettingsProvider settings;
@@ -177,6 +234,13 @@ class WechatGenerator {
 
   /// 「我 → 设置 → 世界观」里手写的设定，全局生效。
   final String worldPrompt;
+
+  /// 跨场景记忆 + 当前时间地点处境，拼成一段注入 system。
+  final String socialContext;
+
+  /// 一次性天意指令（召唤/切话题/结束/冷场）。
+  final String directiveKind;
+  final String directiveWho;
 
   /// 真正去要一句话。[speaker] 是这次轮到的人。
   ///
@@ -199,6 +263,10 @@ class WechatGenerator {
       reasoning: ReasoningRequest.auto,
       requestTimeout: wechatRequestTimeout,
     );
+    // 召唤/冷场时，模型可以用暗号表示「这会儿不想开口」：静默丢掉整轮。
+    if (wechatHasNoSpeakMark(result.text)) {
+      throw const WechatNoReplyException();
+    }
     final text = cleanReply(result.text, speaker.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
@@ -267,10 +335,23 @@ class WechatGenerator {
       buffer.writeln();
     }
 
+    final context = socialContext.trim();
+    if (context.isNotEmpty) {
+      buffer.writeln('【此刻的处境与记忆】');
+      buffer.writeln(context);
+      buffer.writeln();
+    }
+
     buffer.writeln('【这次的规矩】');
     _writeChatRules(buffer, speaker.name, burstCount: burstCount);
     buffer.writeln('- 群里有好几个人，说话可以接着上面某个人，但不是每次都非得接。');
     buffer.writeln('- 消息里带 @名字 的是专门叫那个人，被 @ 的人优先接这句。');
+    _writeDirectiveRules(
+      buffer,
+      speaker.name,
+      kind: directiveKind,
+      who: directiveWho,
+    );
     return buffer.toString().trim();
   }
 
@@ -328,6 +409,9 @@ class WechatDmGenerator {
     this.worldPrompt = '',
     this.selfInitiated = false,
     this.allowNoReply = false,
+    this.socialContext = '',
+    this.directiveKind = '',
+    this.directiveWho = '',
   });
 
   final SettingsProvider settings;
@@ -353,6 +437,11 @@ class WechatDmGenerator {
   /// 只有开了「会不搭理人」且没被强制回复时才是 true。
   final bool allowNoReply;
 
+  /// 跨场景记忆 + 当前处境；一次性天意指令。
+  final String socialContext;
+  final String directiveKind;
+  final String directiveWho;
+
   /// [burstCount] 是这次抽到的连发条数（1~7），写进提示词让模型按行数回。
   Future<String> generate({int burstCount = 1}) async {
     final target = wechatResolveModel(
@@ -377,7 +466,8 @@ class WechatDmGenerator {
       requestTimeout: wechatRequestTimeout,
     );
     // 暗号要在 cleanReply 之前认：cleanReply 会剥行首括号，别让标记被吃掉。
-    if (allowNoReply && wechatHasNoReplyMark(result.text)) {
+    if (wechatHasNoSpeakMark(result.text) ||
+        (allowNoReply && wechatHasNoReplyMark(result.text))) {
       throw const WechatNoReplyException();
     }
     final text = cleanReply(result.text, contact.name);
@@ -432,9 +522,22 @@ class WechatDmGenerator {
       buffer.writeln();
     }
 
+    final context = socialContext.trim();
+    if (context.isNotEmpty) {
+      buffer.writeln('【此刻的处境与记忆】');
+      buffer.writeln(context);
+      buffer.writeln();
+    }
+
     buffer.writeln('【这次的规矩】');
     _writeChatRules(buffer, contact.name, burstCount: burstCount);
     buffer.writeln('- 这是两个人的私聊，没有别人在场，说话可以更随意一点。');
+    _writeDirectiveRules(
+      buffer,
+      contact.name,
+      kind: directiveKind,
+      who: directiveWho,
+    );
     if (selfInitiated) {
       buffer.writeln(
         '- 这次是你自己突然想找「$persona」聊聊，主动给他发消息，'

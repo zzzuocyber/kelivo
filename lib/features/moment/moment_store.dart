@@ -135,6 +135,26 @@ class MomentStore {
 
   Map<String, MomentAssets> readAssets() => momentAssetsOf(findConversation());
 
+  /// 跨场景记忆：扫朋友圈所有帖子，挑出 [name] 发过的动态和留过的评论，
+  /// 返回 `朋友圈 · 内容` 的行，给社交上下文构建器用。
+  List<String> memoryLinesFor(String name, {int limit = 40}) {
+    final posts = momentPostsOf(findConversation());
+    final out = <String>[];
+    for (final post in posts) {
+      if (!post.isMine && post.author.trim() == name && post.text.trim().isNotEmpty) {
+        out.add('朋友圈：发了「${post.text}」');
+        if (out.length >= limit) return out;
+      }
+      for (final comment in post.comments) {
+        if (comment.author.trim() == name && comment.text.trim().isNotEmpty) {
+          out.add('朋友圈：评论「${comment.text}」');
+          if (out.length >= limit) return out;
+        }
+      }
+    }
+    return out;
+  }
+
   /// 换掉某个角色（或马甲）的一张图；传 null 就是移除。
   Future<void> saveAssets(
     String key, {

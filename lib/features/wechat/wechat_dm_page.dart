@@ -7,7 +7,9 @@ import 'package:provider/provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_store.dart';
 import '../../icons/lucide_adapter.dart';
+import '../moment/moment_store.dart';
 import 'wechat_dm_runner.dart';
 import 'wechat_models.dart';
 import 'wechat_service.dart';
@@ -33,6 +35,8 @@ class WechatDmPage extends StatefulWidget {
 
 class _WechatDmPageState extends State<WechatDmPage> {
   late WechatStore _store;
+  late SocialStore _social;
+  late MomentStore _momentStore;
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _focus = FocusNode();
@@ -61,7 +65,10 @@ class _WechatDmPageState extends State<WechatDmPage> {
   @override
   void initState() {
     super.initState();
-    _store = WechatStore(context.read<ChatService>());
+    final chat = context.read<ChatService>();
+    _store = WechatStore(chat);
+    _social = SocialStore(chat);
+    _momentStore = MomentStore(chat);
     WechatDmReplyRunner.instance.addListener(_onReplyChanged);
     _reload();
     unawaited(_store.markRead(WechatStore.dmKey(widget.contactName)));
@@ -164,6 +171,11 @@ class _WechatDmPageState extends State<WechatDmPage> {
   /// 等待和生成都交给后台执行器，退出页面也不会停。
   void _scheduleReply({Duration? summonDelay, bool forceReply = false}) {
     if (WechatDmReplyRunner.instance.isPending(_chatKey)) return;
+    // 冷场期内对方不主动回（召唤/天意强制发起的除外）。
+    if (!forceReply &&
+        _social.topic(socialDmScope(widget.contactName)).isCoolingDown) {
+      return;
+    }
     final isSummon = summonDelay != null;
     final delay = summonDelay ?? _replyDelay();
     WechatDmReplyRunner.instance.schedule(
@@ -173,9 +185,67 @@ class _WechatDmPageState extends State<WechatDmPage> {
       settings: context.read<SettingsProvider>(),
       worldBooks: context.read<WorldBookProvider>(),
       delay: delay,
+      social: _social,
+      momentStore: _momentStore,
       selfInitiated: isSummon,
       forceReply: forceReply || isSummon,
     );
+  }
+
+  /// 点聊天空白处 / 三点菜单：私聊的天意系统（切话题/结束/冷场）。
+  Future<void> _showSkyMenu() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _skyTile(sheetCtx, Lucide.Shuffle, '切换话题', 'switch_topic'),
+              _skyTile(sheetCtx, Lucide.CheckCircle, '结束话题', 'end_topic'),
+              _skyTile(sheetCtx, Lucide.Moon, '冷场一会儿', 'cooldown'),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    await _handleSkyAction(action);
+  }
+
+  Widget _skyTile(
+    BuildContext sheetCtx,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return ListTile(
+      leading: Icon(icon, size: 20, color: wechatMenuInk),
+      title: Text(label, style: const TextStyle(fontSize: 15, color: wechatMenuInk)),
+      onTap: () => Navigator.of(sheetCtx).pop(value),
+    );
+  }
+
+  Future<void> _handleSkyAction(String action) async {
+    final scope = socialDmScope(widget.contactName);
+    switch (action) {
+      case 'switch_topic':
+      case 'end_topic':
+        await _social.setDirective(scope, action);
+        _toast(action == 'switch_topic' ? '天意已定：换个话题' : '天意已定：话题收尾');
+        // 让他接一句把天意演出来。
+        _scheduleReply(forceReply: true);
+        return;
+      case 'cooldown':
+        await _social.setCooldown(scope, const Duration(seconds: 60));
+        _toast('天意已定：先冷场一会儿（约 1 分钟）');
+        return;
+    }
   }
 
   /// 磨多久由「这个人自己的回复间隔」决定（第三处间隔：单角色私聊）。
@@ -365,11 +435,28 @@ class _WechatDmPageState extends State<WechatDmPage> {
                   setState(() => _asDivine = !_asDivine);
                 }
                 if (value == 'delete') await _deleteChat();
+                if (value == 'switch_topic' ||
+                    value == 'end_topic' ||
+                    value == 'cooldown') {
+                  await _handleSkyAction(value);
+                }
               },
               itemBuilder: (_) => <PopupMenuEntry<String>>[
                 PopupMenuItem<String>(
                   value: 'divine',
                   child: Text(_asDivine ? '恢复成我自己说话' : '天意：用他的身份说话'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'switch_topic',
+                  child: Text('切换话题'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'end_topic',
+                  child: Text('结束话题'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'cooldown',
+                  child: Text('冷场一会儿'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'interval',
@@ -383,18 +470,31 @@ class _WechatDmPageState extends State<WechatDmPage> {
             ),
           ],
         ),
-        body: AnimatedPadding(
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: Column(
-            children: <Widget>[
-              Expanded(child: _messageList()),
-              _inputBar(),
-            ],
-          ),
+        // 键盘弹起时不把整页顶上去：消息列表留在原位，只有输入栏浮到键盘上方。
+        body: Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _focus.unfocus(),
+                onLongPress: _showSkyMenu,
+                child: _messageList(),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: _inputBar(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -442,7 +542,8 @@ class _WechatDmPageState extends State<WechatDmPage> {
     }
     return ListView(
       controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
+      // 底部留出输入栏高度：消息列表不随键盘移动，输入栏浮在上面。
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 72),
       children: items,
     );
   }

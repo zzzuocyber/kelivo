@@ -7,7 +7,10 @@ import 'package:provider/provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_context_builder.dart';
+import '../../core/services/social_store.dart';
 import '../../icons/lucide_adapter.dart';
+import '../moment/moment_store.dart';
 import 'wechat_models.dart';
 import 'wechat_contacts_page.dart';
 import 'wechat_dm_page.dart';
@@ -387,10 +390,15 @@ class _WechatPageState extends State<WechatPage> {
 
   /// 只有点了「新建群聊」才会走到这里。
   Future<void> _createGroup() async {
+    // 建群时先定群主：可以从通讯录里挑一个角色，也可以是我自己。
+    // 群主只是名义——拉人/踢人以他的名字发系统消息，权限不变。
+    final owner = await _pickOwner();
+    if (!mounted || owner == null) return;
     // 新群默认用微信设置里那几本世界书，不选也能马上有人设。
     final group = await _store.createGroup(
       name: '新群聊',
       bookIds: _store.wechatSettings().bookIds,
+      owner: owner,
     );
     if (!mounted) return;
     _reload();
@@ -404,6 +412,64 @@ class _WechatPageState extends State<WechatPage> {
       await _openChat(group.id);
       _reload();
     }
+  }
+
+  /// 建群时选群主。返回 null = 用户取消建群；返回空串 = 群主是我。
+  Future<String?> _pickOwner() async {
+    final contacts = _contacts;
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetCtx) => Theme(
+        data: wechatLightTheme(),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Padding(
+                padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
+                child: Text(
+                  '谁来当群主（群主只是名义，拉人踢人以他的名字发）',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: WechatColors.secondaryText,
+                  ),
+                ),
+              ),
+              const Divider(height: 0.5, thickness: 0.5),
+              ListTile(
+                leading: const Icon(
+                  Lucide.User,
+                  size: 20,
+                  color: wechatMenuInk,
+                ),
+                title: const Text(
+                  '我自己',
+                  style: TextStyle(fontSize: 15, color: wechatMenuInk),
+                ),
+                onTap: () => Navigator.of(sheetCtx).pop(''),
+              ),
+              for (final contact in contacts)
+                ListTile(
+                  leading: WechatAvatarText(
+                    name: contact.name,
+                    size: 34,
+                    imagePath: _avatars[contact.name],
+                  ),
+                  title: Text(
+                    contact.name,
+                    style: const TextStyle(fontSize: 15, color: wechatMenuInk),
+                  ),
+                  onTap: () => Navigator.of(sheetCtx).pop(contact.name),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ---------------- 界面 ----------------
@@ -767,6 +833,8 @@ class WechatChatPage extends StatefulWidget {
 
 class _WechatChatPageState extends State<WechatChatPage> {
   late WechatStore _store;
+  late SocialStore _social;
+  late MomentStore _momentStore;
   final WechatScheduler _scheduler = WechatScheduler();
   final Random _burstRandom = Random();
   final TextEditingController _input = TextEditingController();
@@ -810,7 +878,10 @@ class _WechatChatPageState extends State<WechatChatPage> {
   @override
   void initState() {
     super.initState();
-    _store = WechatStore(context.read<ChatService>());
+    final chat = context.read<ChatService>();
+    _store = WechatStore(chat);
+    _social = SocialStore(chat);
+    _momentStore = MomentStore(chat);
     _group = _store.group(widget.groupId);
     _reload();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -838,6 +909,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
         for (final contact in _store.contacts()) contact.name: contact,
       };
       _avatars = _store.avatarPaths();
+      _autoLoop = _social.autoReply(group.id);
     });
     // 进来就算读过了，会话列表的红点会消掉。
     unawaited(_store.markRead(widget.groupId));
@@ -977,17 +1049,30 @@ class _WechatChatPageState extends State<WechatChatPage> {
 
   void _restartLoop({Duration? delay}) {
     _timer?.cancel();
-    if (!_autoLoop || _group == null) return;
+    final group = _group;
+    // 自动回复：页面开关 + 单群开关（存在 social store）都要开才转。
+    if (!_autoLoop || group == null || !_social.autoReply(group.id)) return;
+    // 冷场期内不主动说话，等冷却结束再续上。
+    final cooling = _social.topic(socialGroupScope(group.id)).cooldownUntil;
+    if (cooling > DateTime.now().millisecondsSinceEpoch) {
+      _timer = Timer(
+        Duration(milliseconds: cooling - DateTime.now().millisecondsSinceEpoch + 200),
+        () => _restartLoop(),
+      );
+      return;
+    }
     _timer = Timer(
-      delay ?? _scheduler.nextDelay(_group!, settings: _store.wechatSettings()),
+      delay ?? _scheduler.nextDelay(group, settings: _store.wechatSettings()),
       () => _tick(),
     );
   }
 
-  Future<void> _tick() async {
-    if (!mounted || !_autoLoop) return;
+  Future<void> _tick({bool force = false}) async {
+    if (!mounted) return;
+    if (!force && !_autoLoop) return;
     final group = _group;
-    if (group == null) return;
+    // 召唤是破例的一次发言，即使这个群关了自动回复也要让他冒这句。
+    if (group == null || (!force && !_social.autoReply(group.id))) return;
     // 被 @ 的人优先：说了叫谁就一定是谁，但等的间隔还是按群聊那套。
     final forced = _pendingSpeakers.isEmpty ? null : _pendingSpeakers.first;
     WechatMember? wanted;
@@ -1001,14 +1086,42 @@ class _WechatChatPageState extends State<WechatChatPage> {
       // 名字对不上（人退群了/改名了）就把这个死队列项丢掉，别卡住后面的人。
       if (wanted == null && mounted) _pendingSpeakers.removeAt(0);
     }
-    final speaker = wanted ?? _scheduler.pickSpeaker(group, _messages);
-    if (speaker == null) return;
+    // 一次性天意指令：召唤时强制让被叫的角色这一轮说话。
+    final scope = socialGroupScope(group.id);
+    final directive = await _social.takeDirective(scope);
+    WechatMember? speaker = wanted;
+    if (!directive.isNone && directive.kind == 'summon') {
+      for (final member in group.members) {
+        if (member.name.trim() == directive.who.trim()) {
+          speaker = member;
+          break;
+        }
+      }
+    }
+    speaker ??= _scheduler.pickSpeaker(group, _messages);
+    if (speaker == null) {
+      _restartLoop();
+      return;
+    }
     final isForced = wanted != null;
     final speakerName = speaker.name;
     // 等待和生成期间都静默：打字只在消息落地前短暂亮一下。
     try {
       final wechatSettings = _store.wechatSettings();
       final burst = wechatBurstCount(wechatSettings.burstPreset, _burstRandom);
+      // 跨场景记忆 + 此刻处境：让角色记得自己在朋友圈/别处聊过的事。
+      final memories = <String>[
+        ..._momentStore.memoryLinesFor(speakerName),
+        ..._store.memoryLinesFor(speakerName, excludeKey: group.id),
+      ];
+      final whereabouts = _social.whereabouts(speakerName);
+      final built = SocialContextBuilder.build(
+        name: speakerName,
+        scene: 'group',
+        memoryLines: memories,
+        where: whereabouts.promptLine,
+        store: _social,
+      );
       final generator = WechatGenerator(
         settings: context.read<SettingsProvider>(),
         worldBooks: context.read<WorldBookProvider>(),
@@ -1016,7 +1129,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
         history: wechatRecentContext(_messages),
         contacts: _contactModels,
         worldPrompt: wechatSettings.worldPrompt,
+        socialContext: built.text,
+        directiveKind: directive.kind,
+        directiveWho: directive.who,
       );
+      unawaited(_social.addTokens('group', built.tokens));
       final text = await generator.generateFor(speaker, burstCount: burst);
       if (!mounted) return;
       // 抽到几条就按几条拆，一条一个气泡。
@@ -1051,6 +1168,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
         _messages = <WechatMessage>[..._messages, ...added];
       });
       _jumpToBottom();
+      _restartLoop();
+    } on WechatNoReplyException catch (_) {
+      // 天意召唤/冷场：这个角色这会儿不想开口，静默跳过，不算失败。
+      if (!mounted) return;
+      setState(() => _typingName = null);
       _restartLoop();
     } on WechatServiceException catch (error) {
       if (!mounted) return;
@@ -1110,53 +1232,51 @@ class _WechatChatPageState extends State<WechatChatPage> {
       builder: (sheetCtx) => Theme(
         data: wechatLightTheme(),
         child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: ListView(
+            shrinkWrap: true,
             children: <Widget>[
-              ListTile(
-                leading: const Icon(Lucide.Eye, size: 20, color: wechatMenuInk),
-                title: Text(
-                  _showDivineMark ? '隐藏天意消息' : '查看天意消息',
-                  style: const TextStyle(fontSize: 15, color: wechatMenuInk),
-                ),
-                onTap: () => Navigator.of(sheetCtx).pop('mark'),
+              _skyTile(
+                sheetCtx,
+                icon: Lucide.Sparkles,
+                label: '召唤角色发言',
+                value: 'summon',
               ),
-              ListTile(
-                leading: const Icon(
-                  Lucide.MessageCircle,
-                  size: 20,
-                  color: wechatMenuInk,
-                ),
-                title: const Text(
-                  '召唤：叫他私聊我',
-                  style: TextStyle(fontSize: 15, color: wechatMenuInk),
-                ),
-                onTap: () => Navigator.of(sheetCtx).pop('summon'),
+              _skyTile(
+                sheetCtx,
+                icon: Lucide.Shuffle,
+                label: '切换话题',
+                value: 'switch_topic',
               ),
-              ListTile(
-                leading: const Icon(
-                  Lucide.User,
-                  size: 20,
-                  color: wechatMenuInk,
-                ),
-                title: const Text(
-                  '切换天意：用他的身份说话',
-                  style: TextStyle(fontSize: 15, color: wechatMenuInk),
-                ),
-                onTap: () => Navigator.of(sheetCtx).pop('divine'),
+              _skyTile(
+                sheetCtx,
+                icon: Lucide.CheckCircle,
+                label: '结束话题',
+                value: 'end_topic',
+              ),
+              _skyTile(
+                sheetCtx,
+                icon: Lucide.Moon,
+                label: '冷场一会儿',
+                value: 'cooldown',
+              ),
+              _skyTile(
+                sheetCtx,
+                icon: Lucide.Eye,
+                label: _showDivineMark ? '隐藏天意消息' : '查看天意消息',
+                value: 'mark',
+              ),
+              _skyTile(
+                sheetCtx,
+                icon: Lucide.User,
+                label: '切换天意：用他的身份说话',
+                value: 'divine',
               ),
               if (group.divine.trim().isNotEmpty)
-                ListTile(
-                  leading: const Icon(
-                    Lucide.RotateCcw,
-                    size: 20,
-                    color: wechatMenuInk,
-                  ),
-                  title: const Text(
-                    '恢复成我自己',
-                    style: TextStyle(fontSize: 15, color: wechatMenuInk),
-                  ),
-                  onTap: () => Navigator.of(sheetCtx).pop('reset'),
+                _skyTile(
+                  sheetCtx,
+                  icon: Lucide.RotateCcw,
+                  label: '恢复成我自己',
+                  value: 'reset',
                 ),
             ],
           ),
@@ -1164,27 +1284,71 @@ class _WechatChatPageState extends State<WechatChatPage> {
       ),
     );
     if (!mounted || action == null) return;
-    if (action == 'mark') {
-      setState(() => _showDivineMark = !_showDivineMark);
-      return;
-    }
-    if (action == 'reset') {
-      final next = group.copyWith(divine: '');
-      await _store.saveGroup(next);
-      if (!mounted) return;
-      setState(() => _group = next);
-      return;
-    }
-    if (action == 'divine') {
-      await _pickDivine(group);
-      return;
-    }
-    if (action == 'summon') {
-      await _summon(group);
+    await _handleSkyAction(group, action);
+  }
+
+  Widget _skyTile(
+    BuildContext sheetCtx, {
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return ListTile(
+      leading: Icon(icon, size: 20, color: wechatMenuInk),
+      title: Text(label, style: const TextStyle(fontSize: 15, color: wechatMenuInk)),
+      onTap: () => Navigator.of(sheetCtx).pop(value),
+    );
+  }
+
+  /// 点空白处 / 三点菜单共用的天意动作分发。
+  Future<void> _handleSkyAction(WechatGroup group, String action) async {
+    final scope = socialGroupScope(group.id);
+    switch (action) {
+      case 'mark':
+        setState(() => _showDivineMark = !_showDivineMark);
+        return;
+      case 'reset':
+        final next = group.copyWith(divine: '');
+        await _store.saveGroup(next);
+        if (!mounted) return;
+        setState(() => _group = next);
+        return;
+      case 'divine':
+        await _pickDivine(group);
+        return;
+      case 'summon':
+        await _summon(group);
+        return;
+      case 'switch_topic':
+      case 'end_topic':
+        await _social.setDirective(scope, action);
+        _toast(action == 'switch_topic'
+            ? '天意已定：下一个人会换个话题'
+            : '天意已定：这个话题要收尾了');
+        // 话题由下一次发言体现；自动回复开着就催一次。
+        if (_social.autoReply(group.id)) _tick();
+        return;
+      case 'cooldown':
+        // 冷场：这段时间不主动说话，到点自动恢复。
+        await _social.setCooldown(scope, const Duration(seconds: 60));
+        _timer?.cancel();
+        _toast('天意已定：先冷场一会儿（约 1 分钟）');
+        _timer = Timer(const Duration(seconds: 61), () => _restartLoop());
+        return;
+      case 'toggle_auto':
+        final next = !_social.autoReply(group.id);
+        await _social.setAutoReply(group.id, next);
+        if (!mounted) return;
+        setState(() => _autoLoop = next);
+        if (next) _restartLoop(); else _timer?.cancel();
+        _toast(next ? '已开启自动回复' : '已关闭自动回复（只在这个群）');
+        return;
     }
   }
 
   /// 召唤：挑一个人，让他主动私聊我（不是你发他回，是他先开口）。
+  /// 天意召唤：挑一个人，让他在群里自己冒出来说一句。
+  /// 他不知道是被人叫的（天意叙事），此刻不方便时也会自然地婉拒。
   Future<void> _summon(WechatGroup group) async {
     if (group.members.isEmpty) {
       _toast('群里还没人，先拉个人进来');
@@ -1205,7 +1369,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
               const Padding(
                 padding: EdgeInsets.fromLTRB(18, 16, 18, 8),
                 child: Text(
-                  '叫谁来找你（他会先开口）',
+                  '天意：等会儿谁会自己冒出来说话',
                   style: TextStyle(
                     fontSize: 13,
                     color: WechatColors.secondaryText,
@@ -1224,6 +1388,12 @@ class _WechatChatPageState extends State<WechatChatPage> {
                     member.name,
                     style: const TextStyle(fontSize: 15, color: wechatMenuInk),
                   ),
+                  subtitle: _social.isAvailable(member.name)
+                      ? null
+                      : const Text(
+                          '这会儿他可能不方便',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
                   onTap: () => Navigator.of(sheetCtx).pop(member.name),
                 ),
             ],
@@ -1232,25 +1402,26 @@ class _WechatChatPageState extends State<WechatChatPage> {
       ),
     );
     if (!mounted || picked == null) return;
-    // 万一群里有人没进通讯录（老数据），先补进去，不然私聊页找不到人设。
-    if (_store.contact(picked) == null) {
-      for (final member in group.members) {
-        if (member.name == picked) {
-          await _store.addContacts(<WechatContact>[
-            WechatContact.ofMember(member),
-          ]);
-          break;
-        }
-      }
-    }
-    if (!mounted) return;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => WechatDmPage(contactName: picked, summon: true),
-      ),
+    await _social.setDirective(
+      socialGroupScope(group.id),
+      'summon',
+      who: picked,
     );
+    _toast('天意已定：$picked 一会儿会自己开口');
+    // 召唤要立刻见效：自动回复开着就马上催一轮，关着也破例让他冒这一句。
+    if (_social.autoReply(group.id)) {
+      _tick();
+    } else {
+      await _tickOnceForced(picked);
+    }
+  }
+
+  /// 自动回复关着时，召唤仍然让他冒一句：用 force 绕过开关，跑完不续循环。
+  Future<void> _tickOnceForced(String who) async {
+    if (_group == null) return;
+    await _tick(force: true);
     if (!mounted) return;
-    _reload();
+    _timer?.cancel();
   }
 
   Future<void> _pickDivine(WechatGroup group) async {
@@ -1321,8 +1492,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
       data: wechatLightTheme(),
       child: Scaffold(
         backgroundColor: WechatColors.chatBg,
-        // 键盘起来时整页压缩，输入栏贴着键盘上沿，气泡不会被挡住。
-        resizeToAvoidBottomInset: true,
+        // 键盘弹起时不压缩整页：消息列表留在原位，只有输入栏浮到键盘上方。
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           backgroundColor: WechatColors.navBg,
           elevation: 0,
@@ -1400,19 +1571,14 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   setState(() => _messages = const <WechatMessage>[]);
                   _toast('聊天记录已清空');
                 } else if (value == 'toggle') {
-                  setState(() {
-                    _autoLoop = !_autoLoop;
-                    if (_autoLoop) _loopFailures = 0;
-                  });
-                  if (_autoLoop) {
-                    _restartLoop();
-                  } else {
-                    _timer?.cancel();
-                  }
+                  await _handleSkyAction(group, 'toggle_auto');
                 } else if (value == 'divine') {
                   await _pickDivine(group);
-                } else if (value == 'summon') {
-                  await _summon(group);
+                } else if (value == 'summon' ||
+                    value == 'switch_topic' ||
+                    value == 'end_topic' ||
+                    value == 'cooldown') {
+                  await _handleSkyAction(group, value);
                 }
               },
               itemBuilder: (_) => <PopupMenuEntry<String>>[
@@ -1421,16 +1587,28 @@ class _WechatChatPageState extends State<WechatChatPage> {
                   child: Text(_autoLoop ? '暂停自动回复' : '继续自动回复'),
                 ),
                 const PopupMenuItem<String>(
-                  value: 'clear',
-                  child: Text('清空聊天记录'),
+                  value: 'summon',
+                  child: Text('召唤角色发言'),
                 ),
                 const PopupMenuItem<String>(
-                  value: 'summon',
-                  child: Text('召唤：叫他私聊我'),
+                  value: 'switch_topic',
+                  child: Text('切换话题'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'end_topic',
+                  child: Text('结束话题'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'cooldown',
+                  child: Text('冷场一会儿'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'divine',
                   child: Text('切换天意：用他的身份说话'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'clear',
+                  child: Text('清空聊天记录'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'settings',
@@ -1440,16 +1618,33 @@ class _WechatChatPageState extends State<WechatChatPage> {
             ),
           ],
         ),
-        body: Column(
+        // 消息列表固定铺满，输入栏单独浮在底部并跟随键盘上移，
+        // 这样打字时列表不会被键盘顶上去、界面不跳动。
+        body: Stack(
           children: <Widget>[
-            Expanded(
+            Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onLongPress: _showBlankMenu,
+                onTap: () {
+                  _focus.unfocus();
+                  _showBlankMenu();
+                },
                 child: _messageList(group),
               ),
             ),
-            _inputBar(group),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: _inputBar(group),
+              ),
+            ),
           ],
         ),
       ),
@@ -1509,7 +1704,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
     }
     return ListView(
       controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
+      // 底部留出输入栏高度：列表不随键盘移动，输入栏浮在上面。
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 72),
       children: items,
     );
   }

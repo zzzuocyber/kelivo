@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
 import '../../core/services/chat/chat_service.dart';
+import '../../core/services/social_store.dart';
+import '../../core/utils/token_estimator.dart';
 import '../../core/utils/pinyin_sort.dart';
 import '../../icons/lucide_adapter.dart';
+import '../wechat/wechat_store.dart';
 import 'moment_assets_page.dart';
 import 'moment_contacts_dialog.dart';
 import 'moment_author_page.dart';
@@ -26,6 +31,8 @@ class MomentPage extends StatefulWidget {
 
 class _MomentPageState extends State<MomentPage> {
   late final MomentStore _store;
+  late final SocialStore _social;
+  late final WechatStore _wechatStore;
   List<MomentCharacter> _characters = const <MomentCharacter>[];
   List<MomentPost> _posts = const <MomentPost>[];
   Map<String, MomentAssets> _assets = const <String, MomentAssets>{};
@@ -54,7 +61,10 @@ class _MomentPageState extends State<MomentPage> {
   @override
   void initState() {
     super.initState();
-    _store = MomentStore(context.read<ChatService>());
+    final chat = context.read<ChatService>();
+    _store = MomentStore(chat);
+    _social = SocialStore(chat);
+    _wechatStore = WechatStore(chat);
     _loadNow();
   }
 
@@ -125,6 +135,25 @@ class _MomentPageState extends State<MomentPage> {
     }
   }
 
+  /// 生成朋友圈前，把每个角色此刻的去处和最近在微信里说过的话整理成一段，
+  /// 注入提示词。时间地点跟群聊/私聊共用同一份作息表，所以三处对得上。
+  Future<String> _buildSocialContext() async {
+    final lines = <String>[];
+    for (final character in _characters) {
+      final where = _social.whereabouts(character.name).promptLine;
+      lines.add('${character.name}：$where');
+      // 他在微信里说过的话，取最近几条。
+      final wechat = _wechatStore.memoryLinesFor(character.name, limit: 6);
+      for (final line in wechat.take(6)) {
+        lines.add('  - $line');
+      }
+    }
+    final mode = _social.contextMode('moment');
+    final body = mode.isSummary ? socialSummarize(lines) : lines.join('\n');
+    unawaited(_social.addTokens('moment', estimateTokens(body)));
+    return body;
+  }
+
   Future<void> _refresh() async {
     if (_generating) return;
     if (_characters.isEmpty) {
@@ -135,6 +164,7 @@ class _MomentPageState extends State<MomentPage> {
     final worldBooks = context.read<WorldBookProvider>();
     setState(() => _generating = true);
     try {
+      final socialContext = await _buildSocialContext();
       final generator = MomentGenerator(
         settings: settings,
         worldBooks: worldBooks,
@@ -143,6 +173,7 @@ class _MomentPageState extends State<MomentPage> {
         personaName: _personaName(settings),
         recentPosts: _posts,
         contextCharLimit: settings.momentContextChars,
+        socialContext: socialContext,
       );
       final batch = await generator.generate();
       await _store.applyBatch(batch);

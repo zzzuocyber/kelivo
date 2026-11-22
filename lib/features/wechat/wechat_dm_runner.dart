@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/world_book_provider.dart';
+import '../../core/services/social_context_builder.dart';
+import '../../core/services/social_store.dart';
+import '../moment/moment_store.dart';
 import 'wechat_models.dart';
 import 'wechat_service.dart';
 import 'wechat_store.dart';
@@ -68,6 +71,8 @@ class WechatDmReplyRunner {
     required SettingsProvider settings,
     required WorldBookProvider worldBooks,
     required Duration delay,
+    SocialStore? social,
+    MomentStore? momentStore,
     bool selfInitiated = false,
     bool forceReply = false,
   }) {
@@ -82,6 +87,8 @@ class WechatDmReplyRunner {
           store: store,
           settings: settings,
           worldBooks: worldBooks,
+          social: social,
+          momentStore: momentStore,
           selfInitiated: selfInitiated,
           forceReply: forceReply,
         ),
@@ -96,6 +103,8 @@ class WechatDmReplyRunner {
     required WechatStore store,
     required SettingsProvider settings,
     required WorldBookProvider worldBooks,
+    SocialStore? social,
+    MomentStore? momentStore,
     required bool selfInitiated,
     required bool forceReply,
   }) async {
@@ -116,6 +125,30 @@ class WechatDmReplyRunner {
           !selfInitiated &&
           streak < _maxNoReplyStreak &&
           Random().nextDouble() < contact.noReplyStrength.chance;
+      // 一次性天意指令（切换话题/结束/冷场）。
+      final scope = socialDmScope(contactName);
+      final directive = social == null
+          ? SocialDirective.none
+          : await social.takeDirective(scope);
+      // 跨场景记忆 + 此刻处境：只跟「我」有关的别处记录才有意义。
+      var contextText = '';
+      if (social != null) {
+        final memories = <String>[
+          ...?momentStore?.memoryLinesFor(contactName),
+          ...store.memoryLinesFor(contactName, excludeKey: key),
+        ];
+        final where = social.whereabouts(contactName);
+        final built = SocialContextBuilder.build(
+          name: contactName,
+          scene: 'dm',
+          memoryLines: memories,
+          where: where.promptLine,
+          store: social,
+        );
+        contextText = built.text;
+        unawaited(social.addTokens('dm', built.tokens));
+        // 引导也算我给模型看的上下文的一部分，粗略计入。
+      }
       final generator = WechatDmGenerator(
         settings: settings,
         worldBooks: worldBooks,
@@ -126,6 +159,9 @@ class WechatDmReplyRunner {
         history: wechatRecentContext(store.dmMessages(contactName), limit: 40),
         selfInitiated: selfInitiated,
         allowNoReply: allowNoReply,
+        socialContext: contextText,
+        directiveKind: directive.kind,
+        directiveWho: directive.who,
       );
       final text = await generator.generate(burstCount: burst);
       final parts = wechatSplitReply(text, maxParts: burst);

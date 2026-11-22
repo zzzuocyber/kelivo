@@ -49,6 +49,7 @@ class MomentGenerator {
     required this.recentPosts,
     this.contextCharLimit = 0,
     this.batchSize = momentBatchSize,
+    this.socialContext = '',
   });
 
   final SettingsProvider settings;
@@ -66,6 +67,9 @@ class MomentGenerator {
   final int contextCharLimit;
   final int batchSize;
 
+  /// 跨场景记忆 + 此刻处境，注入到 system 末尾。
+  final String socialContext;
+
   Future<MomentBatch> generate() async {
     if (characters.isEmpty) {
       throw const MomentServiceException('no_characters');
@@ -77,7 +81,11 @@ class MomentGenerator {
     final names = <String>[for (final c in characters) c.name];
     final profiles = _collectProfiles(books, characters);
     final model = _resolveModel(settings);
-    final system = _systemText(settings);
+    var system = _systemText(settings);
+    final extra = socialContext.trim();
+    if (extra.isNotEmpty) {
+      system = '$system\n\n【此刻的处境与别处记忆】\n$extra';
+    }
     final prompt = buildUserPrompt(
       profiles: profiles,
       names: names,

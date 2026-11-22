@@ -119,6 +119,7 @@ class WechatStore {
     List<WechatMember> members = const <WechatMember>[],
     List<String> bookIds = const <String>[],
     String persona = '',
+    String owner = '',
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     // 新群默认「跟随全局」：以后在设置里改全局间隔，没单独设过的群会跟着变。
@@ -128,6 +129,7 @@ class WechatStore {
       members: members,
       bookIds: bookIds,
       persona: persona,
+      owner: owner,
       intervalPreset: WechatIntervalPreset.follow,
       createdAt: now,
     );
@@ -485,6 +487,38 @@ class WechatStore {
   List<WechatMessage> messages(String groupId) =>
       wechatMessagesFromExtras(_extras(), groupId);
 
+  /// 跨场景记忆：扫所有会话（群 + 所有私聊），挑出 [name] 说过的话，
+  /// 跳过 [excludeKey] 这个当前会话，避免把自己刚说的重复喂进去。
+  ///
+  /// 返回 `场景 · 内容` 的行，给社交上下文构建器用。
+  List<String> memoryLinesFor(String name, {String excludeKey = '', int limit = 40}) {
+    final extras = _extras();
+    final raw = extras[wechatMessagesKey];
+    final out = <String>[];
+    if (raw is! Map) return out;
+    final myName = wechatSettings().effectivePersona;
+    for (final entry in raw.entries) {
+      final key = entry.key.toString();
+      if (key == excludeKey) continue;
+      final scene = key.startsWith('dm:') ? '私聊' : '群里';
+      final list = wechatMessagesFromExtras(<String, dynamic>{
+        wechatMessagesKey: <String, dynamic>{key: entry.value},
+      }, key);
+      for (final message in list) {
+        if (message.system || message.text.trim().isEmpty) continue;
+        final isMine = message.mine && !message.divine;
+        final speaker = isMine ? myName : message.sender.trim();
+        // 群里认发送者；私聊里认对方（键名）。
+        final dmPartner = key.startsWith('dm:') ? key.substring(3) : '';
+        final matches = speaker == name || dmPartner == name && !isMine;
+        if (!matches) continue;
+        out.add('$scene：${message.text}');
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
+  }
+
   Future<void> _writeMessages(String groupId, List<WechatMessage> next) async {
     final containerId = await ensureConversation();
     await chat.updateConversationExtras(containerId, (extras) {
@@ -596,10 +630,11 @@ class WechatStore {
     );
     await saveGroup(next);
     final names = fresh.map((m) => m.name).join('、');
+    // 名义上以群主夺舍操作：建群时指定了群主就用他的名字，否则还是我。
     await appendMessage(
       group.id,
       sender: '',
-      text: '${group.effectivePersona} 邀请 $names 加入了群聊',
+      text: '${group.effectiveOwner} 邀请 $names 加入了群聊',
       system: true,
     );
     return next;
@@ -618,7 +653,7 @@ class WechatStore {
     await appendMessage(
       group.id,
       sender: '',
-      text: '$name 被移出了群聊',
+      text: '$name 被 ${group.effectiveOwner} 移出了群聊',
       system: true,
     );
     return next;

@@ -585,6 +585,7 @@ class WechatGroup {
     this.bookIds = const <String>[],
     this.persona = '',
     this.divine = '',
+    this.owner = '',
     this.intervalPreset = WechatIntervalPreset.follow,
     this.customMinSeconds = 3,
     this.customMaxSeconds = 30,
@@ -605,6 +606,10 @@ class WechatGroup {
 
   /// 天意：现在顶替谁说话。空 = 是我自己。
   final String divine;
+
+  /// 群主（成员名）。空 = 群主是我。建群时定，之后不改。
+  /// 只是名义：拉人/踢人以他的名字发系统消息，我没有真的让出权限。
+  final String owner;
 
   final WechatIntervalPreset intervalPreset;
   final int customMinSeconds;
@@ -643,12 +648,19 @@ class WechatGroup {
     return value.isEmpty ? '我' : value;
   }
 
+  /// 群主显示名。空 = 我自己。
+  String get effectiveOwner {
+    final value = owner.trim();
+    return value.isEmpty ? effectivePersona : value;
+  }
+
   WechatGroup copyWith({
     String? name,
     List<WechatMember>? members,
     List<String>? bookIds,
     String? persona,
     String? divine,
+    String? owner,
     WechatIntervalPreset? intervalPreset,
     int? customMinSeconds,
     int? customMaxSeconds,
@@ -663,6 +675,7 @@ class WechatGroup {
       bookIds: bookIds ?? this.bookIds,
       persona: persona ?? this.persona,
       divine: divine ?? this.divine,
+      owner: owner ?? this.owner,
       intervalPreset: intervalPreset ?? this.intervalPreset,
       customMinSeconds: customMinSeconds ?? this.customMinSeconds,
       customMaxSeconds: customMaxSeconds ?? this.customMaxSeconds,
@@ -679,6 +692,7 @@ class WechatGroup {
     'books': bookIds,
     'persona': persona,
     'divine': divine,
+    'owner': owner,
     'interval': intervalPreset.name,
     'min': customMinSeconds,
     'max': customMaxSeconds,
@@ -717,6 +731,7 @@ class WechatGroup {
       bookIds: books,
       persona: (raw['persona'] ?? '').toString(),
       divine: (raw['divine'] ?? '').toString(),
+      owner: (raw['owner'] ?? '').toString(),
       intervalPreset: WechatIntervalPresetX.parse(raw['interval']),
       customMinSeconds: _intOr(raw['min'], 3),
       customMaxSeconds: _intOr(raw['max'], 30),

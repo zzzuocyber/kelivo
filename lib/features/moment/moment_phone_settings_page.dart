@@ -9,6 +9,7 @@ import '../../utils/avatar_files.dart';
 import '../../utils/sandbox_path_resolver.dart';
 import '../../core/services/chat/chat_service.dart';
 import 'moment_phone_theme_store.dart';
+import 'moment_social_memory_page.dart';
 import 'moment_widgets.dart';
 
 /// 小手机桌面上的「设置」图标点进来。以后世界书之类的都挂这里，
@@ -31,6 +32,15 @@ class MomentPhoneSettingsPage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: <Widget>[
+            _SettingsRow(
+              icon: Lucide.Brain,
+              label: '记忆管理',
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const MomentSocialMemoryPage(),
+                ),
+              ),
+            ),
             _SettingsRow(
               icon: Lucide.Palette,
               label: '主题',
