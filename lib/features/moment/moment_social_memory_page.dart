@@ -35,7 +35,6 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
   List<String> _characters = const <String>[];
   String _plotSummary = '';
   String _compressPrompt = kDefaultCompressPrompt;
-  List<PlotLogEntry> _plotLogs = const <PlotLogEntry>[];
   SocialWorldClock _clock = SocialWorldClock.real();
 
   @override
@@ -65,7 +64,6 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
       _characters = sorted;
       _plotSummary = _social.plotSummary;
       _compressPrompt = _social.compressPrompt;
-      _plotLogs = _social.plotLogs();
       _clock = _social.worldClock;
     });
   }
@@ -196,36 +194,6 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
     _reload();
   }
 
-  Future<void> _clearPlotLogs() async {
-    await _social.clearPlotLogs();
-    _reload();
-  }
-
-  void _showPlotLog(PlotLogEntry entry) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: Text(
-          entry.scene,
-          style: const TextStyle(fontSize: 16),
-        ),
-        content: SingleChildScrollView(
-          child: Text(
-            '${DateTime.fromMillisecondsSinceEpoch(entry.at)}\n\n${entry.text}',
-            style: const TextStyle(fontSize: 13.5, height: 1.5),
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -332,67 +300,6 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            _sectionTitle('剧情控制记录（你写过的剧情）'),
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: <Widget>[
-                  if (_plotLogs.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(18),
-                      child: Text(
-                        '还没有记录。用天意「控制剧情走向」写过的剧情会出现在这里。',
-                        style: TextStyle(fontSize: 13, color: MomentColors.secondaryText),
-                      ),
-                    )
-                  else
-                    for (final entry in _plotLogs)
-                      InkWell(
-                        onTap: () => _showPlotLog(entry),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      entry.scene,
-                                      style: const TextStyle(
-                                        fontSize: 11.5,
-                                        color: MomentColors.secondaryText,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      entry.text,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 13.5),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Icon(Lucide.ChevronRight, size: 16, color: Color(0xFFC8C8C8)),
-                            ],
-                          ),
-                        ),
-                      ),
-                  if (_plotLogs.isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _clearPlotLogs,
-                        child: const Text('清空记录', style: TextStyle(fontSize: 13)),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -729,19 +636,22 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
           backgroundColor: Colors.white,
           title: Text(
             existing == null ? '加一条作息' : '改作息',
-            style: const TextStyle(fontSize: 16),
+            style: const TextStyle(fontSize: 16, color: MomentColors.primaryText),
           ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text('哪几天', style: TextStyle(fontSize: 13)),
+                const Text('哪几天',
+                    style: TextStyle(fontSize: 13, color: MomentColors.primaryText)),
                 Wrap(
                   children: <Widget>[
                     for (var i = 0; i < 4; i++)
                       ChoiceChip(
                         label: Text(_dayChoiceLabel(i)),
+                        labelStyle: const TextStyle(
+                            fontSize: 13, color: MomentColors.primaryText),
                         selected: choiceIndex == i,
                         onSelected: (_) {
                           setDialogState(() {
@@ -753,7 +663,8 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text('从 $start:00 到 $end:00'),
+                Text('从 $start:00 到 $end:00',
+                    style: const TextStyle(color: MomentColors.primaryText)),
                 Slider(
                   value: start.toDouble(),
                   min: 0,
@@ -775,6 +686,8 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
                   controller: locationCtrl,
                   decoration: const InputDecoration(
                     labelText: '在哪（例：公司 / 家里）',
+                    labelStyle: TextStyle(color: MomentColors.primaryText),
+                    floatingLabelStyle: TextStyle(color: MomentColors.primaryText),
                     isDense: true,
                   ),
                 ),
@@ -783,13 +696,16 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
                   controller: activityCtrl,
                   decoration: const InputDecoration(
                     labelText: '在做什么（例：上班 / 睡觉）',
+                    labelStyle: TextStyle(color: MomentColors.primaryText),
+                    floatingLabelStyle: TextStyle(color: MomentColors.primaryText),
                     isDense: true,
                   ),
                 ),
                 const SizedBox(height: 4),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('这时候方便聊天', style: TextStyle(fontSize: 14)),
+                  title: const Text('这时候方便聊天',
+                      style: TextStyle(fontSize: 14, color: MomentColors.primaryText)),
                   value: available,
                   onChanged: (v) => setDialogState(() => available = v),
                 ),
@@ -799,11 +715,13 @@ class _MomentSocialMemoryPageState extends State<MomentSocialMemoryPage> {
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: const Text('取消'),
+              child: const Text('取消',
+                  style: TextStyle(color: MomentColors.primaryText)),
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(true),
-              child: const Text('保存'),
+              child: const Text('保存',
+                  style: TextStyle(color: MomentColors.primaryText)),
             ),
           ],
         ),

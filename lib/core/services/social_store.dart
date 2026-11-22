@@ -267,7 +267,7 @@ class SocialTopicState {
 /// 一次性天意指令：写进去后，下一次生成时取走并清掉。
 /// [kind] 是 summon / switch_topic / end_topic / cooldown / none；
 /// [who] 是召唤时指定的角色，其他指令留空。
-/// [text] 是「控制剧情走向」时我手写的剧情文字，只有 plot 这类指令用。
+/// [text] 为旧的「控制剧情走向」遗留字段，仅用于兼容老数据，现不再写入。
 class SocialDirective {
   const SocialDirective({this.kind = 'none', this.who = '', this.text = ''});
 
@@ -627,7 +627,7 @@ class SocialStore {
       SocialDirective.none;
 
   /// 写入一条一次性指令，等下一次生成取走。
-  /// [text] 只有「控制剧情走向」(plot) 用，传我手写的剧情文字。
+  /// [text] 为旧的「控制剧情走向」遗留参数，仅兼容老调用，现不再使用。
   Future<void> setDirective(
     String scope,
     String kind, {
@@ -912,79 +912,6 @@ class SocialStore {
     });
   }
 
-  // ---------------- 剧情控制记录 ----------------
-
-  /// 每次「控制剧情走向」写下的文字，新的在前。
-  List<PlotLogEntry> plotLogs() {
-    final raw = _extras[socialPlotLogKey];
-    if (raw is! List) return const <PlotLogEntry>[];
-    final out = <PlotLogEntry>[];
-    for (final item in raw) {
-      final entry = PlotLogEntry.fromJson(item);
-      if (entry != null) out.add(entry);
-    }
-    out.sort((a, b) => b.at.compareTo(a.at));
-    return out;
-  }
-
-  Future<void> addPlotLog(String text, {String scene = 'group'}) async {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return;
-    final entry = PlotLogEntry(
-      text: trimmed,
-      scene: scene,
-      at: DateTime.now().millisecondsSinceEpoch,
-    );
-    await _update((extras) {
-      final next = Map<String, dynamic>.from(extras);
-      final raw = next[socialPlotLogKey] is List
-          ? List<dynamic>.from(next[socialPlotLogKey] as List)
-          : <dynamic>[];
-      raw.insert(0, entry.toJson());
-      // 只留最近 200 条，别无限涨。
-      final trimmedList = raw.length > 200 ? raw.sublist(0, 200) : raw;
-      next[socialPlotLogKey] = trimmedList;
-      return next;
-    });
-  }
-
-  Future<void> clearPlotLogs() async {
-    await _update((extras) {
-      final next = Map<String, dynamic>.from(extras);
-      next.remove(socialPlotLogKey);
-      return next;
-    });
-  }
-}
-
-/// 一条「控制剧情走向」的记录。
-class PlotLogEntry {
-  const PlotLogEntry({
-    required this.text,
-    required this.scene,
-    required this.at,
-  });
-
-  final String text;
-  final String scene;
-  final int at;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'text': text,
-        'scene': scene,
-        'at': at,
-      };
-
-  static PlotLogEntry? fromJson(Object? raw) {
-    if (raw is! Map) return null;
-    final text = (raw['text'] ?? '').toString();
-    if (text.isEmpty) return null;
-    return PlotLogEntry(
-      text: text,
-      scene: (raw['scene'] ?? 'group').toString(),
-      at: socialInt(raw['at']),
-    );
-  }
 }
 
 bool conversationIsSocial(Conversation conversation) =>

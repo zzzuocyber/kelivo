@@ -226,15 +226,21 @@ class _WechatDmPageState extends State<WechatDmPage> {
     if (error != null) _toast(error);
   }
 
+  /// 点聊天空白处：立刻召唤这个人开口回我。
+  /// 强制插队（掐掉还在等间隔的旧回复）、结束冷场，马上主动说一句。
+  void _summonByBlankTap() {
+    _focus.unfocus();
+    WechatDmReplyRunner.instance.cancelPending(_chatKey);
+    unawaited(_social.clearCooldown(socialDmScope(widget.contactName)));
+    _scheduleReply(summonDelay: const Duration(milliseconds: 300));
+  }
+
   /// 隔一会儿他再回，太秒回像机器人。
   /// 等待和生成都交给后台执行器，退出页面也不会停。
   void _scheduleReply({
     Duration? summonDelay,
     bool forceReply = false,
-    bool bypassPending = false,
   }) {
-    // 控制剧情走向要强制插队：先取消还在等间隔的旧回复，别让剧情被 pending 挡掉。
-    if (bypassPending) WechatDmReplyRunner.instance.cancelPending(_chatKey);
     if (WechatDmReplyRunner.instance.isPending(_chatKey)) return;
     // 冷场期内对方不主动回（召唤/天意强制发起的除外）。
     if (!forceReply &&
@@ -271,7 +277,6 @@ class _WechatDmPageState extends State<WechatDmPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              _skyTile(sheetCtx, Lucide.SquarePen, '控制剧情走向', 'plot'),
               _skyTile(sheetCtx, Lucide.Shuffle, '切换话题', 'switch_topic'),
               _skyTile(sheetCtx, Lucide.CheckCircle, '结束话题', 'end_topic'),
               _skyTile(sheetCtx, Lucide.Moon, '冷场一会儿', 'cooldown'),
@@ -301,18 +306,6 @@ class _WechatDmPageState extends State<WechatDmPage> {
   Future<void> _handleSkyAction(String action) async {
     final scope = socialDmScope(widget.contactName);
     switch (action) {
-      case 'plot':
-        final plot = await showDialog<String>(
-          context: context,
-          builder: (_) => const WechatPlotDialog(),
-        );
-        if (!mounted || plot == null || plot.trim().isEmpty) return;
-        // 控制剧情走向会结束冷场，立刻让他按剧情接一句。
-        await _social.clearCooldown(scope);
-        await _social.setDirective(scope, 'plot', text: plot.trim());
-        await _social.addPlotLog(plot.trim(), scene: '私聊');
-        _scheduleReply(forceReply: true, bypassPending: true);
-        return;
       case 'switch_topic':
       case 'end_topic':
         await _social.setDirective(scope, action);
@@ -538,8 +531,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
                   setState(() => _asDivine = !_asDivine);
                 }
                 if (value == 'delete') await _deleteChat();
-                if (value == 'plot' ||
-                    value == 'switch_topic' ||
+                if (value == 'switch_topic' ||
                     value == 'end_topic' ||
                     value == 'cooldown' ||
                     value == 'clear_cooldown') {
@@ -547,10 +539,6 @@ class _WechatDmPageState extends State<WechatDmPage> {
                 }
               },
               itemBuilder: (_) => <PopupMenuEntry<String>>[
-                const PopupMenuItem<String>(
-                  value: 'plot',
-                  child: Text('控制剧情走向'),
-                ),
                 PopupMenuItem<String>(
                   value: 'divine',
                   child: Text(_asDivine ? '恢复成我自己说话' : '天意：用他的身份说话'),
@@ -600,7 +588,8 @@ class _WechatDmPageState extends State<WechatDmPage> {
                 ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _focus.unfocus(),
+                  // 点空白处：召唤这个人立刻开口；点气泡由气泡自己的 onTap 拦下。
+                  onTap: _summonByBlankTap,
                   onLongPress: _showSkyMenu,
                   child: _messageList(),
                 ),
@@ -678,7 +667,7 @@ class _WechatDmPageState extends State<WechatDmPage> {
     );
   }
 
-  /// 「控制剧情走向」落地的旁白：居中卡片，整段剧情、不挂人名。
+  /// 旧「控制剧情走向」旁白的渲染，仅为兼容老聊天记录保留。
   Widget _plotRow(WechatMessage message) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 22),
@@ -922,8 +911,10 @@ class _WechatDmPageState extends State<WechatDmPage> {
     );
 
     // 长按出菜单：自己的能改，他的能重写。
+    // onTap 留空拦截：点气泡只收键盘，不冒泡到列表的「点空白召唤」。
     final tappableBubble = GestureDetector(
       behavior: HitTestBehavior.opaque,
+      onTap: () => _focus.unfocus(),
       onLongPress: () => _showMessageMenu(message),
       child: Opacity(opacity: _regenId == message.id ? 0.45 : 1, child: bubble),
     );

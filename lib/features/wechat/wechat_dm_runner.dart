@@ -176,16 +176,11 @@ class WechatDmReplyRunner {
         socialContext: contextText,
         directiveKind: directive.kind,
         directiveWho: directive.who,
-        directiveText: directive.text,
         heartVoiceOn: social?.heartVoiceOn(contactName) ?? false,
       );
       final text = await generator.generate(burstCount: burst);
       final heart = generator.lastHeartVoice;
-      final isPlot = directive.kind == 'plot' && directive.text.trim().isNotEmpty;
-      // 控制剧情走向：整段一条旁白，不拆成多条、不挂对方名下。
-      final parts = isPlot
-          ? <String>[text]
-          : wechatSplitReply(text, maxParts: burst);
+      final parts = wechatSplitReply(text, maxParts: burst);
       if (parts.isEmpty) {
         throw const WechatServiceException('empty');
       }
@@ -200,10 +195,9 @@ class WechatDmReplyRunner {
           contactName,
           text: parsed.text,
           mine: false,
-          withImage: parsed.withImage && !isPlot,
-          plot: isPlot,
-          // 心声随这轮回复存；剧情旁白不挂角色，不带心声。
-          heartVoice: isPlot ? '' : heart,
+          withImage: parsed.withImage,
+          // 心声随这轮回复存。
+          heartVoice: heart,
         );
       }
       // 真回过一次就把连续不回清零。

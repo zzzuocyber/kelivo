@@ -133,30 +133,9 @@ void _writeDirectiveRules(
   String speakerName, {
   String kind = '',
   String who = '',
-  String text = '',
 }) {
   if (kind.isEmpty || kind == 'none') return;
   switch (kind) {
-    case 'plot':
-      // 控制剧情走向：我手写的剧情是最高指令，自由度最高。
-      // 模型可以直接叙述、夺舍角色的所想所做、切话题/结束话题/冷场，
-      // 但对外仍装作一切都是自然发生的，不承认有人安排。
-      final plot = text.trim();
-      if (plot.isNotEmpty) {
-        buffer.writeln('- 【最高优先级·剧情由我掌控】下面是我写的剧情，'
-            '你要把它当成已经发生的事实演出来，自由度最高：');
-        buffer.writeln(plot);
-        buffer.writeln('- 我写到的旁白、某个角色心里在想什么、要做什么、话题怎么转、'
-            '要不要收尾或冷场，都照着演，全部当成他们自己的念头和举动，'
-            '绝对不要提「有人安排」「被操控」「剧本」「指令」这类话。');
-        buffer.writeln('- 剧情可以抓马、可以反转，别把它拉回平淡。'
-            '我写的文字就是这一轮要落地的内容：写旁白就发旁白，写某个角色做什么就演给他看，'
-            '不必守「短句、只发一条」那些限制，怎么演完全以我的剧情为准。');
-        buffer.writeln('- 这次不受「只扮演某一个人」「不用括号写动作神态」的限制：'
-            '我的剧情里同时写到几个人，就按写的分别演他们各自的话和举动；'
-            '要写心里的念头、动作、场景，就用括号或旁白写出来。');
-      }
-      break;
     case 'summon':
       buffer.writeln(
         '- 这一轮，你忽然很想开口说点什么，就当是自己一念之间冒出来的念头。'
@@ -245,7 +224,6 @@ class WechatGenerator {
     this.socialContext = '',
     this.directiveKind = '',
     this.directiveWho = '',
-    this.directiveText = '',
     this.heartVoiceOn = false,
   });
 
@@ -273,10 +251,9 @@ class WechatGenerator {
   /// 跨场景记忆 + 当前时间地点处境，拼成一段注入 system。
   final String socialContext;
 
-  /// 一次性天意指令（召唤/切话题/结束/冷场/控制剧情走向）。
+  /// 一次性天意指令（召唤/切话题/结束/冷场）。
   final String directiveKind;
   final String directiveWho;
-  final String directiveText;
 
   /// 真正去要一句话。[speaker] 是这次轮到的人。
   ///
@@ -307,11 +284,7 @@ class WechatGenerator {
     // 没开心声时 splitHeartVoice 原样返回，不影响老行为。
     final split = splitHeartVoice(result.text);
     lastHeartVoice = heartVoiceOn ? split.heartVoice : '';
-    final clean = split.text;
-    // 控制剧情走向：我写的剧情原样落地，不做任何清洗——
-    // 否则旁白、括号动作、markdown 会被 cleanReply 抹掉，剧情就"不奏效"了。
-    final isPlot = directiveKind == 'plot' && directiveText.trim().isNotEmpty;
-    final text = isPlot ? clean.trim() : cleanReply(clean, speaker.name);
+    final text = cleanReply(split.text, speaker.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
     }
@@ -406,7 +379,6 @@ class WechatGenerator {
       speaker.name,
       kind: directiveKind,
       who: directiveWho,
-      text: directiveText,
     );
     // 心声：只有这个角色开了才让模型附一段，没开就一个字都不提，
     // 免得模型在没开的角色上也吐标记。
@@ -471,7 +443,6 @@ class WechatDmGenerator {
     this.socialContext = '',
     this.directiveKind = '',
     this.directiveWho = '',
-    this.directiveText = '',
     this.heartVoiceOn = false,
   });
 
@@ -508,7 +479,6 @@ class WechatDmGenerator {
   final String socialContext;
   final String directiveKind;
   final String directiveWho;
-  final String directiveText;
 
   /// [burstCount] 是这次抽到的连发条数（1~7），写进提示词让模型按行数回。
   Future<String> generate({int burstCount = 1}) async {
@@ -541,10 +511,7 @@ class WechatDmGenerator {
     // 心声在 cleanReply 之前剥出，免得标记被当正文洗掉。
     final split = splitHeartVoice(result.text);
     lastHeartVoice = heartVoiceOn ? split.heartVoice : '';
-    final clean = split.text;
-    // 控制剧情走向：原文落地，不清洗，保住旁白/动作/多角色。
-    final isPlot = directiveKind == 'plot' && directiveText.trim().isNotEmpty;
-    final text = isPlot ? clean.trim() : cleanReply(clean, contact.name);
+    final text = cleanReply(split.text, contact.name);
     if (text.isEmpty) {
       throw const WechatServiceException('empty');
     }
@@ -611,7 +578,6 @@ class WechatDmGenerator {
       contact.name,
       kind: directiveKind,
       who: directiveWho,
-      text: directiveText,
     );
     if (selfInitiated) {
       buffer.writeln(

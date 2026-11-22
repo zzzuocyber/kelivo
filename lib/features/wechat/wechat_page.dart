@@ -1234,19 +1234,14 @@ class _WechatChatPageState extends State<WechatChatPage> {
         socialContext: built.text,
         directiveKind: directive.kind,
         directiveWho: directive.who,
-        directiveText: directive.text,
         heartVoiceOn: _social.heartVoiceOn(speakerName),
       );
       unawaited(_social.addTokens('group', built.tokens));
       final text = await generator.generateFor(speaker, burstCount: burst);
       final heart = generator.lastHeartVoice;
       if (!mounted) return;
-      // 控制剧情走向：整段剧情一条落地，不按连发拆成多个气泡、不挂多个角色名下。
-      // 普通发言才按抽到的条数拆，一条一个气泡。
-      final isPlot = directive.kind == 'plot' && directive.text.trim().isNotEmpty;
-      final parts = isPlot
-          ? <String>[text]
-          : wechatSplitReply(text, maxParts: burst);
+      // 按抽到的条数拆，一条一个气泡。
+      final parts = wechatSplitReply(text, maxParts: burst);
       if (parts.isEmpty) return;
       // 消息要出来了，才亮一下「正在输入」，到点再落气泡。
       setState(() => _typingName = speakerName);
@@ -1259,13 +1254,11 @@ class _WechatChatPageState extends State<WechatChatPage> {
         added.add(
           await _store.appendMessage(
             group.id,
-            // 剧情旁白不挂在某个角色名下；普通发言照旧署名说话人。
-            sender: isPlot ? '' : speakerName,
+            sender: speakerName,
             text: parsed.text,
             withImage: parsed.withImage,
-            plot: isPlot,
-            // 心声随这轮发言一起存；剧情旁白不挂角色，不该带心声。
-            heartVoice: isPlot ? '' : heart,
+            // 心声随这轮发言一起存。
+            heartVoice: heart,
           ),
         );
       }
@@ -1356,12 +1349,6 @@ class _WechatChatPageState extends State<WechatChatPage> {
               ),
               _skyTile(
                 sheetCtx,
-                icon: Lucide.SquarePen,
-                label: '控制剧情走向',
-                value: 'plot',
-              ),
-              _skyTile(
-                sheetCtx,
                 icon: Lucide.Shuffle,
                 label: '切换话题',
                 value: 'switch_topic',
@@ -1443,24 +1430,6 @@ class _WechatChatPageState extends State<WechatChatPage> {
         return;
       case 'summon':
         await _summon(group);
-        return;
-      case 'plot':
-        // 控制剧情走向：手写一段剧情，作为最高指令演这一次。
-        // 输入期间把自动循环停一下，免得计时器抢先把剧情指令取走。
-        _timer?.cancel();
-        final plot = await showDialog<String>(
-          context: context,
-          builder: (_) => const WechatPlotDialog(),
-        );
-        if (!mounted || plot == null || plot.trim().isEmpty) {
-          _restartLoop();
-          return;
-        }
-        await _social.clearCooldown(scope);
-        await _social.setDirective(scope, 'plot', text: plot.trim());
-        await _social.addPlotLog(plot.trim(), scene: group.name);
-        // 立即演一次，绕过自动回复开关；演完由 _tick 内部按开关决定是否续。
-        await _tick(force: true);
         return;
       case 'switch_topic':
       case 'end_topic':
@@ -1730,7 +1699,6 @@ class _WechatChatPageState extends State<WechatChatPage> {
                 } else if (value == 'reset') {
                   await _handleSkyAction(group, 'reset');
                 } else if (value == 'summon' ||
-                    value == 'plot' ||
                     value == 'switch_topic' ||
                     value == 'end_topic' ||
                     value == 'cooldown' ||
@@ -1746,10 +1714,6 @@ class _WechatChatPageState extends State<WechatChatPage> {
                 const PopupMenuItem<String>(
                   value: 'summon',
                   child: Text('召唤角色发言'),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'plot',
-                  child: Text('控制剧情走向'),
                 ),
                 const PopupMenuItem<String>(
                   value: 'switch_topic',
@@ -1894,7 +1858,7 @@ class _WechatChatPageState extends State<WechatChatPage> {
     );
   }
 
-  /// 「控制剧情走向」落地的旁白：居中卡片，正文可多行，跟普通气泡区分开。
+  /// 旧「控制剧情走向」旁白的渲染，仅为兼容老聊天记录保留。
   Widget _plotRow(WechatMessage message) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 22),
