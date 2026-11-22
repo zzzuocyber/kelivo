@@ -642,6 +642,8 @@ class _WechatDmPageState extends State<WechatDmPage> {
           (lastAt == 0 ||
               message.at - lastAt >= wechatTimeDividerGap.inMilliseconds)) {
         items.add(WechatTimeDivider(millis: message.at));
+        // 跨了时间分隔线就是新的一组，头像要重新露出来，不能因为还是同一个人就继续藏。
+        lastSender = null;
       }
       if (message.at > 0) lastAt = message.at;
       if (message.recalled) {

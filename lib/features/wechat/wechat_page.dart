@@ -523,7 +523,8 @@ class _WechatPageState extends State<WechatPage> {
       ),
     );
     _reload();
-    if (changed == true && mounted) {
+    // 建完群立刻在设置页里删掉的话，不能再去打开一个已经不存在的群。
+    if (changed == true && mounted && _store.group(group.id) != null) {
       await _openChat(group.id);
       _reload();
     }
@@ -1755,6 +1756,13 @@ class _WechatChatPageState extends State<WechatChatPage> {
                           WechatSettingsPage(groupId: group.id),
                     ),
                   );
+                  if (!mounted) return;
+                  // 群可能已在设置页里删掉了：聊天页不能再停在一条已不存在的群上，
+                  // 连带自己一起 pop，直接退回会话列表。
+                  if (_store.group(widget.groupId) == null) {
+                    Navigator.of(context).pop();
+                    return;
+                  }
                   _reload();
                 } else if (value == 'clear') {
                   final ok = await showDialog<bool>(
@@ -1921,6 +1929,8 @@ class _WechatChatPageState extends State<WechatChatPage> {
           (lastAt == 0 ||
               message.at - lastAt >= wechatTimeDividerGap.inMilliseconds)) {
         items.add(WechatTimeDivider(millis: message.at));
+        // 跨了时间分隔线就是新的一组，头像要重新露出来，不能因为还是同一个人就继续藏。
+        lastSender = null;
       }
       if (message.at > 0) lastAt = message.at;
       if (message.recalled) {
