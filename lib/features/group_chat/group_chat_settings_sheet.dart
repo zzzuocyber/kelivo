@@ -1365,13 +1365,47 @@ class _WorldEntryPickerSheet extends StatefulWidget {
 }
 
 class _WorldEntryPickerSheetState extends State<_WorldEntryPickerSheet> {
-  late Set<String> _selected = Set.of(widget.initialSelected);
+  late final Set<String> _selected = Set.of(widget.initialSelected);
+  final TextEditingController _search = TextEditingController();
   String _query = '';
+
+  /// 当前在看的书；null = 第一层（选世界书）。
+  String? _bookId;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  WorldBook? _book(List<WorldBook> books) {
+    for (final book in books) {
+      if (book.id == _bookId) return book;
+    }
+    return null;
+  }
+
+  void _openBook(WorldBook book) {
+    setState(() {
+      _bookId = book.id;
+      _query = '';
+      _search.clear();
+    });
+  }
+
+  void _backToBooks() {
+    setState(() {
+      _bookId = null;
+      _query = '';
+      _search.clear();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final worldBooks = context.watch<WorldBookProvider>();
+    final book = _book(worldBooks.books);
     return SafeArea(
       top: false,
       child: Padding(
@@ -1380,22 +1414,26 @@ class _WorldEntryPickerSheetState extends State<_WorldEntryPickerSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
+            const Center(child: _SheetHandle()),
             const SizedBox(height: 14),
             Row(
               children: [
+                if (book != null)
+                  IconButton(
+                    onPressed: _backToBooks,
+                    icon: const Icon(Lucide.ChevronLeft, size: 20),
+                    tooltip: '返回世界书列表',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                  ),
                 Expanded(
                   child: Text(
-                    widget.title,
+                    book?.name ?? widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -1404,16 +1442,17 @@ class _WorldEntryPickerSheetState extends State<_WorldEntryPickerSheet> {
                 ),
                 TextButton(
                   onPressed: () =>
-                      Navigator.of(context).pop(Set.of(_selected)),
+                      Navigator.of(context).pop(Set<String>.of(_selected)),
                   child: const Text('完成'),
                 ),
               ],
             ),
             TextField(
+              controller: _search,
               decoration: InputDecoration(
                 isDense: true,
                 prefixIcon: const Icon(Lucide.Search, size: 16),
-                hintText: '搜条目名',
+                hintText: book == null ? '搜书名' : '搜条目名',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -1425,104 +1464,146 @@ class _WorldEntryPickerSheetState extends State<_WorldEntryPickerSheet> {
             ),
             const SizedBox(height: 8),
             Flexible(
-              child: Builder(
-                builder: (context) {
-                  final groups = <String, List<_EntryRef>>{};
-                  for (final book in worldBooks.books) {
-                    for (final entry in book.entries) {
-                      if (_query.isNotEmpty &&
-                          !entry.name.contains(_query) &&
-                          !book.name.contains(_query)) {
-                        continue;
-                      }
-                      groups
-                          .putIfAbsent(book.name, () => [])
-                          .add(_EntryRef(book, entry));
-                    }
-                  }
-                  if (groups.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          '没有世界书或条目',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: cs.onSurface.withValues(alpha: 0.5),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  return SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final entry in groups.entries) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8, bottom: 4),
-                            child: Text(
-                              entry.key,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    cs.onSurface.withValues(alpha: 0.55),
-                              ),
-                            ),
-                          ),
-                          for (final ref in entry.value)
-                            InkWell(
-                              onTap: () => _toggle(ref.entry.id),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      _selected.contains(ref.entry.id)
-                                          ? Lucide.CircleCheck
-                                          : Lucide.Circle,
-                                      size: 18,
-                                      color: _selected.contains(ref.entry.id)
-                                          ? cs.primary
-                                          : cs.onSurface.withValues(
-                                              alpha: 0.35,
-                                            ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        ref.entry.name,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                    ),
-                                    if (!ref.entry.enabled)
-                                      Text(
-                                        '已停用',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: cs.onSurface
-                                              .withValues(alpha: 0.4),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ],
-                    ),
-                  );
-                },
-              ),
+              child: book == null
+                  ? _buildBookList(cs, worldBooks.books)
+                  : _buildEntryList(cs, book),
             ),
           ],
         ),
       ),
     );
   }
+
+  /// 第一层：世界书列表，右边显示这本书已经勾了几条。
+  Widget _buildBookList(ColorScheme cs, List<WorldBook> books) {
+    final items = [
+      for (final book in books)
+        if (_query.isEmpty || book.name.contains(_query)) book,
+    ];
+    if (items.isEmpty) return _emptyHint(cs, '没有世界书');
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final book in items)
+            InkWell(
+              onTap: () => _openBook(book),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Lucide.BookOpen,
+                      size: 18,
+                      color: cs.onSurface.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        book.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                    if (_selectedIn(book) > 0)
+                      Text(
+                        '已选 ${_selectedIn(book)} 条',
+                        style: TextStyle(fontSize: 12, color: cs.primary),
+                      ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Lucide.ChevronRight,
+                      size: 16,
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  /// 第二层：这本书里的条目。
+  Widget _buildEntryList(ColorScheme cs, WorldBook book) {
+    final entries = [
+      for (final entry in book.entries)
+        if (_query.isEmpty || entry.name.contains(_query)) entry,
+    ];
+    if (entries.isEmpty) return _emptyHint(cs, '这本书没有条目');
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final entry in entries)
+            InkWell(
+              onTap: () => _toggle(entry.id),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _selected.contains(entry.id)
+                          ? Lucide.CircleCheck
+                          : Lucide.Circle,
+                      size: 18,
+                      color: _selected.contains(entry.id)
+                          ? cs.primary
+                          : cs.onSurface.withValues(alpha: 0.35),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        entry.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                    if (!entry.enabled)
+                      Text(
+                        '已停用',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  int _selectedIn(WorldBook book) =>
+      book.entries.where((entry) => _selected.contains(entry.id)).length;
+
+  Widget _emptyHint(ColorScheme cs, String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    child: Center(
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          color: cs.onSurface.withValues(alpha: 0.5),
+        ),
+      ),
+    ),
+  );
 
   void _toggle(String entryId) {
     setState(() {
@@ -1539,11 +1620,4 @@ class _WorldEntryPickerSheetState extends State<_WorldEntryPickerSheet> {
       }
     });
   }
-}
-
-class _EntryRef {
-  const _EntryRef(this.book, this.entry);
-
-  final WorldBook book;
-  final WorldBookEntry entry;
 }
