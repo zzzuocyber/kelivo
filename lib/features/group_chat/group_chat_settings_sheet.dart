@@ -15,7 +15,8 @@ import '../../../shared/widgets/ios_switch.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
 import '../../../utils/app_directories.dart';
-import '../../assistant/pages/avatar_crop_page.dart';
+import '../assistant/pages/avatar_crop_page.dart';
+import '../chat/widgets/tools_sheet_row.dart';
 import 'group_chat_models.dart';
 import 'group_chat_runtime.dart';
 
