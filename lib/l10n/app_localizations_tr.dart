@@ -18997,4 +18997,21 @@ class AppLocalizationsTr extends AppLocalizations {
   String creationFrameModelFirstOnly(String model) {
     return '$model yalnızca ilk kareyi destekler';
   }
+
+  @override
+  String get creationSubscriptionLogin => 'Abonelik';
+
+  @override
+  String creationModelReferenceLimit(int count) {
+    return 'En fazla $count referans';
+  }
+
+  @override
+  String get creationTextOnlyImage => 'Metinden görsel';
+
+  @override
+  String get creationTextOnlyVideo => 'Metinden video';
+
+  @override
+  String get creationCustomCountLabel => 'Özel sayı';
 }
