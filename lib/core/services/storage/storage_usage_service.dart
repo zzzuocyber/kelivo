@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'dart:io';
-import '../../database/database_family_preserver.dart';
 import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../../database/app_database.dart';
+import '../../database/database_family_preserver.dart';
 import '../../database/database_installation_gate.dart';
 import '../hive_migration_marker.dart';
 import '../legacy_data_retirement_service.dart';
@@ -15,6 +16,7 @@ import '../backup/restore_trace_service.dart';
 import '../../../utils/app_directories.dart';
 import '../../../utils/avatar_cache.dart';
 import '../logging/flutter_logger.dart';
+import '../media/media_generation_runner.dart';
 import '../network/request_logger.dart';
 import '../sandbox/rootfs_disk_usage.dart';
 import '../workspace/workspace_session_sync.dart';
@@ -24,6 +26,7 @@ import 'attachment_file_lock.dart';
 enum StorageUsageCategoryKey {
   images,
   files,
+  creations,
   chatData,
   legacyChatData,
   restoreTraces,
@@ -168,6 +171,7 @@ abstract final class StorageUsageService {
   }) async {
     final root = await AppDirectories.getAppDataDirectory();
     final contentRoot = await AppDirectories.contentDirectoryFor(root);
+    final creationsDir = Directory(p.join(contentRoot.path, 'generations'));
     final splitStorage = !p.equals(root.path, contentRoot.path);
     var migrationCompleted = false;
     try {
@@ -245,7 +249,17 @@ abstract final class StorageUsageService {
       try {
         await for (final ent in _listFiles(
           scanRoot,
-          excludedTopDirectories: _isolateMeasuredTopDirs,
+          skipTopDirectory: (dir) {
+            if (p.equals(dir.path, creationsDir.path)) return true;
+            final name = p.basename(dir.path);
+            if (includeUploadFiles &&
+                (!splitStorage || publicFiles) &&
+                _uploadDirectories.any((known) => p.equals(name, known))) {
+              uploadDirectories.add(dir.path);
+              return true;
+            }
+            return _isolateMeasuredTopDirs.contains(name.toLowerCase());
+          },
         )) {
           final rel = p.relative(ent.path, from: scanRoot.path);
           final parts = p.split(rel);
@@ -379,12 +393,23 @@ abstract final class StorageUsageService {
       }
     }
 
-    final [
+    var uploads = const StorageUploadFiles();
+    if (uploadDirectories.isNotEmpty) {
+      final inventory = await _readUploadDirectories(uploadDirectories);
+      uploads = inventory.files;
+      byCat[StorageUsageCategoryKey.images]!.addStats(inventory.imagesStats);
+      byCat[StorageUsageCategoryKey.files]!.addStats(inventory.filesStats);
+      totalFiles +=
+          inventory.imagesStats.fileCount + inventory.filesStats.fileCount;
+      totalBytes += inventory.imagesStats.bytes + inventory.filesStats.bytes;
+    }
+    final (
       workspaceUsage,
       skillsUsage,
       sessionsUsage,
       sandboxUsage,
-    ] = await Future.wait([
+      creationUsage,
+    ) = await (
       _measureContentsOf(
         workspacesDirectory ?? AppDirectories.getWorkspacesDirectory,
       ),
@@ -397,7 +422,8 @@ abstract final class StorageUsageService {
             environmentDirectory ?? AppDirectories.getEnvironmentDirectory,
         rootfsUsageDirectory: rootfsUsageDirectory,
       ),
-    ]);
+      _measureUsage(creationsDir),
+    ).wait;
     byCat[StorageUsageCategoryKey.workspaceFiles]!.addStats(
       workspaceUsage.stats,
     );
@@ -406,16 +432,19 @@ abstract final class StorageUsageService {
     byCat[StorageUsageCategoryKey.sandboxEnvironment]!.addStats(
       sandboxUsage.stats,
     );
+    byCat[StorageUsageCategoryKey.creations]!.addStats(creationUsage);
     totalFiles +=
         workspaceUsage.stats.fileCount +
         skillsUsage.stats.fileCount +
         sessionsUsage.stats.fileCount +
-        sandboxUsage.stats.fileCount;
+        sandboxUsage.stats.fileCount +
+        creationUsage.fileCount;
     totalBytes +=
         workspaceUsage.stats.bytes +
         skillsUsage.stats.bytes +
         sessionsUsage.stats.bytes +
-        sandboxUsage.stats.bytes;
+        sandboxUsage.stats.bytes +
+        creationUsage.bytes;
 
     final fontsDir = await AppDirectories.getFontsDirectory();
     final localModelsDir = Directory(p.join(contentRoot.path, 'asr_models'));
@@ -472,6 +501,10 @@ abstract final class StorageUsageService {
       StorageUsageCategory(
         key: StorageUsageCategoryKey.files,
         stats: byCat[StorageUsageCategoryKey.files]!.toStats(),
+      ),
+      StorageUsageCategory(
+        key: StorageUsageCategoryKey.creations,
+        stats: creationUsage,
       ),
       StorageUsageCategory(
         key: StorageUsageCategoryKey.chatData,
@@ -660,6 +693,37 @@ abstract final class StorageUsageService {
       clearable: clearable,
       categories: categories,
     );
+  }
+
+  static Future<int> clearCreationBatches(
+    MediaGenerationRunner runner, {
+    required DateTime cutoff,
+  }) async {
+    await runner.initialized;
+    await runner.recoverBatchDeletions();
+    final repository = runner.repository;
+    final version = repository.replacementVersion;
+    final candidates = await repository.completedBatchIdsBefore(cutoff);
+    var removed = 0;
+    for (final id in candidates) {
+      await AttachmentFileLock.synchronized(() async {
+        if (!repository.canWrite || version != repository.replacementVersion) {
+          throw StateError('Creation history changed during cleanup');
+        }
+        final batch = await repository.batch(id);
+        if (batch == null ||
+            batch.status.isActive ||
+            !batch.createdAt.isBefore(cutoff)) {
+          return;
+        }
+        await runner.files.deleteBatchAndRecord(
+          id,
+          () => repository.deleteBatch(id),
+        );
+        removed++;
+      });
+    }
+    return removed;
   }
 
   static Future<void> clearCache({required bool avatarsOnly}) async {
@@ -1156,6 +1220,7 @@ class _MutableStats {
 const List<StorageUsageCategoryKey> _categoryOrder = <StorageUsageCategoryKey>[
   StorageUsageCategoryKey.images,
   StorageUsageCategoryKey.files,
+  StorageUsageCategoryKey.creations,
   StorageUsageCategoryKey.chatData,
   StorageUsageCategoryKey.legacyChatData,
   StorageUsageCategoryKey.restoreTraces,
@@ -1186,6 +1251,7 @@ bool _isAlwaysVisibleCategory(StorageUsageCategoryKey key) {
       return false;
     case StorageUsageCategoryKey.images:
     case StorageUsageCategoryKey.files:
+    case StorageUsageCategoryKey.creations:
     case StorageUsageCategoryKey.chatData:
     case StorageUsageCategoryKey.cache:
     case StorageUsageCategoryKey.logs:

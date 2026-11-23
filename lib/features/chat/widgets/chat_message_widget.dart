@@ -3742,6 +3742,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
               return widgets;
             }(),
             ChatCreationImages(
+              key: ValueKey(('creation-images', widget.message.id)),
               messageId: widget.message.id,
               attachments: creationAttachments,
               streaming: widget.message.isStreaming,

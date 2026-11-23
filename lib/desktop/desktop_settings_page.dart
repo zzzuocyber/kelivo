@@ -247,6 +247,8 @@ class _DesktopSettingsPageState extends State<DesktopSettingsPage> {
           DesktopSettingsNavigationTarget.mcp => _SettingsMenuItem.mcp,
           DesktopSettingsNavigationTarget.providers ||
           DesktopSettingsNavigationTarget.fal => _SettingsMenuItem.providers,
+          DesktopSettingsNavigationTarget.defaultModel =>
+            _SettingsMenuItem.defaultModel,
         };
         _showTopicPosition =
             target == DesktopSettingsNavigationTarget.topicPosition;
