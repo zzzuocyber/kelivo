@@ -3493,8 +3493,27 @@ class _ChatInputBarState extends State<ChatInputBar>
           return BrandAssets.assetForName(svc.name);
         })();
 
-        // Search button
-        actions.add(
+        // Search entry moved into the reasoning (lightbulb) sheet as
+        // 「搜索设置」 (089). On mobile this slot is a placeholder for the
+        // upcoming group-chat / extension button (no action yet); desktop
+        // keeps the original search button.
+        if (!PlatformUtils.isDesktop)
+          actions.add(
+            _OverflowAction(
+              width: normalButtonW,
+              builder: () => _CompactIconButton(
+                icon: Lucide.Puzzle,
+                active: false,
+              ),
+              menu: DesktopContextMenuItem(
+                icon: Lucide.Puzzle,
+                label: l10n.chatInputBarOnlineSearchTooltip,
+              ),
+            ),
+          );
+        else
+          // Search button
+          actions.add(
           _OverflowAction(
             width: normalButtonW,
             builder: () {

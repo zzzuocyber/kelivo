@@ -31,6 +31,8 @@ class Lucide {
   static const IconData Crop = lucide.LucideIcons.crop;
   static const IconData Upload = lucide.LucideIcons.upload;
   static const IconData Bot = lucide.LucideIcons.bot;
+  static const IconData Puzzle = lucide.LucideIcons.puzzle;
+  static const IconData Server = lucide.LucideIcons.server;
   static const IconData History = lucide.LucideIcons.history;
   static const IconData Settings = lucide.LucideIcons.settings;
   static const IconData Search = lucide.LucideIcons.search;

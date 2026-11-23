@@ -25,6 +25,9 @@ import '../../../shared/widgets/snackbar.dart';
 import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
 import 'chat_suggestion_module.dart';
+import 'mcp_servers_sheet.dart';
+import 'tools_sheet_row.dart';
+import '../../../features/search/widgets/search_settings_sheet.dart';
 
 Future<void> showReasoningLevelSheet(
   BuildContext context, {
@@ -209,8 +212,85 @@ class ReasoningLevelPicker extends StatelessWidget {
           )
         else
           const _UnsupportedState(),
+        _SearchSettingsEntry(config: config, modelId: modelId, compact: compact),
+        if (assistant != null)
+          _McpServersEntry(
+            assistantId: assistant.id,
+            conversationId: conversationId,
+            compact: compact,
+          ),
         ChatSuggestionModule(conversationId: conversationId, compact: compact),
       ],
+    );
+  }
+}
+
+class _SearchSettingsEntry extends StatelessWidget {
+  const _SearchSettingsEntry({
+    required this.config,
+    required this.modelId,
+    this.compact = false,
+  });
+
+  final ProviderConfig config;
+  final String modelId;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: const ValueKey('search-settings-entry'),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 16,
+        compact ? 4 : 8,
+        compact ? 12 : 16,
+        compact ? 4 : 12,
+      ),
+      child: ToolsSheetRow(
+        icon: Lucide.Globe,
+        label: '搜索设置',
+        onTap: () => showSearchSettingsSheet(
+          context,
+          chatModelProviderKey: config.id,
+          chatModelId: modelId,
+        ),
+        trailing: ToolsSheetRow.chevron(context),
+      ),
+    );
+  }
+}
+
+class _McpServersEntry extends StatelessWidget {
+  const _McpServersEntry({
+    required this.assistantId,
+    this.conversationId,
+    this.compact = false,
+  });
+
+  final String assistantId;
+  final String? conversationId;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: const ValueKey('mcp-servers-entry'),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 16,
+        compact ? 4 : 8,
+        compact ? 12 : 16,
+        compact ? 4 : 12,
+      ),
+      child: ToolsSheetRow(
+        icon: Lucide.Server,
+        label: 'MCP 服务器',
+        onTap: () => showMcpServersSheet(
+          context,
+          assistantId: assistantId,
+          conversationId: conversationId,
+        ),
+        trailing: ToolsSheetRow.chevron(context),
+      ),
     );
   }
 }
