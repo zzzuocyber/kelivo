@@ -9,6 +9,13 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/database/business_preferences.dart';
 import '../../../core/models/world_book.dart';
+import '../../../core/models/model_spec.dart';
+import '../../../core/providers/settings_provider.dart';
+import '../../../core/services/api/reasoning/reasoning_level_options.dart';
+import '../../../core/services/model_spec/model_spec_resolver.dart';
+import '../../../shared/widgets/snackbar.dart';
+import '../chat/widgets/reasoning_level_sheet.dart';
+import '../model/widgets/model_select_sheet.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../icons/lucide_adapter.dart';
@@ -21,6 +28,7 @@ import '../assistant/pages/avatar_crop_page.dart';
 import '../chat/widgets/tools_sheet_row.dart';
 import 'group_chat_models.dart';
 import 'group_chat_role_library.dart';
+import 'group_chat_role_library_page.dart';
 import 'group_chat_runtime.dart';
 
 /// 群聊头像图库目录（聊天记录存储 → 图片 → 群聊头像 分类）。
@@ -462,15 +470,25 @@ class _GroupChatConfigSheetState extends State<_GroupChatConfigSheet> {
               ),
               const SizedBox(height: 8),
               ToolsSheetRow(
-                key: const ValueKey('group-chat-roles'),
+                key: const ValueKey('group-chat-role-picker'),
                 icon: _roleIcon,
-                label: '角色管理（${resolveGroupChatRoles(_config).length}）',
+                label: '参与角色（已选 ${resolveGroupChatRoles(_config).length}）',
                 trailing: ToolsSheetRow.chevron(context),
                 onTap: () => _openChild(
-                  _showGroupChatRoleListSheet(
+                  _showGroupChatRolePickerSheet(
                     context,
                     conversationId: widget.conversationId,
                   ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ToolsSheetRow(
+                key: const ValueKey('group-chat-role-library'),
+                icon: Lucide.NotebookTabs,
+                label: '角色库（共 ${GroupChatRoleLibrary.instance.roles.length}）',
+                trailing: ToolsSheetRow.chevron(context),
+                onTap: () => _openChild(
+                  openGroupChatRoleLibraryPage(context),
                 ),
               ),
               const SizedBox(height: 8),
@@ -802,109 +820,192 @@ class _GroupChatPromptSheetState extends State<_GroupChatPromptSheet> {
 }
 
 // ============================================================================
-// 三级三：角色管理（角色列表 + 添加角色）
+// 三级三：参与角色（从全局角色库里挑这场用谁）
 // ============================================================================
 
-Future<void> _showGroupChatRoleListSheet(
+Future<void> _showGroupChatRolePickerSheet(
   BuildContext context, {
   required String conversationId,
 }) {
   return _showGroupChatSheet<void>(
     context,
-    (_) => _GroupChatRoleListSheet(conversationId: conversationId),
+    (_) => _GroupChatRolePickerSheet(conversationId: conversationId),
   );
 }
 
-class _GroupChatRoleListSheet extends StatefulWidget {
-  const _GroupChatRoleListSheet({required this.conversationId});
+class _GroupChatRolePickerSheet extends StatefulWidget {
+  const _GroupChatRolePickerSheet({required this.conversationId});
 
   final String conversationId;
 
   @override
-  State<_GroupChatRoleListSheet> createState() =>
-      _GroupChatRoleListSheetState();
+  State<_GroupChatRolePickerSheet> createState() =>
+      _GroupChatRolePickerSheetState();
 }
 
-class _GroupChatRoleListSheetState extends State<_GroupChatRoleListSheet> {
+class _GroupChatRolePickerSheetState extends State<_GroupChatRolePickerSheet> {
+  final GroupChatRoleLibrary _library = GroupChatRoleLibrary.instance;
+  late GroupChatConfig _config;
+  List<String> _selected = const <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _config = GroupChatConfig.fromConversation(
+      context.read<ChatService>().getConversation(widget.conversationId),
+    );
+    _selected = <String>[for (final role in resolveGroupChatRoles(_config)) role.id];
+    _library.addListener(_onLibraryChanged);
+    unawaited(_ensureLibrary());
+  }
+
+  @override
+  void dispose() {
+    _library.removeListener(_onLibraryChanged);
+    super.dispose();
+  }
+
+  void _onLibraryChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _ensureLibrary() async {
+    await _library.ensureLoaded(context.read<BusinessPreferences>());
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _save() async {
+    final roles = <GroupChatRole>[
+      for (final id in _selected)
+        if (_library.roleById(id) != null) _library.roleById(id)!,
+    ];
+    await _saveGroupChatConfig(
+      context,
+      widget.conversationId,
+      _config.copyWith(
+        roleIds: <String>[for (final role in roles) role.id],
+        roles: roles,
+      ),
+    );
+    if (mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    // 角色增删改都落在对话 extras，watch 一下就自动刷新。
-    final chat = context.watch<ChatService>();
-    final config = GroupChatConfig.fromConversation(
-      chat.getConversation(widget.conversationId),
-    );
-    final roles = resolveGroupChatRoles(config);
+    final folders = _library.folders;
+    final unclassified = _library.rolesInFolder('');
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Center(child: _SheetHandle()),
-              const SizedBox(height: 14),
-              _SheetHeader(
-                icon: _roleIcon,
-                title: '角色管理（${roles.length}）',
-                trailing: TextButton.icon(
-                  onPressed: () => _addRole(config),
-                  icon: const Icon(Lucide.Plus, size: 16),
-                  label: const Text('添加角色'),
-                ),
-              ),
-              if (roles.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Center(child: _SheetHandle()),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
                   child: Text(
-                    '还没有角色，先添加一个并绑定世界书条目当人设',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurface.withValues(alpha: 0.5),
+                    '参与角色（已选 ${_selected.length}）',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                )
-              else
-                for (final role in roles)
-                  _RoleTile(
-                    role: role,
-                    onTap: () => _manageRole(role),
-                  ),
-              const SizedBox(height: 8),
-            ],
-          ),
+                ),
+                TextButton(onPressed: _save, child: const Text('完成')),
+              ],
+            ),
+            Flexible(
+              child: _library.roles.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          '角色库还是空的，先去「角色库」里建角色',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurface.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (unclassified.isNotEmpty) ...[
+                            _groupHeader(cs, '未分类'),
+                            for (final role in unclassified) _roleRow(cs, role),
+                          ],
+                          for (final folder in folders) ...[
+                            if (_library
+                                .rolesInFolder(folder.id)
+                                .isNotEmpty) ...[
+                              _groupHeader(cs, folder.name),
+                              for (final role
+                                  in _library.rolesInFolder(folder.id))
+                                _roleRow(cs, role),
+                            ],
+                          ],
+                        ],
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
   }
 
-  Future<void> _addRole(GroupChatConfig config) async {
-    final current = resolveGroupChatRoles(config);
-    final role = GroupChatRole(
-      id: const Uuid().v4(),
-      name: '角色${current.length + 1}',
-    );
-    // 098：角色实体进全局库，对话只记住 id。
-    await GroupChatRoleLibrary.instance.upsertRole(role);
-    await _saveGroupChatConfig(
-      context,
-      widget.conversationId,
-      config.copyWith(
-        roles: <GroupChatRole>[...current, role],
-        roleIds: <String>[for (final item in current) item.id, role.id],
+  Widget _groupHeader(ColorScheme cs, String title) => Padding(
+    padding: const EdgeInsets.only(top: 10, bottom: 2),
+    child: Text(
+      title,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: cs.onSurface.withValues(alpha: 0.55),
       ),
-    );
-    if (!mounted) return;
-    await _manageRole(role);
-  }
+    ),
+  );
 
-  Future<void> _manageRole(GroupChatRole role) async {
-    await showGroupChatRoleManageSheet(
-      context,
-      conversationId: widget.conversationId,
-      role: role,
+  Widget _roleRow(ColorScheme cs, GroupChatRole role) {
+    final selected = _selected.contains(role.id);
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        setState(() {
+          if (!_selected.remove(role.id)) _selected.add(role.id);
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Lucide.CircleCheck : Lucide.Circle,
+              size: 18,
+              color: selected
+                  ? cs.primary
+                  : cs.onSurface.withValues(alpha: 0.35),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                role.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -914,9 +1015,10 @@ class _GroupChatRoleListSheetState extends State<_GroupChatRoleListSheet> {
 // ============================================================================
 
 /// 角色管理页（设置弹层里点角色进来的二级页）。
+/// 角色编辑页。[conversationId] 为空 = 从角色库进来的（只改库，不碰对话快照）。
 Future<void> showGroupChatRoleManageSheet(
   BuildContext context, {
-  required String conversationId,
+  String? conversationId,
   required GroupChatRole role,
 }) {
   return showModalBottomSheet<void>(
@@ -934,9 +1036,9 @@ Future<void> showGroupChatRoleManageSheet(
 }
 
 class _RoleManageSheet extends StatefulWidget {
-  const _RoleManageSheet({required this.conversationId, required this.role});
+  const _RoleManageSheet({this.conversationId, required this.role});
 
-  final String conversationId;
+  final String? conversationId;
   final GroupChatRole role;
 
   @override
@@ -965,8 +1067,10 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
     setState(() => _role = next);
     // 098：角色实体落在全局库，改完直接落库；对话里的快照跟着同步。
     unawaited(GroupChatRoleLibrary.instance.upsertRole(next));
+    final conversationId = widget.conversationId;
+    if (conversationId == null) return;
     final chat = context.read<ChatService>();
-    final conversation = chat.getConversation(widget.conversationId);
+    final conversation = chat.getConversation(conversationId);
     if (conversation == null) return;
     final config = GroupChatConfig.fromConversation(conversation);
     final current = resolveGroupChatRoles(config);
@@ -975,7 +1079,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
         if (role.id == next.id) next else role,
     ];
     if (!roles.any((role) => role.id == next.id)) roles.add(next);
-    chat.updateConversationExtras(widget.conversationId, (extrasRaw) {
+    chat.updateConversationExtras(conversationId, (extrasRaw) {
       final extras = Map<String, dynamic>.from(extrasRaw);
       extras[GroupChatConfig.extrasKey] = config
           .copyWith(roles: roles, roleIds: <String>[for (final r in roles) r.id])
@@ -988,10 +1092,11 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除角色'),
+        title: Text(widget.conversationId == null ? '从角色库删除' : '移出这场群聊'),
         content: Text(
-          '把「${_role.name}」从这场群聊里移除？\n'
-          '角色还留在角色库，别的对话不受影响。',
+          widget.conversationId == null
+              ? '「${_role.name}」会从角色库消失。已经选过它的对话仍按上次的样子显示。'
+              : '把「${_role.name}」从这场群聊里移除？\n角色还留在角色库，别的对话不受影响。',
         ),
         actions: [
           TextButton(
@@ -1006,14 +1111,20 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    final conversationId = widget.conversationId;
+    if (conversationId == null) {
+      await GroupChatRoleLibrary.instance.removeRole(_role.id);
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
     final chat = context.read<ChatService>();
-    final conversation = chat.getConversation(widget.conversationId);
+    final conversation = chat.getConversation(conversationId);
     if (conversation != null) {
       final config = GroupChatConfig.fromConversation(conversation);
       final roles = resolveGroupChatRoles(config)
           .where((role) => role.id != _role.id)
           .toList(growable: false);
-      await chat.updateConversationExtras(widget.conversationId, (current) {
+      await chat.updateConversationExtras(conversationId, (current) {
         final extras = Map<String, dynamic>.from(current);
         extras[GroupChatConfig.extrasKey] = config
             .copyWith(
@@ -1103,6 +1214,30 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
                   summary: '',
                   onTap: () =>
                       _updateConfig((role) => role.copyWith(clearAvatar: true)),
+                ),
+              const SizedBox(height: 8),
+              _EntryPickerRow(
+                icon: Lucide.Brain,
+                label: '模型',
+                summary: _modelSummary(),
+                onTap: _pickModel,
+              ),
+              const SizedBox(height: 8),
+              _EntryPickerRow(
+                icon: Lucide.Sparkles,
+                label: '深度思考',
+                summary: _reasoningSummary(),
+                onTap: _pickReasoning,
+              ),
+              if (_role.modelProviderKey.isNotEmpty)
+                _EntryPickerRow(
+                  icon: Lucide.X,
+                  label: '改回跟随对话模型',
+                  summary: '',
+                  onTap: () => _updateConfig(
+                    (role) =>
+                        role.copyWith(clearModel: true, clearReasoning: true),
+                  ),
                 ),
               const SizedBox(height: 8),
             ],
@@ -1200,6 +1335,145 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
     final path = await pickAndSaveGroupChatAvatar(context);
     if (path == null || !mounted) return;
     _updateConfig((role) => role.copyWith(avatar: path));
+  }
+
+  String _modelSummary() {
+    final providerKey = _role.modelProviderKey.trim();
+    final modelId = _role.modelId.trim();
+    if (providerKey.isEmpty || modelId.isEmpty) return '跟随对话';
+    final settings = context.read<SettingsProvider>();
+    final override =
+        settings.providerConfigs[providerKey]?.modelOverrides[modelId];
+    if (override is Map) {
+      final name = (override['name'] as String?)?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+    return modelId;
+  }
+
+  String _reasoningSummary() {
+    if (_role.modelProviderKey.trim().isEmpty ||
+        _role.modelId.trim().isEmpty) {
+      return '先选模型';
+    }
+    final name = _role.reasoningLevel.trim();
+    if (name.isEmpty || name == 'auto') return '自动';
+    final l10n = AppLocalizations.of(context)!;
+    for (final level in ReasoningLevel.values) {
+      if (level.name == name) return reasoningLevelLabel(l10n, level);
+    }
+    return '自动';
+  }
+
+  Future<void> _pickModel() async {
+    final selection = await showModelSelector(
+      context,
+      initialProviderKey: _role.modelProviderKey.trim().isEmpty
+          ? null
+          : _role.modelProviderKey.trim(),
+      initialModelId: _role.modelId.trim().isEmpty
+          ? null
+          : _role.modelId.trim(),
+    );
+    if (selection == null || !mounted) return;
+    if (selection.providerKey.isEmpty || selection.modelId.isEmpty) return;
+    _updateConfig(
+      (role) => role.copyWith(
+        modelProviderKey: selection.providerKey,
+        modelId: selection.modelId,
+        clearReasoning: true,
+      ),
+    );
+  }
+
+  Future<void> _pickReasoning() async {
+    final providerKey = _role.modelProviderKey.trim();
+    final modelId = _role.modelId.trim();
+    if (providerKey.isEmpty || modelId.isEmpty) {
+      showAppSnackBar(
+        context,
+        message: '先给这个角色选模型',
+        type: NotificationType.info,
+      );
+      return;
+    }
+    final settings = context.read<SettingsProvider>();
+    final config = settings.providerConfigs[providerKey];
+    if (config == null) {
+      showAppSnackBar(
+        context,
+        message: '找不到这个模型的服务商',
+        type: NotificationType.error,
+      );
+      return;
+    }
+    final spec = ModelSpecResolver.instance.spec(config, modelId);
+    if (!spec.supportsReasoning) {
+      showAppSnackBar(
+        context,
+        message: '这个模型没有深度思考档位',
+        type: NotificationType.info,
+      );
+      return;
+    }
+    final snapshot = buildReasoningLevelPickerSnapshot(
+      settings: settings,
+      config: config,
+      modelId: modelId,
+    );
+    final l10n = AppLocalizations.of(context)!;
+    final current = _role.reasoningLevel.trim();
+    final picked = await showModalBottomSheet<ReasoningLevelRow>(
+      context: context,
+      backgroundColor: context.overlaySurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Center(child: _SheetHandle()),
+              const SizedBox(height: 12),
+              for (final row in snapshot.sliderStops)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ToolsSheetRow(
+                    icon: row.budget == null ? Lucide.Sparkles : Lucide.Hash,
+                    label: reasoningLevelLabel(
+                      l10n,
+                      row.level ?? ReasoningLevel.auto,
+                    ),
+                    subtitle:
+                        reasoningLevelStopSubtitle(l10n, snapshot, row) ?? '',
+                    trailing:
+                        (row.level?.name ??
+                                'auto') ==
+                            (current.isEmpty ? 'auto' : current)
+                        ? Icon(
+                            Lucide.Check,
+                            size: 18,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          )
+                        : const SizedBox(width: 18),
+                    onTap: () => Navigator.of(ctx).pop(row),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    _updateConfig(
+      (role) => role.copyWith(
+        reasoningLevel: picked.level?.name ?? 'auto',
+        reasoningBudget: picked.budget ?? 0,
+      ),
+    );
   }
 
   InputDecoration _decoration(String hint) {
