@@ -54,8 +54,7 @@ Future<String?> pickAndSaveGroupChatAvatar() async {
   }
 }
 
-/// 拼图按钮点开的「群聊设置」二级弹层（090）。
-/// 每个对话独立：配置存在对话 extras 的 `groupChat.config`。
+/// 拼图抽屉（093 起叫「扩展」）：一级只有一张群聊设置卡片，开关挪进二级。
 Future<void> showGroupChatSettingsSheet(
   BuildContext context, {
   required String? conversationId,
@@ -63,101 +62,231 @@ Future<void> showGroupChatSettingsSheet(
   if (conversationId == null || conversationId.isEmpty) {
     return Future.value();
   }
-  return showModalBottomSheet<void>(
+  return _showGroupChatSheet<void>(
+    context,
+    (_) => _GroupChatEntrySheet(conversationId: conversationId),
+  );
+}
+
+/// 群聊相关弹层统一走这里：同样的圆角、同样的底色。
+Future<T?> _showGroupChatSheet<T>(
+  BuildContext context,
+  WidgetBuilder builder,
+) {
+  return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
     backgroundColor: context.overlaySurface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => _GroupChatSettingsSheet(conversationId: conversationId),
+    builder: builder,
   );
 }
 
-class _GroupChatSettingsSheet extends StatefulWidget {
-  const _GroupChatSettingsSheet({required this.conversationId});
+/// 把整份群聊配置写回对话 extras（二级、三级页面共用）。
+Future<void> _saveGroupChatConfig(
+  BuildContext context,
+  String conversationId,
+  GroupChatConfig next,
+) {
+  return context.read<ChatService>().updateConversationExtras(
+    conversationId,
+    (current) {
+      final extras = Map<String, dynamic>.from(current);
+      extras[GroupChatConfig.extrasKey] = next.toJson();
+      return extras;
+    },
+  );
+}
+
+// 三个二级入口的图标，三级页标题复用同一套。
+const _roleMessageIcon = Lucide.MessagesSquare;
+const _promptIcon = Lucide.Settings2;
+const _roleIcon = Lucide.User;
+
+/// 弹层把手。
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
+/// 弹层标题行：图标 + 名称，右边可以挂开关或按钮。
+class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({required this.icon, required this.title, this.trailing});
+
+  final IconData icon;
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: cs.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
+    );
+  }
+}
+
+InputDecoration _sheetFieldDecoration(BuildContext context, String hint) {
+  final cs = Theme.of(context).colorScheme;
+  return InputDecoration(
+    isDense: true,
+    filled: true,
+    fillColor: cs.onSurface.withValues(alpha: 0.04),
+    hintStyle: TextStyle(
+      color: cs.onSurface.withValues(alpha: 0.4),
+      fontSize: 13,
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    hintText: hint,
+  );
+}
+
+Widget _sheetFieldLabel(String text) => Padding(
+  padding: const EdgeInsets.only(bottom: 6),
+  child: Text(
+    text,
+    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+  ),
+);
+
+// ============================================================================
+// 一级：拼图抽屉「扩展」
+// ============================================================================
+
+class _GroupChatEntrySheet extends StatelessWidget {
+  const _GroupChatEntrySheet({required this.conversationId});
 
   final String conversationId;
 
   @override
-  State<_GroupChatSettingsSheet> createState() =>
-      _GroupChatSettingsSheetState();
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final chat = context.watch<ChatService>();
+    final enabled = GroupChatConfig.fromConversation(
+      chat.getConversation(conversationId),
+    ).enabled;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Center(child: _SheetHandle()),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 34,
+              child: Center(
+                child: Text(
+                  '扩展',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: AppFontWeights.emphasis,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            ToolsSheetRow(
+              key: const ValueKey('group-chat-entry'),
+              icon: Lucide.Puzzle,
+              label: '群聊设置',
+              detail: enabled ? '已开启' : '已关闭',
+              trailing: ToolsSheetRow.chevron(context),
+              onTap: () => _showGroupChatConfigSheet(
+                context,
+                conversationId: conversationId,
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _GroupChatSettingsSheetState extends State<_GroupChatSettingsSheet> {
+// ============================================================================
+// 二级：群聊设置（开关 + 三个入口卡片）
+// ============================================================================
+
+Future<void> _showGroupChatConfigSheet(
+  BuildContext context, {
+  required String conversationId,
+}) {
+  return _showGroupChatSheet<void>(
+    context,
+    (_) => _GroupChatConfigSheet(conversationId: conversationId),
+  );
+}
+
+class _GroupChatConfigSheet extends StatefulWidget {
+  const _GroupChatConfigSheet({required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  State<_GroupChatConfigSheet> createState() => _GroupChatConfigSheetState();
+}
+
+class _GroupChatConfigSheetState extends State<_GroupChatConfigSheet> {
   GroupChatConfig _config = const GroupChatConfig();
-  late final TextEditingController _turns;
-  late final TextEditingController _format;
-  late final TextEditingController _topic;
-  late final TextEditingController _rules;
-  late final TextEditingController _world;
-  bool _loaded = false;
 
   @override
   void initState() {
     super.initState();
+    _reload();
+  }
+
+  void _reload() {
     _config = GroupChatConfig.fromConversation(
       context.read<ChatService>().getConversation(widget.conversationId),
     );
-    _turns = TextEditingController(text: '${_config.maxTurns}');
-    _format = TextEditingController(text: _config.messageFormat);
-    _topic = TextEditingController(text: _config.topic);
-    _rules = TextEditingController(text: _config.rules);
-    _world = TextEditingController(text: _config.worldPrompt);
-    _loaded = true;
-  }
-
-  @override
-  void dispose() {
-    _turns.dispose();
-    _format.dispose();
-    _topic.dispose();
-    _rules.dispose();
-    _world.dispose();
-    super.dispose();
   }
 
   Future<void> _persist(GroupChatConfig next) async {
     setState(() => _config = next);
-    await context.read<ChatService>().updateConversationExtras(
-          widget.conversationId,
-          (current) {
-            final extras = Map<String, dynamic>.from(current);
-            extras[GroupChatConfig.extrasKey] = next.toJson();
-            return extras;
-          },
-        );
+    await _saveGroupChatConfig(context, widget.conversationId, next);
   }
 
-  InputDecoration _decoration(String hint) {
-    final cs = Theme.of(context).colorScheme;
-    return InputDecoration(
-      isDense: true,
-      filled: true,
-      fillColor: cs.onSurface.withValues(alpha: 0.04),
-      hintStyle: TextStyle(
-        color: cs.onSurface.withValues(alpha: 0.4),
-        fontSize: 13,
-      ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      hintText: hint,
-    );
+  /// 三级页回来可能改了角色或绑定，重新读一份快照。
+  Future<void> _openChild(Future<void> child) async {
+    await child;
+    if (!mounted) return;
+    setState(_reload);
   }
-
-  Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-      );
 
   @override
   Widget build(BuildContext context) {
@@ -171,35 +300,15 @@ class _GroupChatSettingsSheetState extends State<_GroupChatSettingsSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: cs.onSurface.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
+              const Center(child: _SheetHandle()),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Icon(Lucide.Puzzle, size: 20, color: cs.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: const Text(
-                      '群聊设置',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  IosSwitch(
-                    value: _config.enabled,
-                    onChanged: (v) => _persist(_config.copyWith(enabled: v)),
-                  ),
-                ],
+              _SheetHeader(
+                icon: Lucide.Puzzle,
+                title: '群聊设置',
+                trailing: IosSwitch(
+                  value: _config.enabled,
+                  onChanged: (v) => _persist(_config.copyWith(enabled: v)),
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -209,82 +318,53 @@ class _GroupChatSettingsSheetState extends State<_GroupChatSettingsSheet> {
                   color: cs.onSurface.withValues(alpha: 0.5),
                 ),
               ),
-              if (_config.enabled) ...[
-                const SizedBox(height: 16),
-                _buildPauseRow(cs),
-                const SizedBox(height: 14),
-                _label('接力上限（条，最多 ${GroupChatConfig.maxTurnsLimit}）'),
-                TextField(
-                  controller: _turns,
-                  keyboardType: TextInputType.number,
-                  decoration: _decoration('默认 ${GroupChatConfig.defaultMaxTurns}'),
-                  onChanged: (v) {
-                    final parsed = int.tryParse(v.trim());
-                    if (parsed == null) return;
-                    _persist(
-                      _config.copyWith(
-                        maxTurns: parsed.clamp(1, GroupChatConfig.maxTurnsLimit),
-                      ),
-                    );
-                  },
+              const SizedBox(height: 16),
+              _buildPauseRow(cs),
+              const SizedBox(height: 14),
+              ToolsSheetRow(
+                key: const ValueKey('group-chat-role-message'),
+                icon: _roleMessageIcon,
+                label: '角色消息设置',
+                trailing: ToolsSheetRow.chevron(context),
+                onTap: () => _openChild(
+                  _showGroupChatRoleMessageSheet(
+                    context,
+                    conversationId: widget.conversationId,
+                  ),
                 ),
-                const SizedBox(height: 14),
-                _label('消息格式（{角色名} {内容} 占位）'),
-                TextField(
-                  controller: _format,
-                  decoration:
-                      _decoration(GroupChatConfig.defaultMessageFormat),
-                  onChanged: (v) =>
-                      _persist(_config.copyWith(messageFormat: v)),
+              ),
+              const SizedBox(height: 8),
+              ToolsSheetRow(
+                key: const ValueKey('group-chat-prompts'),
+                icon: _promptIcon,
+                label: '群聊提示词设置',
+                trailing: ToolsSheetRow.chevron(context),
+                onTap: () => _openChild(
+                  _showGroupChatPromptSheet(
+                    context,
+                    conversationId: widget.conversationId,
+                  ),
                 ),
-                const SizedBox(height: 14),
-                _label('当前话题'),
-                TextField(
-                  controller: _topic,
-                  minLines: 1,
-                  maxLines: 4,
-                  decoration: _decoration('现在大家在聊什么'),
-                  onChanged: (v) => _persist(_config.copyWith(topic: v)),
+              ),
+              const SizedBox(height: 8),
+              ToolsSheetRow(
+                key: const ValueKey('group-chat-roles'),
+                icon: _roleIcon,
+                label: '角色管理（${_config.roles.length}）',
+                trailing: ToolsSheetRow.chevron(context),
+                onTap: () => _openChild(
+                  _showGroupChatRoleListSheet(
+                    context,
+                    conversationId: widget.conversationId,
+                  ),
                 ),
-                const SizedBox(height: 14),
-                _label('群聊规则'),
-                TextField(
-                  controller: _rules,
-                  minLines: 1,
-                  maxLines: 4,
-                  decoration: _decoration('怎么聊的约束，如：每次发言不超过三句'),
-                  onChanged: (v) => _persist(_config.copyWith(rules: v)),
-                ),
-                const SizedBox(height: 14),
-                _label('世界观'),
-                TextField(
-                  controller: _world,
-                  minLines: 2,
-                  maxLines: 6,
-                  decoration: _decoration('群聊的世界观，可写字也可绑世界书条目'),
-                  onChanged: (v) => _persist(_config.copyWith(worldPrompt: v)),
-                ),
-                const SizedBox(height: 8),
-                _EntryPickerRow(
-                  icon: Lucide.BookOpen,
-                  label: '绑定世界观条目',
-                  summary: _worldSummary(),
-                  onTap: () => _pickWorldEntries(),
-                ),
-                const SizedBox(height: 16),
-                _buildRoleSection(cs),
-              ],
+              ),
               const SizedBox(height: 8),
             ],
           ),
         ),
       ),
     );
-  }
-
-  String _worldSummary() {
-    if (_config.worldEntryIds.isEmpty) return '未绑定';
-    return '已绑 ${_config.worldEntryIds.length} 条';
   }
 
   Widget _buildPauseRow(ColorScheme cs) {
@@ -325,81 +405,165 @@ class _GroupChatSettingsSheetState extends State<_GroupChatSettingsSheet> {
       ],
     );
   }
+}
 
-  Widget _buildRoleSection(ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '角色管理（${_config.roles.length}）',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+// ============================================================================
+// 三级一：角色消息设置（接力上限 + 消息格式）
+// ============================================================================
+
+Future<void> _showGroupChatRoleMessageSheet(
+  BuildContext context, {
+  required String conversationId,
+}) {
+  return _showGroupChatSheet<void>(
+    context,
+    (_) => _GroupChatRoleMessageSheet(conversationId: conversationId),
+  );
+}
+
+class _GroupChatRoleMessageSheet extends StatefulWidget {
+  const _GroupChatRoleMessageSheet({required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  State<_GroupChatRoleMessageSheet> createState() =>
+      _GroupChatRoleMessageSheetState();
+}
+
+class _GroupChatRoleMessageSheetState
+    extends State<_GroupChatRoleMessageSheet> {
+  GroupChatConfig _config = const GroupChatConfig();
+  late final TextEditingController _turns;
+  late final TextEditingController _format;
+
+  @override
+  void initState() {
+    super.initState();
+    _config = GroupChatConfig.fromConversation(
+      context.read<ChatService>().getConversation(widget.conversationId),
+    );
+    _turns = TextEditingController(text: '${_config.maxTurns}');
+    _format = TextEditingController(text: _config.messageFormat);
+  }
+
+  @override
+  void dispose() {
+    _turns.dispose();
+    _format.dispose();
+    super.dispose();
+  }
+
+  Future<void> _persist(GroupChatConfig next) async {
+    setState(() => _config = next);
+    await _saveGroupChatConfig(context, widget.conversationId, next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(child: _SheetHandle()),
+              const SizedBox(height: 14),
+              const _SheetHeader(icon: _roleMessageIcon, title: '角色消息设置'),
+              const SizedBox(height: 16),
+              _sheetFieldLabel(
+                '接力上限（条，最多 ${GroupChatConfig.maxTurnsLimit}）',
+              ),
+              TextField(
+                controller: _turns,
+                keyboardType: TextInputType.number,
+                decoration: _sheetFieldDecoration(
+                  context,
+                  '默认 ${GroupChatConfig.defaultMaxTurns}',
                 ),
+                onChanged: (v) {
+                  final parsed = int.tryParse(v.trim());
+                  if (parsed == null) return;
+                  _persist(
+                    _config.copyWith(
+                      maxTurns: parsed.clamp(1, GroupChatConfig.maxTurnsLimit),
+                    ),
+                  );
+                },
               ),
-            ),
-            TextButton.icon(
-              onPressed: _addRole,
-              icon: const Icon(Lucide.Plus, size: 16),
-              label: const Text('添加角色'),
-            ),
-          ],
+              const SizedBox(height: 14),
+              _sheetFieldLabel('消息格式（{角色名} {内容} 占位）'),
+              TextField(
+                controller: _format,
+                decoration: _sheetFieldDecoration(
+                  context,
+                  GroupChatConfig.defaultMessageFormat,
+                ),
+                onChanged: (v) => _persist(_config.copyWith(messageFormat: v)),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
-        if (_config.roles.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              '还没有角色，先添加一个并绑定世界书条目当人设',
-              style: TextStyle(
-                fontSize: 12,
-                color: cs.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-          )
-        else
-          for (final role in _config.roles)
-            _RoleTile(
-              role: role,
-              onTap: () => _manageRole(role),
-            ),
-      ],
+      ),
     );
   }
+}
 
-  Future<void> _addRole() async {
-    final next = List.of(_config.roles)
-      ..add(
-        GroupChatRole(
-          id: const Uuid().v4(),
-          name: '角色${_config.roles.length + 1}',
-        ),
-      );
-    await _persist(_config.copyWith(roles: next));
-    final added = _config.roles.last;
-    await _manageRole(added);
+// ============================================================================
+// 三级二：群聊提示词设置（话题 / 规则 / 世界观 / 绑定条目）
+// ============================================================================
+
+Future<void> _showGroupChatPromptSheet(
+  BuildContext context, {
+  required String conversationId,
+}) {
+  return _showGroupChatSheet<void>(
+    context,
+    (_) => _GroupChatPromptSheet(conversationId: conversationId),
+  );
+}
+
+class _GroupChatPromptSheet extends StatefulWidget {
+  const _GroupChatPromptSheet({required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  State<_GroupChatPromptSheet> createState() => _GroupChatPromptSheetState();
+}
+
+class _GroupChatPromptSheetState extends State<_GroupChatPromptSheet> {
+  GroupChatConfig _config = const GroupChatConfig();
+  late final TextEditingController _topic;
+  late final TextEditingController _rules;
+  late final TextEditingController _world;
+
+  @override
+  void initState() {
+    super.initState();
+    _config = GroupChatConfig.fromConversation(
+      context.read<ChatService>().getConversation(widget.conversationId),
+    );
+    _topic = TextEditingController(text: _config.topic);
+    _rules = TextEditingController(text: _config.rules);
+    _world = TextEditingController(text: _config.worldPrompt);
   }
 
-  Future<void> _manageRole(GroupChatRole role) async {
-    await showGroupChatRoleManageSheet(
-      context,
-      conversationId: widget.conversationId,
-      role: role,
-    );
-    if (!mounted) return;
-    // 管理页可能改了配置，刷新本地快照。
-    setState(() {
-      _config = GroupChatConfig.fromConversation(
-        context.read<ChatService>().getConversation(widget.conversationId),
-      );
-      _turns.text = '${_config.maxTurns}';
-      _format.text = _config.messageFormat;
-      _topic.text = _config.topic;
-      _rules.text = _config.rules;
-      _world.text = _config.worldPrompt;
-    });
+  @override
+  void dispose() {
+    _topic.dispose();
+    _rules.dispose();
+    _world.dispose();
+    super.dispose();
+  }
+
+  Future<void> _persist(GroupChatConfig next) async {
+    setState(() => _config = next);
+    await _saveGroupChatConfig(context, widget.conversationId, next);
   }
 
   Future<void> _pickWorldEntries() async {
@@ -411,6 +575,177 @@ class _GroupChatSettingsSheetState extends State<_GroupChatSettingsSheet> {
     );
     if (selected == null || !mounted) return;
     await _persist(_config.copyWith(worldEntryIds: selected.toList()));
+  }
+
+  String _worldSummary() {
+    if (_config.worldEntryIds.isEmpty) return '未绑定';
+    return '已绑 ${_config.worldEntryIds.length} 条';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(child: _SheetHandle()),
+              const SizedBox(height: 14),
+              const _SheetHeader(icon: _promptIcon, title: '群聊提示词设置'),
+              const SizedBox(height: 16),
+              _sheetFieldLabel('当前话题'),
+              TextField(
+                controller: _topic,
+                minLines: 1,
+                maxLines: 4,
+                decoration: _sheetFieldDecoration(context, '现在大家在聊什么'),
+                onChanged: (v) => _persist(_config.copyWith(topic: v)),
+              ),
+              const SizedBox(height: 14),
+              _sheetFieldLabel('群聊规则'),
+              TextField(
+                controller: _rules,
+                minLines: 1,
+                maxLines: 4,
+                decoration: _sheetFieldDecoration(
+                  context,
+                  '怎么聊的约束，如：每次发言不超过三句',
+                ),
+                onChanged: (v) => _persist(_config.copyWith(rules: v)),
+              ),
+              const SizedBox(height: 14),
+              _sheetFieldLabel('世界观'),
+              TextField(
+                controller: _world,
+                minLines: 2,
+                maxLines: 6,
+                decoration: _sheetFieldDecoration(
+                  context,
+                  '群聊的世界观，可写字也可绑世界书条目',
+                ),
+                onChanged: (v) => _persist(_config.copyWith(worldPrompt: v)),
+              ),
+              const SizedBox(height: 8),
+              _EntryPickerRow(
+                icon: Lucide.BookOpen,
+                label: '绑定世界观条目',
+                summary: _worldSummary(),
+                onTap: _pickWorldEntries,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 三级三：角色管理（角色列表 + 添加角色）
+// ============================================================================
+
+Future<void> _showGroupChatRoleListSheet(
+  BuildContext context, {
+  required String conversationId,
+}) {
+  return _showGroupChatSheet<void>(
+    context,
+    (_) => _GroupChatRoleListSheet(conversationId: conversationId),
+  );
+}
+
+class _GroupChatRoleListSheet extends StatefulWidget {
+  const _GroupChatRoleListSheet({required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  State<_GroupChatRoleListSheet> createState() =>
+      _GroupChatRoleListSheetState();
+}
+
+class _GroupChatRoleListSheetState extends State<_GroupChatRoleListSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // 角色增删改都落在对话 extras，watch 一下就自动刷新。
+    final chat = context.watch<ChatService>();
+    final config = GroupChatConfig.fromConversation(
+      chat.getConversation(widget.conversationId),
+    );
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(child: _SheetHandle()),
+              const SizedBox(height: 14),
+              _SheetHeader(
+                icon: _roleIcon,
+                title: '角色管理（${config.roles.length}）',
+                trailing: TextButton.icon(
+                  onPressed: () => _addRole(config),
+                  icon: const Icon(Lucide.Plus, size: 16),
+                  label: const Text('添加角色'),
+                ),
+              ),
+              if (config.roles.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    '还没有角色，先添加一个并绑定世界书条目当人设',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                )
+              else
+                for (final role in config.roles)
+                  _RoleTile(
+                    role: role,
+                    onTap: () => _manageRole(role),
+                  ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addRole(GroupChatConfig config) async {
+    final next = List.of(config.roles)
+      ..add(
+        GroupChatRole(
+          id: const Uuid().v4(),
+          name: '角色${config.roles.length + 1}',
+        ),
+      );
+    await _saveGroupChatConfig(
+      context,
+      widget.conversationId,
+      config.copyWith(roles: next),
+    );
+    if (!mounted) return;
+    await _manageRole(next.last);
+  }
+
+  Future<void> _manageRole(GroupChatRole role) async {
+    await showGroupChatRoleManageSheet(
+      context,
+      conversationId: widget.conversationId,
+      role: role,
+    );
   }
 }
 
