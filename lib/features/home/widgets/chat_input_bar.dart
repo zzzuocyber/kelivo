@@ -3520,6 +3520,9 @@ class _ChatInputBarState extends State<ChatInputBar>
               builder: () => _CompactIconButton(
                 icon: Lucide.Puzzle,
                 active: _groupChatActive,
+                // 拼图图形本身偏实，按 17 号画才跟旁边 20 号图标视觉齐平（093）。
+                childBuilder: (color) =>
+                    Icon(Lucide.Puzzle, size: 17, color: color),
                 onTap: lockTap(
                   () => showGroupChatSettingsSheet(
                     context,

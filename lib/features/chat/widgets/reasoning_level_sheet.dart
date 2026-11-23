@@ -240,11 +240,12 @@ class _SearchSettingsEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('search-settings-entry'),
+      // 卡间距对齐「＋」工具面板：卡与卡之间只留 8（093）。
       padding: EdgeInsets.fromLTRB(
         compact ? 12 : 16,
         compact ? 4 : 8,
         compact ? 12 : 16,
-        compact ? 4 : 12,
+        4,
       ),
       child: ToolsSheetRow(
         icon: Lucide.Globe,
@@ -275,12 +276,7 @@ class _McpServersEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('mcp-servers-entry'),
-      padding: EdgeInsets.fromLTRB(
-        compact ? 12 : 16,
-        compact ? 4 : 8,
-        compact ? 12 : 16,
-        compact ? 4 : 12,
-      ),
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 4, compact ? 12 : 16, 4),
       child: ToolsSheetRow(
         icon: Lucide.Server,
         label: 'MCP 服务器',

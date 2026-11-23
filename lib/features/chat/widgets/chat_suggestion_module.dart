@@ -35,7 +35,7 @@ class ChatSuggestionModule extends StatelessWidget {
       key: const ValueKey('chat-suggestion-entry'),
       padding: EdgeInsets.fromLTRB(
         compact ? 12 : 16,
-        compact ? 4 : 8,
+        4,
         compact ? 12 : 16,
         compact ? 4 : 12,
       ),
