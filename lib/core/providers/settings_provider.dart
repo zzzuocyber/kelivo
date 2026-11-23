@@ -1,3 +1,4 @@
+import '../services/media/fal_model_catalog.dart';
 import '../models/image_upload_quality.dart';
 export '../models/image_upload_quality.dart';
 import '../models/attachment_retention.dart';
@@ -122,6 +123,7 @@ class SettingsProvider extends ChangeNotifier {
     'Claude',
     'Grok',
     'ByteDance',
+    'fal',
   ];
   static const Set<String> _builtInProviderKeys = {
     ..._builtInProviderKeysInOrder,
@@ -7549,6 +7551,9 @@ class ProviderConfig {
   final DateTime? oauthModelsSyncedAt;
   final String? oauthModelsClientVersion;
   bool get isOAuth => oauthProvider != null;
+  bool get isFal => id == 'fal';
+  ProviderConfig withBuiltInFalModels() =>
+      copyWith(models: {...models, ...falModels.keys}.toList());
   final String baseUrl;
   final bool autoVersionDisabled;
   final ProviderKind?
@@ -8036,6 +8041,7 @@ class ProviderConfig {
 
   static String _defaultBase(String key) {
     final k = key.toLowerCase();
+    if (k == 'fal') return 'https://queue.fal.run';
     if (k.contains('tensdaq')) return 'https://tensdaq-api.x-aio.com/v1';
     if (k.contains('kelivoin')) return 'https://api.psycheas.top/v1';
     if (k.contains('openrouter')) return 'https://openrouter.ai/api/v1';
@@ -8208,7 +8214,10 @@ class ProviderConfig {
           providerType: ProviderKind.openai,
           chatPath: '/chat/completions',
           useResponseApi: lowerKey == 'marucode',
-          models: const [],
+          models: lowerKey == 'fal' ? falModels.keys.toList() : const [],
+          autoVersionDisabled: lowerKey == 'fal',
+          avatarType: lowerKey == 'fal' ? 'icon' : null,
+          avatarValue: lowerKey == 'fal' ? 'assets/icons/fal-color.svg' : null,
           modelOverrides: const {},
           proxyEnabled: false,
           proxyHost: '',
