@@ -54,7 +54,7 @@ Future<String?> pickAndSaveGroupChatAvatar() async {
   }
 }
 
-/// 拼图抽屉（093 起叫「扩展」）：一级只有一张群聊设置卡片，开关挪进二级。
+/// 拼图抽屉（092 起叫「扩展」）：一级只有一张群聊设置卡片，开关挪进二级。
 Future<void> showGroupChatSettingsSheet(
   BuildContext context, {
   required String? conversationId,

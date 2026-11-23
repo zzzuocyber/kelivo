@@ -240,7 +240,7 @@ class _SearchSettingsEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('search-settings-entry'),
-      // 卡间距对齐「＋」工具面板：卡与卡之间只留 8（093）。
+      // 卡间距对齐「＋」工具面板：卡与卡之间只留 8（092）。
       padding: EdgeInsets.fromLTRB(
         compact ? 12 : 16,
         compact ? 4 : 8,
