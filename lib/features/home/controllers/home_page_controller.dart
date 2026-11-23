@@ -1325,6 +1325,29 @@ class HomePageController extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> prefillCreationImage(String path) async {
+    final conversationId = currentConversation?.id;
+    if (conversationId == null || !_context.mounted || _composerDisposed) {
+      return false;
+    }
+    await _activateComposerDraft();
+    if (!_context.mounted ||
+        _composerDisposed ||
+        currentConversation?.id != conversationId ||
+        _mediaController.restoringDraft ||
+        _userMessageEditState != null ||
+        (_composerDrafts != null &&
+            (_composerOwner != conversationId ||
+                _mediaController.draftOwnerId != conversationId))) {
+      return false;
+    }
+    _mediaController.capture().enqueueImages([
+      path,
+    ], _context.read<SettingsProvider>().resolveImageCompressConfig());
+    _inputFocus.requestFocus();
+    return true;
+  }
+
   /// A delayed page task follows the restored editor, never the visible chat
   /// that happened to replace it while its draft was loading.
   void _appendPendingBrowserTaskDraft(String conversationId) {
@@ -1395,6 +1418,45 @@ class HomePageController extends ChangeNotifier {
       _spotlightToken++;
       notifyListeners();
     }
+  }
+
+  Future<bool> openCreationSource({
+    required String conversationId,
+    required String messageId,
+    required bool Function() stillCurrent,
+  }) async {
+    final message = (await _chatService.loadMessagesByIds([
+      messageId,
+    ])).firstOrNull;
+    if (message == null ||
+        message.conversationId != conversationId ||
+        !stillCurrent()) {
+      return false;
+    }
+    await switchConversationAnimated(conversationId);
+    if (!stillCurrent() || currentConversation?.id != conversationId) {
+      return false;
+    }
+    final visible = await _chatController.loadUntilMessageVisible(messageId);
+    if (!stillCurrent() || currentConversation?.id != conversationId) {
+      return false;
+    }
+    if (!visible) {
+      await setSelectedVersion(message.groupId ?? message.id, message.version);
+      if (!stillCurrent() ||
+          currentConversation?.id != conversationId ||
+          versionSelections[message.groupId ?? message.id] != message.version) {
+        return false;
+      }
+    }
+    await scrollToMessageId(messageId, stillCurrent: stillCurrent);
+    if (!stillCurrent() || currentConversation?.id != conversationId) {
+      return false;
+    }
+    _spotlightMessageId = messageId;
+    _spotlightToken++;
+    notifyListeners();
+    return true;
   }
 
   Future<void> initChat() async {
@@ -1702,10 +1764,7 @@ class HomePageController extends ChangeNotifier {
           _userMessageEditState?.messageId == editState.messageId) {
         _exitUserMessageEdit(clearDraft: false);
       }
-      await regenerateAtMessage(
-        newMsg,
-        allowImagesApiRouting: input.allowImagesApiRouting,
-      );
+      await regenerateAtMessage(newMsg);
       return ChatInputSubmissionResult.sent;
     }
     if (currentConversation == null) {
@@ -1823,7 +1882,6 @@ class HomePageController extends ChangeNotifier {
   Future<void> regenerateAtMessage(
     ChatMessage message, {
     bool assistantAsNewReply = false,
-    bool? allowImagesApiRouting,
     bool omitImages = false,
   }) async {
     if (currentConversation == null) return;
@@ -1877,8 +1935,6 @@ class HomePageController extends ChangeNotifier {
       omitImages: omitImages,
       assistantAsNewReply: assistantAsNewReply,
       expectedContextState: approved,
-      allowImagesApiRouting:
-          allowImagesApiRouting ?? _mediaController.allowImagesApiRouting,
     );
     if (success) {
       notifyListeners();
@@ -1931,10 +1987,7 @@ class HomePageController extends ChangeNotifier {
     streamingContentNotifier.notifyToolHeightChanged(message.id);
     notifyListeners();
 
-    await _viewModel.continueAssistantMessageAfterToolAnswer(
-      message,
-      allowImagesApiRouting: _mediaController.allowImagesApiRouting,
-    );
+    await _viewModel.continueAssistantMessageAfterToolAnswer(message);
   }
 
   Future<void> cancelStreaming() async {

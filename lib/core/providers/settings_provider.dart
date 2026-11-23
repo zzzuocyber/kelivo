@@ -46,6 +46,7 @@ import '../../utils/sandbox_path_resolver.dart';
 import '../../utils/avatar_cache.dart';
 import '../models/assistant.dart';
 import '../models/model_spec.dart';
+import '../models/media_creation.dart';
 import '../models/reasoning_request.dart';
 import '../services/model_spec/model_list_metadata_cache.dart';
 import '../services/model_spec/model_spec_resolver.dart';
@@ -137,6 +138,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _selectedModelKey = 'selected_model_v1';
   static const String _perChatModelEnabledKey = 'per_chat_model_enabled_v1';
   static const String _titleModelKey = 'title_model_v1';
+  static const String _promptEnhancePromptKey = 'prompt_enhance_prompt_v1';
   static const String _titleGenerationEnabledKey =
       'title_generation_enabled_v1';
   static const String _titlePromptKey = 'title_prompt_v1';
@@ -884,6 +886,13 @@ class SettingsProvider extends ChangeNotifier {
         _titleModelId = parts.sublist(1).join('::');
       }
     }
+    for (final slot in CreationModelSlot.values) {
+      if (prefs.getString(slot.settingKey) case final key?) {
+        _creationModelKeys[slot] = key;
+      }
+    }
+    _promptEnhancePrompt =
+        prefs.getString(_promptEnhancePromptKey) ?? defaultPromptEnhancePrompt;
     _perChatModelEnabled = prefs.getBool(_perChatModelEnabledKey) ?? false;
     _titleGenerationEnabled = prefs.getBool(_titleGenerationEnabledKey) ?? true;
     // load title prompt
@@ -4135,7 +4144,7 @@ class SettingsProvider extends ChangeNotifier {
   /// Used when a provider is disabled or deleted.
   Future<void> clearSelectionsForProvider(String providerKey) async {
     final prefs = _preferences;
-    bool changed = false;
+    bool changed = await _clearCreationSelections(providerKey);
     if (_currentModelProvider == providerKey) {
       _currentModelProvider = null;
       _currentModelId = null;
@@ -4201,7 +4210,7 @@ class SettingsProvider extends ChangeNotifier {
     bool preserveModelPreferences = false,
   }) async {
     final prefs = _preferences;
-    bool changed = false;
+    bool changed = await _clearCreationSelections(providerKey, modelId);
     if (_currentModelProvider == providerKey && _currentModelId == modelId) {
       _currentModelProvider = null;
       _currentModelId = null;
@@ -4290,6 +4299,7 @@ class SettingsProvider extends ChangeNotifier {
 
     // Clear selections referencing this provider to avoid re-creating defaults
     final prefs = _preferences;
+    await _clearCreationSelections(key);
     if (_currentModelProvider == key) {
       _currentModelProvider = null;
       _currentModelId = null;
@@ -4418,6 +4428,69 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   // Title model and prompt
+  final _creationModelKeys = <CreationModelSlot, String>{};
+  String? creationModelKey(CreationModelSlot slot) => _creationModelKeys[slot];
+  ({String providerKey, String modelId})? creationModel(
+    CreationModelSlot slot,
+  ) {
+    final key = _creationModelKeys[slot];
+    if (key == null) return null;
+    final split = key.indexOf('::');
+    if (split <= 0 || split + 2 >= key.length) return null;
+    return (
+      providerKey: key.substring(0, split),
+      modelId: key.substring(split + 2),
+    );
+  }
+
+  Future<void> setCreationModel(
+    CreationModelSlot slot,
+    ({String providerKey, String modelId})? value,
+  ) async {
+    if (value == null) {
+      _creationModelKeys.remove(slot);
+      await _preferences.remove(slot.settingKey);
+    } else {
+      final key = '${value.providerKey}::${value.modelId}';
+      _creationModelKeys[slot] = key;
+      await _preferences.setString(slot.settingKey, key);
+    }
+    notifyListeners();
+  }
+
+  Future<bool> _clearCreationSelections(
+    String providerKey, [
+    String? modelId,
+  ]) async {
+    var changed = false;
+    for (final slot in CreationModelSlot.values) {
+      final selected = creationModel(slot);
+      if (selected?.providerKey == providerKey &&
+          (modelId == null || selected?.modelId == modelId)) {
+        _creationModelKeys.remove(slot);
+        await _preferences.remove(slot.settingKey);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  static const defaultPromptEnhancePrompt =
+      'Rewrite this prompt for an image or video generation model. Preserve the '
+      'user\'s intent, language, and any quoted text. Add useful visual details '
+      'without changing the subject. If reference images are included, use them '
+      'to clarify the description. Return only the rewritten prompt.\n\n{prompt}';
+
+  String _promptEnhancePrompt = defaultPromptEnhancePrompt;
+  String get promptEnhancePrompt => _promptEnhancePrompt;
+
+  Future<void> setPromptEnhancePrompt(String value) async {
+    final prompt = value.trim();
+    _promptEnhancePrompt = prompt.isEmpty ? defaultPromptEnhancePrompt : prompt;
+    await _preferences.setString(_promptEnhancePromptKey, _promptEnhancePrompt);
+    notifyListeners();
+  }
+
   String? _titleModelProvider;
   String? _titleModelId;
   bool _titleGenerationEnabled = true;
@@ -7138,15 +7211,8 @@ Requirements:
     copy._currentModelProvider = _currentModelProvider;
     copy._currentModelId = _currentModelId;
     copy._perChatModelEnabled = _perChatModelEnabled;
-    copy._momentBookId = _momentBookId;
-    copy._momentSystemPrompt = _momentSystemPrompt;
-    copy._momentExtraInstruction = _momentExtraInstruction;
-    copy._momentBookIds = _momentBookIds;
-    copy._momentModelProvider = _momentModelProvider;
-    copy._momentModelId = _momentModelId;
-    copy._momentPersonaName = _momentPersonaName;
-    copy._momentContextChars = _momentContextChars;
-    copy._momentReasoning = _momentReasoning;
+    copy._creationModelKeys.addAll(_creationModelKeys);
+    copy._promptEnhancePrompt = _promptEnhancePrompt;
     copy._titleModelProvider = _titleModelProvider;
     copy._titleModelId = _titleModelId;
     copy._titleGenerationEnabled = _titleGenerationEnabled;

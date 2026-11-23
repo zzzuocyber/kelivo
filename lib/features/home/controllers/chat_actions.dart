@@ -1144,6 +1144,7 @@ class ChatActions {
           uri: SandboxPathResolver.canonicalize(saved),
           mime: part.mime ?? (mime.isEmpty ? 'image/png' : mime),
           assetId: part.assetId,
+          generationItemId: part.generationItemId,
           unavailable: part.unavailable,
         ),
       );
@@ -1472,7 +1473,6 @@ class ChatActions {
         assistantMessage: assistantMessage,
         prepared: prepared,
         userImagePaths: userImagePaths,
-        allowImagesApiRouting: input.allowImagesApiRouting,
         providerKey: providerKey,
         modelId: modelId,
         assistant: assistant,
@@ -1807,7 +1807,6 @@ class ChatActions {
     required ChatMessage message,
     required Conversation conversation,
     bool assistantAsNewReply = false,
-    bool allowImagesApiRouting = true,
     bool omitImages = false,
     Assistant? assistantOverride,
     ({String providerKey, String modelId})? modelOverride,
@@ -1833,7 +1832,6 @@ class ChatActions {
         message: message,
         conversation: conversation,
         assistantAsNewReply: assistantAsNewReply,
-        allowImagesApiRouting: allowImagesApiRouting,
         assistantOverride: assistantOverride,
         modelOverride: modelOverride,
         preserveFollowingMessages: preserveFollowingMessages,
@@ -1860,7 +1858,6 @@ class ChatActions {
     required ChatMessage message,
     required Conversation conversation,
     bool assistantAsNewReply = false,
-    bool allowImagesApiRouting = true,
     bool omitImages = false,
     Assistant? assistantOverride,
     ({String providerKey, String modelId})? modelOverride,
@@ -2123,7 +2120,6 @@ class ChatActions {
           assistantMessage: assistantMessage,
           prepared: prepared,
           userImagePaths: userImagePaths,
-          allowImagesApiRouting: allowImagesApiRouting,
           providerKey: providerKey,
           modelId: modelId,
           assistant: assistant,
@@ -2185,7 +2181,6 @@ class ChatActions {
   Future<ChatActionResult> continueAssistantMessageAfterToolAnswer({
     required ChatMessage message,
     required Conversation conversation,
-    bool allowImagesApiRouting = true,
   }) async {
     if (AppExitFlush.isExiting) return ChatActionResult.inFlight();
     final preparation = Completer<void>();
@@ -2194,7 +2189,6 @@ class ChatActions {
       return await _continueAssistantMessageAfterToolAnswer(
         message: message,
         conversation: conversation,
-        allowImagesApiRouting: allowImagesApiRouting,
       );
     } finally {
       _generationPreparations.remove(preparation);
@@ -2205,7 +2199,6 @@ class ChatActions {
   Future<ChatActionResult> _continueAssistantMessageAfterToolAnswer({
     required ChatMessage message,
     required Conversation conversation,
-    bool allowImagesApiRouting = true,
   }) async {
     // A continuation reuses the revision ID, including for preparation
     // failures. Wait for the previous owner before it can share that ID.
@@ -2302,7 +2295,6 @@ class ChatActions {
         conversation: conversation,
         assistantAsNewReply: true,
         preserveFollowingMessages: true,
-        allowImagesApiRouting: allowImagesApiRouting,
         assistantOverride: assistant,
         modelOverride: (providerKey: providerKey, modelId: modelId),
       );
@@ -2362,7 +2354,6 @@ class ChatActions {
         assistantMessage: streamingMessage,
         prepared: prepared,
         userImagePaths: userImagePaths,
-        allowImagesApiRouting: allowImagesApiRouting,
         providerKey: providerKey,
         modelId: modelId,
         assistant: assistant,
@@ -3164,7 +3155,6 @@ class ChatActions {
         stream: ctx.streamOutput,
         requestId: conversationId,
         conversationId: conversationId,
-        allowImagesApiRouting: ctx.allowImagesApiRouting,
         ocrActive: ctx.ocrActive,
         parseMarkdownImageLinks: ctx.settings.sendMarkdownImageLinksAsImages,
         onRequestDispatched: () => state.requestDispatched = true,
