@@ -1,6 +1,7 @@
 import '../widgets/settings_search_target.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'mobile_background_settings_page.dart';
+import 'sidebar_settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -76,6 +77,38 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ThemeSettingsPage()),
                 ),
+              ),
+              _iosDivider(context),
+              _iosNavRow(
+                context,
+                icon: Lucide.Languages,
+                label: l10n.displaySettingsPageLanguageTitle,
+                detailBuilder: (ctx) {
+                  final settings = ctx.watch<SettingsProvider>();
+                  String labelFor(Locale l) {
+                    return AppLanguage.fromLocale(l).nativeName;
+                  }
+                  return Text(
+                    settings.isFollowingSystemLocale
+                        ? l10n.settingsPageSystemMode
+                        : labelFor(settings.appLocale),
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                      fontSize: 13,
+                    ),
+                  );
+                },
+                onTap: () async {
+                  await _showLanguageSheet(context);
+                  if (mounted) setState(() {});
+                },
+              ),
+              _iosDivider(context),
+              _iosNavRow(
+                context,
+                icon: Lucide.panelLeft,
+                label: l10n.sidebarSettingsTitle,
+                onTap: () => openSidebarSettings(context),
               ),
               _iosDivider(context),
               _iosNavRow(
