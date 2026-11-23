@@ -1,3 +1,4 @@
+import '../../media/widgets/creation_preferences.dart';
 import '../widgets/settings_search_target.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'mobile_background_settings_page.dart';
@@ -307,110 +308,7 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          _header(context, l10n.displaySettingsGroupChatBehavior, first: false),
-          SectionCard(
-            children: [
-              _iosNavRow(
-                context,
-                icon: Lucide.RefreshCw,
-                label: l10n.settingsPageAutoRetry,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AutoRetryPage()),
-                ),
-              ),
-              _iosDivider(context),
-              _iosNavRow(
-                context,
-                icon: Lucide.Vibrate,
-                label: l10n.displaySettingsPageHapticsSettingsTitle,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const HapticsSettingsPage(),
-                  ),
-                ),
-              ),
-              _iosDivider(context),
-              if (defaultTargetPlatform == TargetPlatform.android ||
-                  defaultTargetPlatform == TargetPlatform.iOS) ...[
-                _iosNavRow(
-                  context,
-                  icon: Lucide.Activity,
-                  label: l10n.backgroundSettingsTitle,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const MobileBackgroundSettingsPage(),
-                    ),
-                  ),
-                ),
-                _iosDivider(context),
-              ],
-              _iosNavRow(
-                context,
-                icon: Lucide.ArrowDown,
-                label: l10n.displaySettingsPageAutoScrollEnableTitle,
-                detailBuilder: (ctx) {
-                  final enabled = ctx
-                      .watch<SettingsProvider>()
-                      .autoScrollEnabled;
-                  return Text(
-                    enabled
-                        ? l10n.displaySettingsPageAutoScrollEnabledLabel
-                        : l10n.displaySettingsPageAutoScrollDisabledLabel,
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.6),
-                      fontSize: 13,
-                    ),
-                  );
-                },
-                onTap: () => _showAutoScrollSheet(context),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _header(context, l10n.displaySettingsGroupSystem, first: false),
-          SectionCard(
-            children: [
-              _iosNavRow(
-                context,
-                icon: Lucide.Languages,
-                label: l10n.displaySettingsPageLanguageTitle,
-                detailBuilder: (ctx) {
-                  final settings = ctx.watch<SettingsProvider>();
-                  String labelFor(Locale l) {
-                    return AppLanguage.fromLocale(l).nativeName;
-                  }
-
-                  return Text(
-                    settings.isFollowingSystemLocale
-                        ? l10n.settingsPageSystemMode
-                        : labelFor(settings.appLocale),
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.6),
-                      fontSize: 13,
-                    ),
-                  );
-                },
-                onTap: () async {
-                  await _showLanguageSheet(context);
-                  if (mounted) setState(() {});
-                },
-              ),
-              _iosDivider(context),
-              _iosNavRow(
-                context,
-                icon: Lucide.eclipse,
-                label: l10n.displaySettingsPageBehaviorStartupTitle,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const BehaviorStartupSettingsPage(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Inline cards replaced by sheet-triggering rows above.
+          const CreationPreferences(desktop: false),
         ],
       ),
     );
