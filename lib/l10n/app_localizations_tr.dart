@@ -18971,4 +18971,21 @@ class AppLocalizationsTr extends AppLocalizations {
   String creationGameCompleted(int score) {
     return 'Oluşturma hazır · $score';
   }
+
+  @override
+  String get creationNoSelectableModels => 'Kullanılabilir model yok';
+
+  @override
+  String get creationNoMatchingTopics => 'Eşleşen konu yok';
+
+  @override
+  String creationAllTopicCount(int count) {
+    return 'Tüm konular $count';
+  }
+
+  @override
+  String get creationNoImageModels => 'Henüz görsel oluşturma modeli yok';
+
+  @override
+  String get creationNoVideoModels => 'Henüz video oluşturma modeli yok';
 }
