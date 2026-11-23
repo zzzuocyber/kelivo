@@ -10,48 +10,13 @@ import 'package:Kelivo/core/providers/mcp_provider.dart';
 import 'package:Kelivo/desktop/tools_popover.dart';
 import 'package:Kelivo/features/chat/widgets/chat_tools_sheet.dart';
 import 'package:Kelivo/features/mcp/widgets/mcp_server_avatar.dart';
-import 'package:Kelivo/shared/widgets/ios_switch.dart';
 
 import '../../../support/mcp_presentation_harness.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    '50 servers are built lazily and the last row remains reachable',
-    (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final harness = await McpPresentationHarness.create(count: 50);
-      await tester.pumpWidget(
-        harness.app(
-          Scaffold(body: ChatToolsSheet(assistantId: harness.assistantId)),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(McpServerAvatar).evaluate().length, lessThan(25));
-      final last = find.byKey(ChatToolsSheet.mcpServerKey('server-49'));
-      expect(last, findsNothing);
-      await tester.scrollUntilVisible(
-        last,
-        500,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      expect(last, findsOneWidget);
-      await tester.tap(
-        find.descendant(of: last, matching: find.byType(IosSwitch)),
-      );
-      await tester.runAsync(harness.preferences.flushPendingWrites);
-      expect(
-        harness.assistants.getById(harness.assistantId)!.mcpServerIds,
-        isNot(contains('server-49')),
-      );
-    },
-  );
-
-  for (final desktop in [false, true]) {
+  for (final desktop in [true]) {
     testWidgets(
       'tool groups follow settings order and keep server toggles desktop=$desktop',
       (tester) async {
@@ -133,11 +98,7 @@ void main() {
             greaterThan(tester.getTopLeft(find.text(order[index - 1])).dy),
           );
         }
-        final row = find.byKey(
-          desktop
-              ? const ValueKey('desktop-tools-mcp-server-0')
-              : ChatToolsSheet.mcpServerKey('server-0'),
-        );
+        final row = find.byKey(const ValueKey('desktop-tools-mcp-server-0'));
         final avatar = find.descendant(
           of: row,
           matching: find.byType(McpServerAvatar),
@@ -195,7 +156,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('18/26'), findsNWidgets(3));
+      // 093：MCP 行已从工具面板移走，这里不该再出现服务器计数。
+      expect(find.text('18/26'), findsNothing);
       expect(find.text('Manage'), findsNothing);
       expect(find.textContaining(' on'), findsNothing);
       expect(tester.takeException(), isNull);

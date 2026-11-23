@@ -25,7 +25,6 @@ import 'package:Kelivo/features/home/services/local_tools_service.dart';
 import 'package:Kelivo/features/workspace/widgets/workspace_section.dart';
 import 'package:Kelivo/features/workspace/pages/workspace_settings_page.dart';
 import 'package:Kelivo/l10n/app_localizations.dart';
-import 'package:Kelivo/shared/widgets/ios_switch.dart';
 import 'package:Kelivo/shared/widgets/snackbar.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -544,62 +543,15 @@ void main() {
     expect(find.text(enabledCount), findsOneWidget);
   });
 
-  testWidgets('hides the MCP group when nothing is connected', (tester) async {
-    await pumpSheet(tester);
-    expect(find.byKey(ChatToolsSheet.mcpGroupKey), findsNothing);
-  });
-
-  testWidgets('MCP servers toggle the assistant selection', (tester) async {
+  testWidgets('MCP servers are not repeated in the tools sheet', (
+    tester,
+  ) async {
+    // 093：MCP 分组从工具面板挪进小灯泡的「MCP 服务器」入口，这里不再出现。
     final l10n = await pumpSheet(tester, servers: [_server('s1', 'Alpha')]);
-
-    final header = find.byKey(ChatToolsSheet.mcpGroupKey);
-    expect(header, findsOneWidget);
-    expect(
-      find.descendant(of: header, matching: find.text('0/1')),
-      findsOneWidget,
-    );
-    final row = find.byKey(ChatToolsSheet.mcpServerKey('s1'));
-    expect(row, findsOneWidget);
-    expect(find.text('Alpha'), findsOneWidget);
-
-    await tester.tap(
-      find.descendant(of: row, matching: find.byType(IosSwitch)),
-    );
-    await tester.pumpAndSettle();
-    expect(assistants.getById(assistantId)!.mcpServerIds, ['s1']);
-
-    // AssistantProvider notifies only after persisting, so the row would still
-    // be reading the pre-toggle selection without real async time.
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 100)),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.descendant(of: header, matching: find.text('1/1')),
-      findsOneWidget,
-    );
-    await tester.tap(row);
-    await tester.pumpAndSettle();
-    expect(assistants.getById(assistantId)!.mcpServerIds, isEmpty);
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 100)),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.descendant(of: header, matching: find.text('0/1')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text(l10n.mcpAssistantSheetTitle));
-    await tester.pumpAndSettle();
-    expect(row, findsNothing);
-    expect(
-      find.descendant(of: header, matching: find.text('0/1')),
-      findsOneWidget,
-    );
+    expect(find.text(l10n.mcpAssistantSheetTitle), findsNothing);
   });
 
-  for (final desktop in [false, true]) {
+  for (final desktop in [true]) {
     testWidgets(
       'MCP customization stays in this conversation (desktop: $desktop)',
       (tester) async {
@@ -640,11 +592,7 @@ void main() {
             findsOneWidget,
           );
         }
-        final beta = find.byKey(
-          desktop
-              ? const ValueKey('desktop-tools-mcp-s2')
-              : ChatToolsSheet.mcpServerKey('s2'),
-        );
+        final beta = find.byKey(const ValueKey('desktop-tools-mcp-s2'));
         await tester.ensureVisible(beta);
         await tester.tap(beta);
         await tester.pumpAndSettle();
