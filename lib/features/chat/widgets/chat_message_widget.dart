@@ -10,6 +10,8 @@ import 'package:Kelivo/features/intelligent_ui/host/ui_host_scope.dart';
 import 'package:Kelivo/features/intelligent_ui/host/ui_generation_state.dart';
 import 'package:markstream/markstream_core.dart' show SourceSpan;
 import 'package:markstream/markstream.dart' show SelectableSpanAdapter;
+import '../../../shared/markdown/scroll_directive_block.dart'
+    show excludeScrollDirectiveHighlightRanges;
 import 'tool_permission_widgets.dart';
 import '../../provider/widgets/oauth_message_recovery.dart';
 import 'response_truncation_notice.dart';
@@ -2376,7 +2378,10 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       sourceMap: sourceMap,
     );
     final find = ConversationFindHighlights.of(context);
-    final highlights = [...quoteRanges, ...?find?.ranges(FindPart.body, 0)];
+    final highlights = excludeScrollDirectiveHighlightRanges(visualText, [
+      ...quoteRanges,
+      ...?find?.ranges(FindPart.body, 0),
+    ]);
     final highlightColor = quoteRanges.isEmpty && highlights.isNotEmpty
         ? context.appColors.searchHighlight
         : Theme.of(context).colorScheme.primary.withValues(alpha: .22);
@@ -2916,12 +2921,12 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       visualContent,
       sourceMap: sourceMap,
     );
-    final highlights = [
+    final highlights = excludeScrollDirectiveHighlightRanges(visualContent, [
       ...quoteRanges,
       ...?ConversationFindHighlights.of(
         context,
       )?.ranges(FindPart.body, findBlock, paragraph: findParagraph),
-    ];
+    ]);
     final highlightColor = quoteRanges.isEmpty && highlights.isNotEmpty
         ? context.appColors.searchHighlight
         : Theme.of(context).colorScheme.primary.withValues(alpha: .22);

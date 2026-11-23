@@ -19,6 +19,43 @@ const _border = Color(0xFFE4E4E7);
 /// Only text is projected into the card. `toPlainText` keeps paragraph and
 /// list wording while dropping chrome such as code fences, which matches the
 /// narrative use case this syntax was added for.
+/// 过滤引用/查找产生的高亮区间：钉死的白底滚动卡片不吃任何高亮。
+///
+/// 切回会话时引用高亮会被重新贴回正文，若区间覆盖 `:::scroll` 块，
+/// 卡片正文就会被刷成灰底浅字（100）。卡片自带复制按钮，不需要选中高亮。
+List<SourceSpan> excludeScrollDirectiveHighlightRanges(
+  String source,
+  Iterable<SourceSpan> ranges,
+) {
+  if (ranges.isEmpty) return const <SourceSpan>[];
+  final blocks = <SourceSpan>[];
+  final open = RegExp(
+    r'(?:^|\n)[ \t]*:::scroll[^\n]*(?:\n|$)',
+    caseSensitive: false,
+  );
+  final closePattern = RegExp(r'(?:^|\n)[ \t]*:::[ \t]*(?:\n|$)');
+  var cursor = 0;
+  while (cursor < source.length) {
+    final opened = open.firstMatch(source.substring(cursor));
+    if (opened == null) break;
+    final blockStart = cursor + opened.start;
+    final bodyStart = cursor + opened.end;
+    final closed = closePattern.firstMatch(source.substring(bodyStart));
+    final blockEnd = closed == null ? source.length : bodyStart + closed.end;
+    blocks.add(SourceSpan(blockStart, blockEnd));
+    if (closed == null) break;
+    cursor = blockEnd;
+  }
+  if (blocks.isEmpty) return List<SourceSpan>.unmodifiable(ranges);
+  return <SourceSpan>[
+    for (final range in ranges)
+      if (!blocks.any(
+        (block) => range.start < block.end && range.end > block.start,
+      ))
+        range,
+  ];
+}
+
 Widget buildScrollDirectiveBlock(
   BuildContext context,
   BlockNode node,
@@ -66,14 +103,16 @@ class _ScrollThumb extends StatelessWidget {
         return const SizedBox.shrink();
       }
       // Stack 的高度就是滚动视口高度，把它们当同一条轨道算比例。
-      final thumbHeight =
-          (viewport / total * viewport).clamp(24.0, viewport).toDouble();
+      final thumbHeight = (viewport / total * viewport)
+          .clamp(24.0, viewport)
+          .toDouble();
       final maxScroll = total - viewport;
       final progress = maxScroll <= 0
           ? 0.0
           : (position.pixels / maxScroll).clamp(0.0, 1.0);
-      final top =
-          (progress * (viewport - thumbHeight)).clamp(0.0, viewport - thumbHeight).toDouble();
+      final top = (progress * (viewport - thumbHeight))
+          .clamp(0.0, viewport - thumbHeight)
+          .toDouble();
       return Align(
         alignment: AlignmentDirectional.topEnd,
         child: Padding(
@@ -114,11 +153,7 @@ class _ScrollDirectiveCardState extends State<_ScrollDirectiveCard> {
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: widget.text));
     if (!mounted) return;
-    showAppSnackBar(
-      context,
-      message: '已复制',
-      type: NotificationType.success,
-    );
+    showAppSnackBar(context, message: '已复制', type: NotificationType.success);
   }
 
   @override
@@ -144,11 +179,7 @@ class _ScrollDirectiveCardState extends State<_ScrollDirectiveCard> {
                   child: Row(
                     children: [
                       if (hasTitle) ...[
-                        Icon(
-                          Lucide.FileText,
-                          size: 15,
-                          color: _mutedInk,
-                        ),
+                        Icon(Lucide.FileText, size: 15, color: _mutedInk),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -185,6 +216,8 @@ class _ScrollDirectiveCardState extends State<_ScrollDirectiveCard> {
                       child: SelectionContainer.disabled(
                         child: Text(
                           widget.text,
+                          // 就算被外层 SelectableRegion 接管，也不画选中灰底。
+                          selectionColor: Colors.transparent,
                           style: const TextStyle(
                             color: _ink,
                             fontSize: 15.5,
