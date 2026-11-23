@@ -19039,4 +19039,7 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get creationCancelledHelp =>
       'İstem ve ayarlarınız kaydedildi. İstediğiniz zaman yeniden oluşturabilirsiniz.';
+
+  @override
+  String get creationChatImageReady => 'Görsel oluşturuldu';
 }

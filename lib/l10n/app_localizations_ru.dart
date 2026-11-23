@@ -19259,4 +19259,7 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get creationCancelledHelp =>
       'Ваш промпт и настройки сохранены. Вы можете сгенерировать снова в любое время.';
+
+  @override
+  String get creationChatImageReady => 'Изображение создано';
 }
