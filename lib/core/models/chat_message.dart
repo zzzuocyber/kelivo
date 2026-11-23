@@ -7,6 +7,7 @@ import 'message_part_snapshot.dart';
 import 'token_usage.dart';
 import 'quote_ref.dart';
 import '../database/generation_run.dart';
+import '../../features/group_chat/group_chat_models.dart' show GroupChatSpeaker;
 
 part 'chat_message.g.dart';
 
@@ -87,6 +88,10 @@ class ChatMessage extends HiveObject {
       (id: id, role: role, text: content, isStreaming: isStreaming);
 
   final List<QuoteRef> quotes;
+
+  /// 群聊发言人快照（090）。仅群聊角色的消息非空；普通消息为 null。
+  final GroupChatSpeaker? speaker;
+
   String quotedContent(String Function(int) quoteMarker) =>
       formatQuotedMessage(content, quotes, quoteMarker: quoteMarker);
 
@@ -200,6 +205,7 @@ class ChatMessage extends HiveObject {
     this.reasoningTokens,
     this.cacheWriteTokens,
     this.finishUsage,
+    this.speaker,
   }) : quotes = List.unmodifiable(quotes),
        _parts = parts is MessagePartSnapshot
            ? parts
@@ -361,6 +367,7 @@ class ChatMessage extends HiveObject {
     int? reasoningTokens,
     int? cacheWriteTokens,
     TokenUsage? finishUsage,
+    GroupChatSpeaker? speaker,
   }) {
     final List<MessagePart>? nextParts;
     if (parts != null) {
@@ -398,6 +405,7 @@ class ChatMessage extends HiveObject {
         reasoningTokens: reasoningTokens ?? this.reasoningTokens,
         cacheWriteTokens: cacheWriteTokens ?? this.cacheWriteTokens,
         finishUsage: finishUsage ?? this.finishUsage,
+        speaker: speaker ?? this.speaker,
       )
       .._storageOrder = (id == null || id == this.id) ? _storageOrder : null
       .._generationState = (id == null || id == this.id)
@@ -427,6 +435,7 @@ class ChatMessage extends HiveObject {
       'totalTokens': totalTokens,
       'conversationId': conversationId,
       'isStreaming': isStreaming,
+      if (speaker != null) 'speaker': speaker!.toJson(),
       'reasoningText': reasoningText,
       'reasoningStartAt': reasoningStartAt?.toIso8601String(),
       'reasoningFinishedAt': reasoningFinishedAt?.toIso8601String(),
@@ -506,6 +515,7 @@ class ChatMessage extends HiveObject {
               Map<String, dynamic>.from(json['finishUsage'] as Map),
             )
           : null,
+      speaker: GroupChatSpeaker.fromJson(json['speaker']),
     );
   }
 }

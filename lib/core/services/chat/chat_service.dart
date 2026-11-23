@@ -37,6 +37,7 @@ import '../backup/backup_isolate_runner.dart';
 import '../backup/backup_task_progress.dart';
 import '../../database/generation_run.dart';
 import '../../models/chat_message.dart';
+import '../../features/group_chat/group_chat_models.dart' show GroupChatSpeaker;
 import '../../models/context_operation.dart';
 import '../../models/context_operation_summary.dart';
 import '../../models/compress_context_options.dart';
@@ -3583,6 +3584,7 @@ class ChatService extends ChangeNotifier {
     bool selectVersion = false,
     String? temporaryAfterGroupId,
     UiContextSubmission? uiContext,
+    GroupChatSpeaker? speaker,
   }) => _serializeConversationPublication(conversationId, () async {
     if (!_initialized) await init();
 
@@ -3621,6 +3623,7 @@ class ChatService extends ChangeNotifier {
       reasoningFinishedAt: reasoningFinishedAt,
       groupId: groupId,
       version: version,
+      speaker: speaker,
     );
 
     if (_discardedTemporaryConversationIds.contains(conversationId)) {

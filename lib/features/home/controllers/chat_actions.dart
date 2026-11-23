@@ -27,6 +27,10 @@ import '../../../core/database/generation_run.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/chat_input_data.dart';
 import '../../../core/models/chat_message.dart';
+import '../../group_chat/group_chat_engine.dart';
+import '../../group_chat/group_chat_models.dart';
+import '../../group_chat/group_chat_runtime.dart';
+import '../../../core/providers/world_book_provider.dart';
 import '../../../core/models/message_part.dart';
 import '../../../utils/app_directories.dart';
 import '../../../utils/utf16_safe_cut.dart';
@@ -1246,6 +1250,21 @@ class ChatActions {
     final providerKey = modelConfig.providerKey!;
     final modelId = modelConfig.modelId!;
 
+    // ===== 群聊模式（090）：本对话启用群聊且配了角色时，走群聊编排 =====
+    final groupConfig = GroupChatConfig.fromConversation(
+      chatService.getConversation(conversation.id) ?? conversation,
+    );
+    if (groupConfig.canRun) {
+      return _sendGroupChatMessage(
+        input: input,
+        conversation: conversation,
+        assistant: assistant,
+        providerKey: providerKey,
+        modelId: modelId,
+        config: groupConfig,
+      );
+    }
+
     if (chatController.currentConversation?.id == conversation.id &&
         chatController.hasMoreAfter) {
       final loaded = await chatController.loadEndWindow();
@@ -1566,6 +1585,162 @@ class ChatActions {
     return persistedMessageCount > 0
         ? persistedMessageCount
         : Assistant.maxContextMessageSize;
+  }
+
+  // ============================================================================
+  // Group Chat (090)
+  // ============================================================================
+
+  /// 群聊模式下的发送：只落库用户消息，接力在后台跑（不占用发送锁，
+  /// 接力期间用户可以继续说话，新消息会被进行中的接力看进历史里）。
+  Future<ChatActionResult> _sendGroupChatMessage({
+    required ChatInputData input,
+    required Conversation conversation,
+    required Assistant? assistant,
+    required String providerKey,
+    required String modelId,
+    required GroupChatConfig config,
+  }) async {
+    final startRelay = !GroupChatRuntime.isActive(conversation.id);
+    GroupChatRuntime.markActive(conversation.id);
+    try {
+      final userParts = await MessageGenerationService
+          .buildPersistedUserMessageParts(input, assistant: assistant);
+      final userMessage = await chatService.addMessage(
+        conversationId: conversation.id,
+        role: 'user',
+        parts: userParts,
+        quotes: input.quotes,
+      );
+      if (await chatController.appendPersistedTailMessages([userMessage])) {
+        viewModel.restoreMessageUiState();
+      }
+      onMessagesChanged?.call();
+      if (startRelay) {
+        _setConversationLoading(conversation.id, true);
+        unawaited(
+          _runGroupChatRelay(
+            conversationId: conversation.id,
+            config: config,
+            assistant: assistant,
+            providerKey: providerKey,
+            modelId: modelId,
+          ),
+        );
+      }
+      return ChatActionResult(success: true);
+    } catch (e) {
+      if (startRelay) {
+        GroupChatRuntime.markFinished(conversation.id);
+        _setConversationLoading(conversation.id, false);
+      }
+      return ChatActionResult.error(e.toString());
+    }
+  }
+
+  /// 群聊接力主循环：按角色列表轮换，每人一次真实调用；发言里 @ 谁谁插队，
+  /// [沉默] 收走不显示；暂停/上限到了就停。
+  Future<void> _runGroupChatRelay({
+    required String conversationId,
+    required GroupChatConfig config,
+    required Assistant? assistant,
+    required String providerKey,
+    required String modelId,
+  }) async {
+    try {
+      final settings = contextProvider.read<SettingsProvider>();
+      final worldBooks = contextProvider.read<WorldBookProvider>();
+      final engine = GroupChatEngine(
+        settings: settings,
+        worldBooks: worldBooks,
+        config: config,
+        fallbackProviderKey: providerKey,
+        fallbackModelId: modelId,
+      );
+      final queue = List.of(config.roles);
+      var turns = 0;
+      while (turns < config.maxTurns) {
+        if (GroupChatRuntime.isPaused(conversationId)) break;
+        if (queue.isEmpty) queue.addAll(config.roles);
+        final role = queue.removeAt(0);
+        await Future<void>.delayed(engine.delayFor(turns));
+        if (GroupChatRuntime.isPaused(conversationId)) break;
+        List<String> historyLines;
+        try {
+          historyLines = await _groupChatHistoryLines(
+            conversationId,
+            config,
+            assistant,
+          );
+        } catch (_) {
+          historyLines = const <String>[];
+        }
+        if (GroupChatRuntime.isPaused(conversationId)) break;
+        final GroupChatTurn turn;
+        try {
+          turn = await engine.speak(
+            role,
+            userText: '',
+            historyLines: historyLines,
+          );
+        } catch (_) {
+          // 调用失败直接收摊，不重试不刷屏。
+          break;
+        }
+        turns++;
+        if (GroupChatRuntime.isSilence(turn.text)) continue;
+        final message = await chatService.addMessage(
+          conversationId: conversationId,
+          role: 'assistant',
+          content: turn.text,
+          modelId: modelId,
+          providerId: providerKey,
+          speaker: GroupChatSpeaker(
+            id: role.id,
+            name: role.name,
+            avatar: role.avatar,
+          ),
+        );
+        if (await chatController.appendPersistedTailMessages([message])) {
+          viewModel.restoreMessageUiState();
+        }
+        onMessagesChanged?.call();
+        final mentioned = engine.mentionsIn(turn.text, role);
+        if (mentioned.isNotEmpty) queue.insertAll(0, mentioned);
+      }
+    } finally {
+      GroupChatRuntime.markFinished(conversationId);
+      _setConversationLoading(conversationId, false);
+    }
+  }
+
+  /// 把最近的消息按格式模板拼成历史对话行，喂给角色。
+  Future<List<String>> _groupChatHistoryLines(
+    String conversationId,
+    GroupChatConfig config,
+    Assistant? assistant,
+  ) async {
+    final conversation = chatService.getConversation(conversationId);
+    if (conversation == null) return const <String>[];
+    final messages = chatService.isTemporaryConversation(conversationId)
+        ? await chatController.messagesForCompleteHistoryContext(conversation)
+        : await chatController.messagesForGenerationContext(
+            conversation,
+            maxMessages: 60,
+          );
+    final lines = <String>[];
+    for (final message in messages) {
+      final text = message.content.trim();
+      if (text.isEmpty) continue;
+      if (message.role == 'user') {
+        lines.add(config.formatLine('主人', text));
+      } else if (message.speaker != null) {
+        lines.add(config.formatLine(message.speaker!.name, text));
+      } else if (message.role == 'assistant') {
+        lines.add(config.formatLine(assistant?.name ?? '助手', text));
+      }
+    }
+    return lines;
   }
 
   // ============================================================================

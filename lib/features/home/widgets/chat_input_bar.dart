@@ -6,6 +6,9 @@ import '../../chat/models/image_viewer_draft_mode.dart';
 import '../../chat/utils/image_edit_renderer.dart';
 import '../../../core/models/compression_config.dart';
 import '../../../core/services/chat/chat_service.dart';
+import '../../group_chat/group_chat_models.dart';
+import '../../group_chat/group_chat_settings_sheet.dart'
+    show showGroupChatSettingsSheet;
 import '../../chat/controllers/quote_editing_controller.dart';
 import '../../intelligent_ui/models/ui_context_attachment.dart';
 import '../../intelligent_ui/host/ui_composer_context_chip.dart';
@@ -216,6 +219,19 @@ class ChatInputBarController {
       _state?._allowImagesApiRouting ??
       _pendingDraft?.allowImagesApiRouting ??
       true;
+
+  /// 当前对话是否启用了群聊（090，拼图按钮点亮用）。
+  bool get _groupChatActive {
+    final id = widget.conversationId;
+    if (id == null || id.isEmpty) return false;
+    try {
+      final conversation = context.read<ChatService>().getConversation(id);
+      return GroupChatConfig.fromConversation(conversation).enabled;
+    } catch (_) {
+      return false;
+    }
+  }
+
   bool get isAttached => _state != null;
   bool get hasDraftMedia =>
       _state?._hasDraftMedia ??
@@ -3494,20 +3510,25 @@ class _ChatInputBarState extends State<ChatInputBar>
         })();
 
         // Search entry moved into the reasoning (lightbulb) sheet as
-        // 「搜索设置」 (089). On mobile this slot is a placeholder for the
-        // upcoming group-chat / extension button (no action yet); desktop
-        // keeps the original search button.
+        // 「搜索设置」 (089). On mobile this slot is the group-chat settings
+        // button (090); desktop keeps the original search button.
         if (!PlatformUtils.isDesktop)
           actions.add(
             _OverflowAction(
               width: normalButtonW,
               builder: () => _CompactIconButton(
                 icon: Lucide.Puzzle,
-                active: false,
+                active: _groupChatActive,
+                onTap: lockTap(
+                  () => showGroupChatSettingsSheet(
+                    context,
+                    conversationId: widget.conversationId,
+                  ),
+                ),
               ),
               menu: DesktopContextMenuItem(
                 icon: Lucide.Puzzle,
-                label: l10n.chatInputBarOnlineSearchTooltip,
+                label: '群聊设置',
               ),
             ),
           );

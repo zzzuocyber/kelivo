@@ -18,7 +18,14 @@ import '../../../utils/app_directories.dart';
 import '../../../utils/kelivo_file_uri.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 
-enum StorageImageKind { chat, tool, avatar, temporaryBackground, phone }
+enum StorageImageKind {
+  chat,
+  tool,
+  avatar,
+  temporaryBackground,
+  phone,
+  groupChatAvatar,
+}
 
 /// One persisted snapshot for association labels and deletion protection.
 /// Message parts cover references whose asset-index backfill is still pending.
@@ -29,6 +36,7 @@ class StorageAttachmentUsage {
     _chat = _resolveSet(_references.chat);
     _temporaryBackground = _resolveSet(_references.temporaryBackgrounds);
     _phone = _resolveSet(_references.phone);
+    _groupChatAvatars = _resolveSet(_references.groupChatAvatars);
     _protected = _resolveSet(_references.protected);
     for (final entry in _references.conversations.entries) {
       for (final path in _paths(entry.key, _root)) {
@@ -49,6 +57,7 @@ class StorageAttachmentUsage {
       _chat,
       _temporaryBackground,
       _phone,
+      _groupChatAvatars,
       _protected;
   final _conversations = <String, Map<String, String>>{};
   final _pending = <String, DateTime>{};
@@ -117,6 +126,7 @@ class StorageAttachmentUsage {
     return _appearance.contains(normalized) ||
         _temporaryBackground.contains(normalized) ||
         _phone.contains(normalized) ||
+        _groupChatAvatars.contains(normalized) ||
         _protected.contains(normalized) ||
         _conversations.containsKey(normalized);
   }
@@ -125,6 +135,7 @@ class StorageAttachmentUsage {
     ..._appearance,
     ..._temporaryBackground,
     ..._phone,
+    ..._groupChatAvatars,
     ..._protected,
     ..._conversations.keys,
   }.any((path) => p.equals(directory, path) || p.isWithin(directory, path));
@@ -317,6 +328,12 @@ class StorageAttachmentUsage {
     if (contains(_temporaryBackground)) {
       return StorageImageKind.temporaryBackground;
     }
+    // 群聊头像（090）：目录 + 文件名前缀双保险，抢在小手机和头像规则前。
+    if (contains(_groupChatAvatars) ||
+        p.isWithin(p.join(_root, 'avatars', 'group_chat'), normalized) ||
+        p.basename(normalized).startsWith('group_avatar_')) {
+      return StorageImageKind.groupChatAvatar;
+    }
     if (p.isWithin(p.join(_root, 'images'), normalized)) {
       final name = p.basename(normalized);
       if (name.startsWith('conversation_background_')) {
@@ -386,6 +403,8 @@ class _AttachmentReferences {
 
   /// 小手机（朋友圈 / 微信，以及以后同类功能）用的图。
   final phone = <String>{};
+  /// 群聊角色头像（090，从对话 extras 的 groupChat.config 收集）。
+  final groupChatAvatars = <String>{};
   final protected = <String>{};
   final conversations = <String, Map<String, String>>{};
   final pending = <String, int>{};
@@ -707,6 +726,36 @@ _AttachmentReferences _readReferences(
       final title = (row['title'] as String?) ?? '';
       for (final path in _imageReferencesIn(decoded)) {
         result.phone.add(path);
+        associate(path, id, title);
+      }
+    }
+
+    // 群聊头像（090）：对话 extras 的 groupChat.config 里各角色的头像路径。
+    // 收进引用表：单独归类成「群聊头像」；算作使用中，免得被清理删掉。
+    for (final row in database.select(
+      'SELECT id, title, extras_json FROM conversation_rows '
+      "WHERE instr(extras_json, 'groupChat.config') > 0",
+    )) {
+      Object? decoded;
+      try {
+        decoded = jsonDecode(row['extras_json'] as String);
+      } on FormatException {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      final config = decoded['groupChat.config'];
+      if (config is! Map) continue;
+      final roles = config['roles'];
+      if (roles is! List) continue;
+      final id = row['id'] as String;
+      final title = (row['title'] as String?) ?? '';
+      for (final role in roles) {
+        if (role is! Map) continue;
+        final avatar = role['avatar'];
+        if (avatar is! String) continue;
+        final path = avatar.trim();
+        if (path.isEmpty) continue;
+        result.groupChatAvatars.add(path);
         associate(path, id, title);
       }
     }

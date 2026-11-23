@@ -37,6 +37,8 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import '../../features/group_chat/group_chat_models.dart'
+    show GroupChatSpeaker;
 import '../models/context_operation.dart';
 import '../models/context_operation_summary.dart';
 import '../models/compress_context_options.dart';
@@ -8501,6 +8503,7 @@ ORDER BY m.message_order DESC LIMIT 20
     final extras = _decodeExtrasJson(row.extrasJson);
     return ChatMessage(
       quotes: QuoteRef.decodeList(extras['quotes']),
+      speaker: GroupChatSpeaker.fromJson(extras[GroupChatSpeaker.extrasKey]),
       id: row.id,
       role: row.role,
       parts: parts,
@@ -8847,9 +8850,16 @@ ORDER BY m.message_order DESC LIMIT 20
       completionTokens: Value(message.completionTokens),
       cachedTokens: Value(message.cachedTokens),
       durationMs: Value(message.durationMs),
+      senderId: Value(
+        (message.speaker?.id.isNotEmpty ?? false) ? message.speaker!.id : null,
+      ),
       extrasJson: Value(
         _encodeTokenExtras(
-          '{}',
+          message.speaker == null
+              ? '{}'
+              : jsonEncode({
+                GroupChatSpeaker.extrasKey: message.speaker!.toJson(),
+              }),
           reasoningTokens: message.reasoningTokens,
           cacheWriteTokens: message.cacheWriteTokens,
           finishUsage: message.finishUsage,

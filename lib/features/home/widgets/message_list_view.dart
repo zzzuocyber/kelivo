@@ -2600,6 +2600,8 @@ class _MessageListViewState extends State<MessageListView> {
     RetryStatus? retryStatus,
   }) {
     final currentIdx = availableVersions.indexOf(selectedVersion);
+    final speaker = message.speaker;
+    final showSpeakerIdentity = speaker != null;
     return ChatMessageWidget(
       timelineStorage: _timelineStorage.putIfAbsent(
         message.id,
@@ -2624,6 +2626,7 @@ class _MessageListViewState extends State<MessageListView> {
           : null,
       modelIcon:
           (!useAssistAvatar &&
+              speaker == null &&
               message.role == 'assistant' &&
               message.providerId != null &&
               message.modelId != null)
@@ -2634,12 +2637,20 @@ class _MessageListViewState extends State<MessageListView> {
             )
           : null,
       showModelIcon: useAssistAvatar ? false : presentation.showModelIcon,
-      useAssistantAvatar: useAssistAvatar && message.role == 'assistant',
-      useAssistantName: useAssistName && message.role == 'assistant',
-      assistantName: (useAssistAvatar || useAssistName)
-          ? (assistant?.name ?? 'Assistant')
-          : null,
-      assistantAvatar: useAssistAvatar ? (assistant?.avatar ?? '') : null,
+      useAssistantAvatar:
+          (useAssistAvatar || showSpeakerIdentity) && message.role == 'assistant',
+      useAssistantName:
+          (useAssistName || showSpeakerIdentity) && message.role == 'assistant',
+      assistantName: showSpeakerIdentity
+          ? speaker!.name
+          : (useAssistAvatar || useAssistName)
+              ? (assistant?.name ?? 'Assistant')
+              : null,
+      assistantAvatar: showSpeakerIdentity
+          ? speaker!.avatar
+          : useAssistAvatar
+              ? (assistant?.avatar ?? '')
+              : null,
       showUserAvatar: presentation.showUserAvatar,
       showTokenStats: presentation.showTokenStats,
       hideStreamingIndicator:
