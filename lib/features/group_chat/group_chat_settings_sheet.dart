@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/database/business_preferences.dart';
 import '../../../core/models/world_book.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
@@ -18,6 +20,7 @@ import '../../../utils/app_directories.dart';
 import '../assistant/pages/avatar_crop_page.dart';
 import '../chat/widgets/tools_sheet_row.dart';
 import 'group_chat_models.dart';
+import 'group_chat_role_library.dart';
 import 'group_chat_runtime.dart';
 
 /// 群聊头像图库目录（聊天记录存储 → 图片 → 群聊头像 分类）。
@@ -359,6 +362,26 @@ class _GroupChatConfigSheetState extends State<_GroupChatConfigSheet> {
   void initState() {
     super.initState();
     _reload();
+    unawaited(_syncRoleLibrary());
+  }
+
+  /// 098：把老对话里存的角色搬进全局角色库，并补上 roleIds。
+  Future<void> _syncRoleLibrary() async {
+    final library = GroupChatRoleLibrary.instance;
+    await library.ensureLoaded(context.read<BusinessPreferences>());
+    final config = GroupChatConfig.fromConversation(
+      context.read<ChatService>().getConversation(widget.conversationId),
+    );
+    final ids = await library.adoptConversation(config);
+    if (config.roleIds.isEmpty && ids.isNotEmpty) {
+      await _saveGroupChatConfig(
+        context,
+        widget.conversationId,
+        config.copyWith(roleIds: ids),
+      );
+    }
+    if (!mounted) return;
+    setState(_reload);
   }
 
   void _reload() {
@@ -441,7 +464,7 @@ class _GroupChatConfigSheetState extends State<_GroupChatConfigSheet> {
               ToolsSheetRow(
                 key: const ValueKey('group-chat-roles'),
                 icon: _roleIcon,
-                label: '角色管理（${_config.roles.length}）',
+                label: '角色管理（${resolveGroupChatRoles(_config).length}）',
                 trailing: ToolsSheetRow.chevron(context),
                 onTap: () => _openChild(
                   _showGroupChatRoleListSheet(
@@ -811,6 +834,7 @@ class _GroupChatRoleListSheetState extends State<_GroupChatRoleListSheet> {
     final config = GroupChatConfig.fromConversation(
       chat.getConversation(widget.conversationId),
     );
+    final roles = resolveGroupChatRoles(config);
     return SafeArea(
       top: false,
       child: Padding(
@@ -824,14 +848,14 @@ class _GroupChatRoleListSheetState extends State<_GroupChatRoleListSheet> {
               const SizedBox(height: 14),
               _SheetHeader(
                 icon: _roleIcon,
-                title: '角色管理（${config.roles.length}）',
+                title: '角色管理（${roles.length}）',
                 trailing: TextButton.icon(
                   onPressed: () => _addRole(config),
                   icon: const Icon(Lucide.Plus, size: 16),
                   label: const Text('添加角色'),
                 ),
               ),
-              if (config.roles.isEmpty)
+              if (roles.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
@@ -843,7 +867,7 @@ class _GroupChatRoleListSheetState extends State<_GroupChatRoleListSheet> {
                   ),
                 )
               else
-                for (final role in config.roles)
+                for (final role in roles)
                   _RoleTile(
                     role: role,
                     onTap: () => _manageRole(role),
@@ -857,20 +881,23 @@ class _GroupChatRoleListSheetState extends State<_GroupChatRoleListSheet> {
   }
 
   Future<void> _addRole(GroupChatConfig config) async {
-    final next = List.of(config.roles)
-      ..add(
-        GroupChatRole(
-          id: const Uuid().v4(),
-          name: '角色${config.roles.length + 1}',
-        ),
-      );
+    final current = resolveGroupChatRoles(config);
+    final role = GroupChatRole(
+      id: const Uuid().v4(),
+      name: '角色${current.length + 1}',
+    );
+    // 098：角色实体进全局库，对话只记住 id。
+    await GroupChatRoleLibrary.instance.upsertRole(role);
     await _saveGroupChatConfig(
       context,
       widget.conversationId,
-      config.copyWith(roles: next),
+      config.copyWith(
+        roles: <GroupChatRole>[...current, role],
+        roleIds: <String>[for (final item in current) item.id, role.id],
+      ),
     );
     if (!mounted) return;
-    await _manageRole(next.last);
+    await _manageRole(role);
   }
 
   Future<void> _manageRole(GroupChatRole role) async {
@@ -934,21 +961,27 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
   }
 
   void _updateConfig(GroupChatRole Function(GroupChatRole) change) {
+    final next = change(_role);
+    setState(() => _role = next);
+    // 098：角色实体落在全局库，改完直接落库；对话里的快照跟着同步。
+    unawaited(GroupChatRoleLibrary.instance.upsertRole(next));
     final chat = context.read<ChatService>();
     final conversation = chat.getConversation(widget.conversationId);
     if (conversation == null) return;
     final config = GroupChatConfig.fromConversation(conversation);
-    final roles = [
-      for (final role in config.roles)
-        if (role.id == _role.id) change(role) else role,
+    final current = resolveGroupChatRoles(config);
+    final roles = <GroupChatRole>[
+      for (final role in current)
+        if (role.id == next.id) next else role,
     ];
-    chat.updateConversationExtras(widget.conversationId, (current) {
-      final extras = Map<String, dynamic>.from(current);
-      extras[GroupChatConfig.extrasKey] =
-          config.copyWith(roles: roles).toJson();
+    if (!roles.any((role) => role.id == next.id)) roles.add(next);
+    chat.updateConversationExtras(widget.conversationId, (extrasRaw) {
+      final extras = Map<String, dynamic>.from(extrasRaw);
+      extras[GroupChatConfig.extrasKey] = config
+          .copyWith(roles: roles, roleIds: <String>[for (final r in roles) r.id])
+          .toJson();
       return extras;
     });
-    setState(() => _role = change(_role));
   }
 
   Future<void> _deleteRole() async {
@@ -956,7 +989,10 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除角色'),
-        content: Text('从本对话的角色列表删除「${_role.name}」？世界书条目不会被删。'),
+        content: Text(
+          '把「${_role.name}」从这场群聊里移除？\n'
+          '角色还留在角色库，别的对话不受影响。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -974,13 +1010,17 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
     final conversation = chat.getConversation(widget.conversationId);
     if (conversation != null) {
       final config = GroupChatConfig.fromConversation(conversation);
-      final roles = config.roles
+      final roles = resolveGroupChatRoles(config)
           .where((role) => role.id != _role.id)
           .toList(growable: false);
       await chat.updateConversationExtras(widget.conversationId, (current) {
         final extras = Map<String, dynamic>.from(current);
-        extras[GroupChatConfig.extrasKey] =
-            config.copyWith(roles: roles).toJson();
+        extras[GroupChatConfig.extrasKey] = config
+            .copyWith(
+              roles: roles,
+              roleIds: <String>[for (final role in roles) role.id],
+            )
+            .toJson();
         return extras;
       });
     }

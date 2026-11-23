@@ -23,6 +23,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
+import '../../../core/database/business_preferences.dart';
 import '../../../core/database/generation_run.dart';
 import '../../../core/models/assistant.dart';
 import '../../../core/models/chat_input_data.dart';
@@ -30,9 +31,7 @@ import '../../../core/models/chat_message.dart';
 import '../../group_chat/group_chat_engine.dart';
 import '../../group_chat/group_chat_models.dart';
 import '../../group_chat/group_chat_runtime.dart';
-
-/// 群聊「随机挑人」用的随机源（096）。
-final math.Random _groupChatRandom = math.Random();
+import '../../group_chat/group_chat_role_library.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/models/message_part.dart';
 import '../../../utils/app_directories.dart';
@@ -70,6 +69,10 @@ import 'home_view_model.dart';
 import 'latest_wins_checkpoint_writer.dart';
 import 'streaming_tool_events.dart';
 import 'stream_controller.dart' as stream_ctrl;
+
+
+/// 群聊「随机挑人」用的随机源。
+final math.Random _groupChatRandom = math.Random();
 
 final class _BarrierStreamSubscription<T> implements StreamSubscription<T> {
   _BarrierStreamSubscription(this._delegate, this._cancelWithBarrier);
@@ -1653,20 +1656,47 @@ class ChatActions {
     try {
       final settings = contextProvider.read<SettingsProvider>();
       final worldBooks = contextProvider.read<WorldBookProvider>();
+      // 098：角色来自全局角色库；老对话（只存了快照）先搬进库并补上 roleIds。
+      final library = GroupChatRoleLibrary.instance;
+      await library.ensureLoaded(
+        contextProvider.read<BusinessPreferences>(),
+      );
+      final adoptedIds = await library.adoptConversation(config);
+      if (config.roleIds.isEmpty && adoptedIds.isNotEmpty) {
+        await chatService.updateConversationExtras(conversationId, (current) {
+          final extras = Map<String, dynamic>.from(current);
+          final raw = extras[GroupChatConfig.extrasKey];
+          final map = raw is Map
+              ? Map<String, dynamic>.from(raw)
+              : <String, dynamic>{};
+          map['roleIds'] = adoptedIds;
+          extras[GroupChatConfig.extrasKey] = map;
+          return extras;
+        });
+      }
+      final roles = <GroupChatRole>[
+        for (final id in (adoptedIds.isEmpty ? config.roleIds : adoptedIds))
+          if (library.roleById(id) != null) library.roleById(id)!,
+      ];
+      final activeRoles = roles.isEmpty
+          ? resolveGroupChatRoles(config)
+          : roles;
+      if (activeRoles.isEmpty) return;
       final engine = GroupChatEngine(
         settings: settings,
         worldBooks: worldBooks,
         config: config,
         fallbackProviderKey: providerKey,
         fallbackModelId: modelId,
+        roles: activeRoles,
       );
-      final queue = List.of(config.roles);
+      final queue = List.of(activeRoles);
       String? lastSpeakerId;
       var turns = 0;
       while (turns < config.maxTurns) {
         if (GroupChatRuntime.isPaused(conversationId)) break;
         if (queue.isEmpty) {
-          queue.addAll(config.roles);
+          queue.addAll(activeRoles);
           // 随机挑人：每轮把队列打乱再轮流（@ 插队照旧有效）。
           if (config.relayMode == GroupChatRelayMode.random &&
               queue.length > 1) {

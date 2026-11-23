@@ -14,6 +14,11 @@ class GroupChatRole {
     this.entryId = '',
     this.bookId = '',
     this.avatar = '',
+    this.folderId = '',
+    this.modelProviderKey = '',
+    this.modelId = '',
+    this.reasoningLevel = '',
+    this.reasoningBudget = 0,
   });
 
   final String id;
@@ -30,12 +35,32 @@ class GroupChatRole {
   /// 角色头像（本地文件路径，落在 群聊头像 图库）。空 = 首字圆标。
   final String avatar;
 
+  /// 全局角色库里属于哪个文件夹（空 = 未分类）。一层，不嵌套。
+  final String folderId;
+
+  /// 角色单独的模型；留空 = 跟随对话当前模型（098）。
+  final String modelProviderKey;
+  final String modelId;
+
+  /// 深度思考档位（ReasoningLevel 的名字）；空 = 自动。
+  final String reasoningLevel;
+
+  /// 自定义预算 token，0 = 不用预算。
+  final int reasoningBudget;
+
   GroupChatRole copyWith({
     String? name,
     String? entryId,
     String? bookId,
     String? avatar,
+    String? folderId,
+    String? modelProviderKey,
+    String? modelId,
+    String? reasoningLevel,
+    int? reasoningBudget,
     bool clearAvatar = false,
+    bool clearModel = false,
+    bool clearReasoning = false,
   }) {
     return GroupChatRole(
       id: id,
@@ -43,6 +68,17 @@ class GroupChatRole {
       entryId: entryId ?? this.entryId,
       bookId: bookId ?? this.bookId,
       avatar: clearAvatar ? '' : (avatar ?? this.avatar),
+      folderId: folderId ?? this.folderId,
+      modelProviderKey: clearModel
+          ? ''
+          : (modelProviderKey ?? this.modelProviderKey),
+      modelId: clearModel ? '' : (modelId ?? this.modelId),
+      reasoningLevel: clearReasoning
+          ? ''
+          : (reasoningLevel ?? this.reasoningLevel),
+      reasoningBudget: clearReasoning
+          ? 0
+          : (reasoningBudget ?? this.reasoningBudget),
     );
   }
 
@@ -52,6 +88,11 @@ class GroupChatRole {
     'entry': entryId,
     'book': bookId,
     'avatar': avatar,
+    'folder': folderId,
+    'modelProvider': modelProviderKey,
+    'model': modelId,
+    'reasoning': reasoningLevel,
+    'reasoningBudget': reasoningBudget,
   };
 
   static GroupChatRole fromJson(Map<String, dynamic> json) => GroupChatRole(
@@ -60,7 +101,35 @@ class GroupChatRole {
     entryId: (json['entry'] ?? '').toString(),
     bookId: (json['book'] ?? '').toString(),
     avatar: (json['avatar'] ?? '').toString(),
+    folderId: (json['folder'] ?? '').toString(),
+    modelProviderKey: (json['modelProvider'] ?? '').toString(),
+    modelId: (json['model'] ?? '').toString(),
+    reasoningLevel: (json['reasoning'] ?? '').toString(),
+    reasoningBudget: switch (json['reasoningBudget']) {
+      final num value => value.toInt(),
+      final String value => int.tryParse(value) ?? 0,
+      _ => 0,
+    },
   );
+}
+
+/// 角色库里的文件夹（一层，不嵌套）。
+class GroupChatRoleFolder {
+  const GroupChatRoleFolder({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  GroupChatRoleFolder copyWith({String? name}) =>
+      GroupChatRoleFolder(id: id, name: name ?? this.name);
+
+  Map<String, dynamic> toJson() => <String, dynamic>{'id': id, 'name': name};
+
+  static GroupChatRoleFolder fromJson(Map<String, dynamic> json) =>
+      GroupChatRoleFolder(
+        id: (json['id'] ?? '').toString(),
+        name: (json['name'] ?? '').toString(),
+      );
 }
 
 /// 一个对话的整套群聊配置（存 Conversation.extras）。
@@ -85,6 +154,7 @@ class GroupChatConfig {
     this.maxTurns = defaultMaxTurns,
     this.relayMode = GroupChatRelayMode.rotation,
     this.roles = const <GroupChatRole>[],
+    this.roleIds = const <String>[],
     this.messageFormat = defaultMessageFormat,
     this.topic = '',
     this.rules = '',
@@ -101,8 +171,11 @@ class GroupChatConfig {
   /// 接力挑人方式：排队轮流 / 随机挑人。
   final GroupChatRelayMode relayMode;
 
-  /// 本对话的角色（按列表顺序轮换）。
+  /// 本对话的角色快照（老数据/兜底用；新数据以 [roleIds] 为准）。
   final List<GroupChatRole> roles;
+
+  /// 本对话从全局角色库里选了谁（按顺序轮换，098）。
+  final List<String> roleIds;
 
   /// 消息格式模板，支持 {角色名} {内容} 占位符。用于喂给模型的上下文。
   final String messageFormat;
@@ -119,7 +192,10 @@ class GroupChatConfig {
   /// 世界观绑定的世界书条目 id（大段世界观在世界书里养着）。
   final List<String> worldEntryIds;
 
-  bool get canRun => enabled && roles.isNotEmpty;
+  /// 有没有配角色（新数据看 roleIds，老数据看快照）。
+  bool get hasRoles => roleIds.isNotEmpty || roles.isNotEmpty;
+
+  bool get canRun => enabled && hasRoles;
 
   String formatLine(String name, String content) {
     final template = messageFormat.trim().isEmpty
@@ -135,6 +211,7 @@ class GroupChatConfig {
     int? maxTurns,
     GroupChatRelayMode? relayMode,
     List<GroupChatRole>? roles,
+    List<String>? roleIds,
     String? messageFormat,
     String? topic,
     String? rules,
@@ -146,6 +223,7 @@ class GroupChatConfig {
       maxTurns: maxTurns ?? this.maxTurns,
       relayMode: relayMode ?? this.relayMode,
       roles: roles ?? this.roles,
+      roleIds: roleIds ?? this.roleIds,
       messageFormat: messageFormat ?? this.messageFormat,
       topic: topic ?? this.topic,
       rules: rules ?? this.rules,
@@ -159,6 +237,7 @@ class GroupChatConfig {
     'maxTurns': maxTurns,
     'relayMode': relayMode.name,
     'roles': [for (final role in roles) role.toJson()],
+    'roleIds': roleIds,
     'messageFormat': messageFormat,
     'topic': topic,
     'rules': rules,
@@ -171,6 +250,7 @@ class GroupChatConfig {
     if (raw is! Map) return const GroupChatConfig();
     final map = raw.cast<String, dynamic>();
     final roles = map['roles'];
+    final roleIds = map['roleIds'];
     final worldEntries = map['worldEntryIds'];
     final turns = map['maxTurns'];
     return GroupChatConfig(
@@ -188,6 +268,9 @@ class GroupChatConfig {
               .map((e) => GroupChatRole.fromJson(e.cast<String, dynamic>()))
               .toList()
           : const <GroupChatRole>[],
+      roleIds: roleIds is List
+          ? <String>[for (final id in roleIds) id.toString()]
+          : const <String>[],
       messageFormat: (map['messageFormat'] ?? '').toString(),
       topic: (map['topic'] ?? '').toString(),
       rules: (map['rules'] ?? '').toString(),

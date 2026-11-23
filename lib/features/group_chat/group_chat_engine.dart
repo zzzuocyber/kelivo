@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import '../../core/models/model_spec.dart';
 import '../../core/models/reasoning_request.dart';
 import '../../core/models/world_book.dart';
 import '../../core/providers/settings_provider.dart';
@@ -28,13 +29,17 @@ class GroupChatEngine {
     required this.config,
     required this.fallbackProviderKey,
     required this.fallbackModelId,
-  });
+    List<GroupChatRole>? roles,
+  }) : roles = roles ?? config.roles;
 
   final SettingsProvider settings;
   final WorldBookProvider worldBooks;
   final GroupChatConfig config;
 
-  /// 对话当前用的模型（角色不绑模型，全员跟对话走）。
+  /// 这场群聊实际参与的角色（098：来自全局角色库，按配置的 id 顺序）。
+  final List<GroupChatRole> roles;
+
+  /// 对话当前用的模型（角色没单独绑模型时全员跟它走）。
   final String fallbackProviderKey;
   final String fallbackModelId;
 
@@ -52,9 +57,18 @@ class GroupChatEngine {
     final system = _systemPrompt(role);
     final user = _userPrompt(role, userText, historyLines);
 
+    // 角色单独绑了模型就用它（098），没绑就跟对话走。
+    final roleHasModel =
+        role.modelProviderKey.isNotEmpty &&
+        role.modelId.isNotEmpty &&
+        settings.providerConfigs.containsKey(role.modelProviderKey);
+    final providerKey = roleHasModel
+        ? role.modelProviderKey
+        : fallbackProviderKey;
+    final modelId = roleHasModel ? role.modelId : fallbackModelId;
     final result = await ChatApiService.generateMessage(
-      config: settings.getProviderConfig(fallbackProviderKey),
-      modelId: fallbackModelId,
+      config: settings.getProviderConfig(providerKey),
+      modelId: modelId,
       messages: <Map<String, dynamic>>[
         <String, dynamic>{'role': 'system', 'content': system},
         <String, dynamic>{'role': 'user', 'content': user},
@@ -63,16 +77,32 @@ class GroupChatEngine {
       skipImageParsing: true,
       allowImagesApiRouting: false,
       textOnly: true,
-      reasoning: ReasoningRequest.auto,
+      reasoning: _reasoningFor(role),
       requestTimeout: const Duration(minutes: 5),
     );
     return GroupChatTurn(role: role, text: _clean(result.text, role.name));
   }
 
+  /// 角色的深度思考档位：存的只是档位名（不含 token 细节），
+  /// 真请求时按当前模型换算由 ChatApiService 处理；空 = 自动。
+  ReasoningRequest _reasoningFor(GroupChatRole role) {
+    final name = role.reasoningLevel.trim();
+    if (name.isEmpty) return ReasoningRequest.auto;
+    for (final level in ReasoningLevel.values) {
+      if (level.name == name) {
+        return ReasoningRequest(
+          level,
+          budgetTokens: role.reasoningBudget > 0 ? role.reasoningBudget : null,
+        );
+      }
+    }
+    return ReasoningRequest.auto;
+  }
+
   /// 解析一句话里 @ 到的群成员（长名优先防误伤，按出现顺序、去重）。
   List<GroupChatRole> mentionsIn(String text, GroupChatRole speaker) {
     final normalized = text.replaceAll('＠', '@');
-    final candidates = config.roles
+    final candidates = roles
         .where((role) => role.id != speaker.id && role.name.trim().isNotEmpty)
         .toList()
       ..sort((a, b) => b.name.length.compareTo(a.name.length));
@@ -85,7 +115,7 @@ class GroupChatEngine {
     }
     // 还原成发言顺序（candidates 被长度排序打乱了）。
     return [
-      for (final role in config.roles)
+      for (final role in roles)
         if (out.any((hit) => hit.id == role.id)) role,
     ];
   }
@@ -178,7 +208,7 @@ class GroupChatEngine {
     }
 
     buffer.writeln('【群里的人】');
-    for (final role in config.roles) {
+    for (final role in roles) {
       buffer.writeln('### ${role.name}');
       final entry = _findEntry(role);
       buffer.writeln(
