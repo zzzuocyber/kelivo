@@ -10,9 +10,12 @@ import '../../../core/models/world_book.dart';
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/services/chat/chat_service.dart';
 import '../../../icons/lucide_adapter.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_switch.dart';
+import '../../../theme/app_font_weights.dart';
 import '../../../theme/app_semantic_colors.dart';
 import '../../../utils/app_directories.dart';
+import '../../assistant/pages/avatar_crop_page.dart';
 import 'group_chat_models.dart';
 import 'group_chat_runtime.dart';
 
@@ -38,8 +41,12 @@ Future<String?> saveGroupChatAvatar(String sourcePath) async {
   }
 }
 
-/// 重新上传（压缩参数跟助手背景一致）。
-Future<String?> pickAndSaveGroupChatAvatar() async {
+/// 上传角色头像：先问裁不裁，再进图库选图。
+/// 选「裁剪为正方形」时复用助手头像那套裁剪页（圆形只做预览，输出 1:1 方形），
+/// 结果仍旧存进「群聊头像」图库（094）。压缩参数跟助手背景一致。
+Future<String?> pickAndSaveGroupChatAvatar(BuildContext context) async {
+  final crop = await _showAvatarCropChoice(context);
+  if (crop == null || !context.mounted) return null;
   try {
     final picker = ImagePicker();
     final file = await picker.pickImage(
@@ -48,10 +55,77 @@ Future<String?> pickAndSaveGroupChatAvatar() async {
       imageQuality: 85,
     );
     if (file == null) return null;
-    return saveGroupChatAvatar(file.path);
+    var path = file.path;
+    if (crop) {
+      final cropped = await Navigator.of(context).push<String>(
+        MaterialPageRoute<String>(
+          builder: (_) => AvatarCropPage(imagePath: file.path),
+        ),
+      );
+      if (cropped == null) return null;
+      path = cropped;
+    }
+    return saveGroupChatAvatar(path);
   } catch (_) {
     return null;
   }
+}
+
+/// 裁剪 / 不裁剪 二选一，文案和助手头像设置共用一套。
+Future<bool?> _showAvatarCropChoice(BuildContext context) {
+  final l10n = AppLocalizations.of(context)!;
+  return showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: context.overlaySurface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      Widget choice({
+        required IconData icon,
+        required String title,
+        required String subtitle,
+        required bool value,
+      }) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: ToolsSheetRow(
+            icon: icon,
+            label: title,
+            subtitle: subtitle,
+            trailing: ToolsSheetRow.chevron(ctx),
+            onTap: () => Navigator.of(ctx).pop<bool>(value),
+          ),
+        );
+      }
+
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Center(child: _SheetHandle()),
+              const SizedBox(height: 10),
+              choice(
+                icon: Lucide.Crop,
+                title: l10n.assistantEditAvatarCropChoiceTitle,
+                subtitle: l10n.assistantEditAvatarCropChoiceSubtitle,
+                value: true,
+              ),
+              choice(
+                icon: Lucide.Image,
+                title: l10n.assistantEditAvatarNoCropChoiceTitle,
+                subtitle: l10n.assistantEditAvatarNoCropChoiceSubtitle,
+                value: false,
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 /// 拼图抽屉（092 起叫「扩展」）：一级只有一张群聊设置卡片，开关挪进二级。
@@ -910,15 +984,15 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
               const SizedBox(height: 14),
               _EntryPickerRow(
                 icon: Lucide.BookOpen,
-                label: '绑定世界书条目（人设）',
+                label: '绑定世界书条目',
                 summary: entry == null ? '未绑定' : entry.name,
                 onTap: _pickEntry,
               ),
               const SizedBox(height: 8),
               _EntryPickerRow(
                 icon: Lucide.Image,
-                label: '上传头像（存入群聊头像图库）',
-                summary: _role.avatar.isEmpty ? '未设置·用首字圆标' : '已设置',
+                label: '上传头像',
+                summary: _role.avatar.isEmpty ? '未设置' : '已设置',
                 onTap: _pickAvatar,
               ),
               if (_role.avatar.isNotEmpty)
@@ -1022,7 +1096,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
   }
 
   Future<void> _pickAvatar() async {
-    final path = await pickAndSaveGroupChatAvatar();
+    final path = await pickAndSaveGroupChatAvatar(context);
     if (path == null || !mounted) return;
     _updateConfig((role) => role.copyWith(avatar: path));
   }
