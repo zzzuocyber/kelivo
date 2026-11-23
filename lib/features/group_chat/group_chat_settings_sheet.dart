@@ -1454,6 +1454,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
       settings: settings,
       config: config,
       modelId: modelId,
+      spec: spec,
     );
     final l10n = AppLocalizations.of(context)!;
     final current = _role.reasoningLevel.trim();
