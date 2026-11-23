@@ -30,6 +30,9 @@ import '../../../core/models/chat_message.dart';
 import '../../group_chat/group_chat_engine.dart';
 import '../../group_chat/group_chat_models.dart';
 import '../../group_chat/group_chat_runtime.dart';
+
+/// 群聊「随机挑人」用的随机源（096）。
+final math.Random _groupChatRandom = math.Random();
 import '../../../core/providers/world_book_provider.dart';
 import '../../../core/models/message_part.dart';
 import '../../../utils/app_directories.dart';
@@ -1658,11 +1661,27 @@ class ChatActions {
         fallbackModelId: modelId,
       );
       final queue = List.of(config.roles);
+      String? lastSpeakerId;
       var turns = 0;
       while (turns < config.maxTurns) {
         if (GroupChatRuntime.isPaused(conversationId)) break;
-        if (queue.isEmpty) queue.addAll(config.roles);
+        if (queue.isEmpty) {
+          queue.addAll(config.roles);
+          // 随机挑人：每轮把队列打乱再轮流（@ 插队照旧有效）。
+          if (config.relayMode == GroupChatRelayMode.random &&
+              queue.length > 1) {
+            queue.shuffle(_groupChatRandom);
+            // 新一轮开头别跟上一位撞脸。
+            if (queue.first.id == lastSpeakerId) {
+              final swapAt = 1 + _groupChatRandom.nextInt(queue.length - 1);
+              final head = queue[0];
+              queue[0] = queue[swapAt];
+              queue[swapAt] = head;
+            }
+          }
+        }
         final role = queue.removeAt(0);
+        lastSpeakerId = role.id;
         await Future<void>.delayed(engine.delayFor(turns));
         if (GroupChatRuntime.isPaused(conversationId)) break;
         List<String> historyLines;

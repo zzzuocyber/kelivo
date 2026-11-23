@@ -64,6 +64,15 @@ class GroupChatRole {
 }
 
 /// 一个对话的整套群聊配置（存 Conversation.extras）。
+/// 群聊接力怎么挑下一个发言人（096）。
+enum GroupChatRelayMode {
+  /// 排队轮流：按角色列表顺序，A → B → C → A（默认，老数据都走这个）。
+  rotation,
+
+  /// 随机挑人：每轮把角色打乱再轮流，不连着同一个人说。
+  random,
+}
+
 class GroupChatConfig {
   static const extrasKey = 'groupChat.config';
 
@@ -74,6 +83,7 @@ class GroupChatConfig {
   const GroupChatConfig({
     this.enabled = false,
     this.maxTurns = defaultMaxTurns,
+    this.relayMode = GroupChatRelayMode.rotation,
     this.roles = const <GroupChatRole>[],
     this.messageFormat = defaultMessageFormat,
     this.topic = '',
@@ -87,6 +97,9 @@ class GroupChatConfig {
 
   /// 一次接力最多几条角色发言（用户手输，1~100，默认 20）。
   final int maxTurns;
+
+  /// 接力挑人方式：排队轮流 / 随机挑人。
+  final GroupChatRelayMode relayMode;
 
   /// 本对话的角色（按列表顺序轮换）。
   final List<GroupChatRole> roles;
@@ -120,6 +133,7 @@ class GroupChatConfig {
   GroupChatConfig copyWith({
     bool? enabled,
     int? maxTurns,
+    GroupChatRelayMode? relayMode,
     List<GroupChatRole>? roles,
     String? messageFormat,
     String? topic,
@@ -130,6 +144,7 @@ class GroupChatConfig {
     return GroupChatConfig(
       enabled: enabled ?? this.enabled,
       maxTurns: maxTurns ?? this.maxTurns,
+      relayMode: relayMode ?? this.relayMode,
       roles: roles ?? this.roles,
       messageFormat: messageFormat ?? this.messageFormat,
       topic: topic ?? this.topic,
@@ -142,6 +157,7 @@ class GroupChatConfig {
   Map<String, dynamic> toJson() => <String, dynamic>{
     'enabled': enabled,
     'maxTurns': maxTurns,
+    'relayMode': relayMode.name,
     'roles': [for (final role in roles) role.toJson()],
     'messageFormat': messageFormat,
     'topic': topic,
@@ -159,6 +175,10 @@ class GroupChatConfig {
     final turns = map['maxTurns'];
     return GroupChatConfig(
       enabled: map['enabled'] as bool? ?? false,
+      relayMode: GroupChatRelayMode.values.firstWhere(
+        (mode) => mode.name == map['relayMode'],
+        orElse: () => GroupChatRelayMode.rotation,
+      ),
       maxTurns: turns is num
           ? turns.toInt().clamp(1, maxTurnsLimit)
           : defaultMaxTurns,

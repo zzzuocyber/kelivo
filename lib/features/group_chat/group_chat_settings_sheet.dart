@@ -155,7 +155,7 @@ Future<T?> _showGroupChatSheet<T>(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: builder,
+    builder: (ctx) => _keyboardSafeSheet(ctx, builder(ctx)),
   );
 }
 
@@ -178,7 +178,23 @@ Future<void> _saveGroupChatConfig(
 // 三个二级入口的图标，三级页标题复用同一套。
 const _roleMessageIcon = Lucide.MessagesSquare;
 const _promptIcon = Lucide.Settings2;
-const _roleIcon = Lucide.User;
+const _roleIcon = Lucide.NotebookTabs;
+
+/// 键盘避让：输入框聚焦时把面板整体顶到键盘上方，并限高让内容可滚（096）。
+Widget _keyboardSafeSheet(BuildContext ctx, Widget child) {
+  final insets = MediaQuery.viewInsetsOf(ctx).bottom;
+  return AnimatedPadding(
+    duration: const Duration(milliseconds: 180),
+    curve: Curves.easeOutCubic,
+    padding: EdgeInsets.only(bottom: insets),
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(ctx).height - insets - 24,
+      ),
+      child: child,
+    ),
+  );
+}
 
 /// 弹层把手。
 class _SheetHandle extends StatelessWidget {
@@ -296,7 +312,7 @@ class _GroupChatEntrySheet extends StatelessWidget {
             const SizedBox(height: 4),
             ToolsSheetRow(
               key: const ValueKey('group-chat-entry'),
-              icon: Lucide.Puzzle,
+              icon: Lucide.User,
               label: '群聊设置',
               detail: enabled ? '已开启' : '已关闭',
               trailing: ToolsSheetRow.chevron(context),
@@ -378,7 +394,7 @@ class _GroupChatConfigSheetState extends State<_GroupChatConfigSheet> {
               const Center(child: _SheetHandle()),
               const SizedBox(height: 14),
               _SheetHeader(
-                icon: Lucide.Puzzle,
+                icon: Lucide.User,
                 title: '群聊设置',
                 trailing: IosSwitch(
                   value: _config.enabled,
@@ -534,6 +550,27 @@ class _GroupChatRoleMessageSheetState
     await _saveGroupChatConfig(context, widget.conversationId, next);
   }
 
+  /// 轮流方式的单选项（勾中的那行打勾）。
+  Widget _relayModeRow({
+    required IconData icon,
+    required String label,
+    required String hint,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return ToolsSheetRow(
+      icon: icon,
+      label: label,
+      subtitle: hint,
+      selected: selected,
+      trailing: selected
+          ? Icon(Lucide.Check, size: 18, color: cs.primary)
+          : const SizedBox(width: 18),
+      onTap: onTap,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -578,6 +615,27 @@ class _GroupChatRoleMessageSheetState
                   GroupChatConfig.defaultMessageFormat,
                 ),
                 onChanged: (v) => _persist(_config.copyWith(messageFormat: v)),
+              ),
+              const SizedBox(height: 16),
+              _sheetFieldLabel('轮流方式'),
+              _relayModeRow(
+                icon: Lucide.ListOrdered,
+                label: '排队轮流',
+                hint: 'A → B → C 依次接话',
+                selected: _config.relayMode == GroupChatRelayMode.rotation,
+                onTap: () => _persist(
+                  _config.copyWith(relayMode: GroupChatRelayMode.rotation),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _relayModeRow(
+                icon: Lucide.Shuffle,
+                label: '随机挑人',
+                hint: '每轮打乱顺序，不连着同一个人说',
+                selected: _config.relayMode == GroupChatRelayMode.random,
+                onTap: () => _persist(
+                  _config.copyWith(relayMode: GroupChatRelayMode.random),
+                ),
               ),
               const SizedBox(height: 8),
             ],
@@ -841,8 +899,10 @@ Future<void> showGroupChatRoleManageSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) =>
-        _RoleManageSheet(conversationId: conversationId, role: role),
+    builder: (ctx) => _keyboardSafeSheet(
+      ctx,
+      _RoleManageSheet(conversationId: conversationId, role: role),
+    ),
   );
 }
 
@@ -1278,10 +1338,13 @@ Future<Set<String>?> showWorldEntryPickerSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => _WorldEntryPickerSheet(
-      initialSelected: selectedIds,
-      multiSelect: multiSelect,
-      title: title,
+    builder: (ctx) => _keyboardSafeSheet(
+      ctx,
+      _WorldEntryPickerSheet(
+        initialSelected: selectedIds,
+        multiSelect: multiSelect,
+        title: title,
+      ),
     ),
   );
 }
