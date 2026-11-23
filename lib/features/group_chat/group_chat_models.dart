@@ -195,7 +195,12 @@ class GroupChatConfig {
   /// 有没有配角色（新数据看 roleIds，老数据看快照）。
   bool get hasRoles => roleIds.isNotEmpty || roles.isNotEmpty;
 
-  bool get canRun => enabled && hasRoles;
+  /// 群聊模式总开关（1xx 起为废案）：false = 任何时候都不跑群聊，
+  /// 哪怕某个对话上次开着也当普通聊天用。想重启改回 true 即可，
+  /// 配置、角色库、历史消息都还在。
+  static const bool featureEnabled = false;
+
+  bool get canRun => featureEnabled && enabled && hasRoles;
 
   String formatLine(String name, String content) {
     final template = messageFormat.trim().isEmpty

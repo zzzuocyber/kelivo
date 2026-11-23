@@ -140,7 +140,12 @@ Future<bool?> _showAvatarCropChoice(BuildContext context) {
   );
 }
 
-/// 拼图抽屉（092 起叫「扩展」）：一级只有一张群聊设置卡片，开关挪进二级。
+/// 拼图抽屉（092 起叫「扩展」）。
+///
+/// 1xx：群聊设置整套撤下进废案（存档见 02-自改日志/03_已删项目），抽屉和
+/// 界面留着，卡片先当占位符用；下面的群聊设置/角色库代码没删，想重启时把
+/// [GroupChatConfig.featureEnabled] 改回 true、这里换回 `_GroupChatEntrySheet`
+/// 就能接上。
 Future<void> showGroupChatSettingsSheet(
   BuildContext context, {
   required String? conversationId,
@@ -150,7 +155,7 @@ Future<void> showGroupChatSettingsSheet(
   }
   return _showGroupChatSheet<void>(
     context,
-    (_) => _GroupChatEntrySheet(conversationId: conversationId),
+    (_) => const _ExtensionEntrySheet(),
   );
 }
 
@@ -285,18 +290,12 @@ Widget _sheetFieldLabel(String text) => Padding(
 // 一级：拼图抽屉「扩展」
 // ============================================================================
 
-class _GroupChatEntrySheet extends StatelessWidget {
-  const _GroupChatEntrySheet({required this.conversationId});
-
-  final String conversationId;
+class _ExtensionEntrySheet extends StatelessWidget {
+  const _ExtensionEntrySheet();
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final chat = context.watch<ChatService>();
-    final enabled = GroupChatConfig.fromConversation(
-      chat.getConversation(conversationId),
-    ).enabled;
     return SafeArea(
       top: false,
       child: Padding(
@@ -322,15 +321,11 @@ class _GroupChatEntrySheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             ToolsSheetRow(
-              key: const ValueKey('group-chat-entry'),
-              icon: Lucide.User,
-              label: '群聊设置',
-              detail: enabled ? '已开启' : '已关闭',
+              key: const ValueKey('extension-placeholder-entry'),
+              icon: Lucide.Box,
+              label: '占位符',
               trailing: ToolsSheetRow.chevron(context),
-              onTap: () => _showGroupChatConfigSheet(
-                context,
-                conversationId: conversationId,
-              ),
+              onTap: () => _showExtensionPlaceholderSheet(context),
             ),
             const SizedBox(height: 4),
           ],
@@ -339,6 +334,45 @@ class _GroupChatEntrySheet extends StatelessWidget {
     );
   }
 }
+
+/// 占位页：先空着，以后想到放什么再往里加。
+Future<void> _showExtensionPlaceholderSheet(BuildContext context) {
+  return _showGroupChatSheet<void>(
+    context,
+    (ctx) {
+      final cs = Theme.of(ctx).colorScheme;
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(child: _SheetHandle()),
+              const SizedBox(height: 14),
+              const _SheetHeader(icon: Lucide.Box, title: '占位符'),
+              const SizedBox(height: 10),
+              Text(
+                '这里先空着，以后想到要放什么，再往这儿加。',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: cs.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+// ============================================================================
+// 以下是撤下的群聊设置（1xx 废案）：入口已换占位符，代码保留待重启。
+// ============================================================================
 
 // ============================================================================
 // 二级：群聊设置（开关 + 三个入口卡片）

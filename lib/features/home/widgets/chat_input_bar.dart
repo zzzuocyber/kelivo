@@ -871,7 +871,9 @@ class _ChatInputBarState extends State<ChatInputBar>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   /// 当前对话是否启用了群聊（090，拼图按钮点亮用）。
   /// 放在 State 里才能拿到 widget/context（controller 没有，CI 曾报错）。
+  /// 1xx：群聊模式进废案，功能总开关关了就不再点亮。
   bool get _groupChatActive {
+    if (!GroupChatConfig.featureEnabled) return false;
     final id = widget.conversationId;
     if (id == null || id.isEmpty) return false;
     try {
@@ -3531,8 +3533,8 @@ class _ChatInputBarState extends State<ChatInputBar>
                 ),
               ),
               menu: DesktopContextMenuItem(
-                icon: Lucide.Puzzle,
-                label: '群聊设置',
+                icon: Lucide.Box,
+                label: '占位符',
               ),
             ),
           );
