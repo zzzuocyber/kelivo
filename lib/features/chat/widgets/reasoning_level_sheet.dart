@@ -249,7 +249,7 @@ class _SearchSettingsEntry extends StatelessWidget {
       child: ToolsSheetRow(
         icon: Lucide.Globe,
         label: '搜索设置',
-        onTap: () => showSearchSettingsSheet(
+        onTap: () => showSearchSettingsPanel(
           context,
           chatModelProviderKey: config.id,
           chatModelId: modelId,

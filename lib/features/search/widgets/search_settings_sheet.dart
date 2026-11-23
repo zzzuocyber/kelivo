@@ -18,7 +18,10 @@ import '../../../shared/widgets/section_card.dart';
 /// [chatModelProviderKey]/[chatModelId] carry the model the chat actually
 /// sends with, resolved by the caller (conversation override -> assistant ->
 /// global default), so built-in-search support is judged against it.
-Future<void> showSearchSettingsSheet(
+
+/// Real search settings, hosted as the second-level sheet under the
+/// reasoning (lightbulb) composer entry (089).
+Future<void> showSearchSettingsPanel(
   BuildContext context, {
   String? chatModelProviderKey,
   String? chatModelId,
@@ -35,6 +38,94 @@ Future<void> showSearchSettingsSheet(
       chatModelId: chatModelId,
     ),
   );
+}
+
+/// Reserved shell of the old search drawer (089): the real search settings
+/// moved under the reasoning sheet; this keeps the drawer feel with
+/// placeholder rows for future use.
+Future<void> showSearchSettingsSheet(
+  BuildContext context, {
+  String? chatModelProviderKey,
+  String? chatModelId,
+}) async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: context.overlaySurface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => const _ReservedSearchDrawer(),
+  );
+}
+
+class _ReservedSearchDrawer extends StatelessWidget {
+  const _ReservedSearchDrawer();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurface.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(
+                  Lucide.Puzzle,
+                  size: 20,
+                  color: cs.onSurface.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '占位 · 预留',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: cs.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Lucide.Globe,
+                  size: 20,
+                  color: cs.onSurface.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '搜索设置已移入输入栏小灯泡弹层',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: cs.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SearchSettingsSheet extends StatelessWidget {

@@ -104,7 +104,7 @@ void main() {
           home: Builder(
             builder: (context) => Center(
               child: FilledButton(
-                onPressed: () => showSearchSettingsSheet(
+                onPressed: () => showSearchSettingsPanel(
                   context,
                   chatModelProviderKey: _providerKey,
                   chatModelId: _modelId,
