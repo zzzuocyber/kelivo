@@ -18608,6 +18608,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get creationReferenceAdded => 'Referanslara eklendi';
 
   @override
+  String get creationReferenceAlreadyAdded => 'Zaten referanslarınızda';
+
+  @override
   String creationReferenceLimitReached(int count) {
     return 'Bu model en fazla $count referans görseli kabul eder.';
   }
@@ -18626,6 +18629,14 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get creationRecentCreation => 'Oluştur';
+
+  @override
+  String creationReferenceSlotsAvailable(int count) {
+    return '$count tane daha seçebilirsiniz';
+  }
+
+  @override
+  String get creationTapToSelect => 'Seçmek için bir görsele dokunun';
 
   @override
   String creationSelectedImages(int count) {
@@ -18669,6 +18680,9 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get creationEditStarted =>
       'Düzenleme başladı. Sonuç bu konunun altında görünecek.';
+
+  @override
+  String get creationEditedResult => 'Düzenlenmiş sonuç';
 
   @override
   String get creationEditedFrom => 'Şuradan düzenlendi';
