@@ -1,4 +1,4 @@
-import 'conversation.dart';
+import '../../core/models/conversation.dart';
 
 /// 群聊功能的数据模型（090）。
 ///

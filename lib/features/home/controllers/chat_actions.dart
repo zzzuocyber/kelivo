@@ -1688,7 +1688,7 @@ class ChatActions {
           break;
         }
         turns++;
-        if (GroupChatRuntime.isSilence(turn.text)) continue;
+        if (GroupChatEngine.isSilence(turn.text)) continue;
         final message = await chatService.addMessage(
           conversationId: conversationId,
           role: 'assistant',

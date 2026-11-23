@@ -215,7 +215,7 @@ class ReasoningLevelPicker extends StatelessWidget {
         _SearchSettingsEntry(config: config, modelId: modelId, compact: compact),
         if (assistant != null)
           _McpServersEntry(
-            assistantId: assistant.id,
+            assistantId: assistant!.id,
             conversationId: conversationId,
             compact: compact,
           ),

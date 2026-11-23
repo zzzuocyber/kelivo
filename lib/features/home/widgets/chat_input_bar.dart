@@ -220,18 +220,6 @@ class ChatInputBarController {
       _pendingDraft?.allowImagesApiRouting ??
       true;
 
-  /// 当前对话是否启用了群聊（090，拼图按钮点亮用）。
-  bool get _groupChatActive {
-    final id = widget.conversationId;
-    if (id == null || id.isEmpty) return false;
-    try {
-      final conversation = context.read<ChatService>().getConversation(id);
-      return GroupChatConfig.fromConversation(conversation).enabled;
-    } catch (_) {
-      return false;
-    }
-  }
-
   bool get isAttached => _state != null;
   bool get hasDraftMedia =>
       _state?._hasDraftMedia ??
@@ -881,6 +869,19 @@ class ChatInputBar extends StatefulWidget {
 
 class _ChatInputBarState extends State<ChatInputBar>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  /// 当前对话是否启用了群聊（090，拼图按钮点亮用）。
+  /// 放在 State 里才能拿到 widget/context（controller 没有，CI 曾报错）。
+  bool get _groupChatActive {
+    final id = widget.conversationId;
+    if (id == null || id.isEmpty) return false;
+    try {
+      final conversation = context.read<ChatService>().getConversation(id);
+      return GroupChatConfig.fromConversation(conversation).enabled;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void setState(VoidCallback fn) {
     super.setState(fn);
