@@ -1,6 +1,6 @@
 import 'dart:async';
 
-enum DesktopSettingsNavigationTarget { backup, mcp, topicPosition }
+enum DesktopSettingsNavigationTarget { backup, mcp, topicPosition, providers }
 
 class DesktopSettingsNavigationBus {
   DesktopSettingsNavigationBus._();
@@ -26,11 +26,9 @@ class DesktopSettingsNavigationBus {
     _controller.add(DesktopSettingsNavigationTarget.topicPosition);
   }
 
-  void openBackup() {
-    _controller.add(DesktopSettingsNavigationTarget.backup);
-  }
-
-  void openMcp() {
-    _controller.add(DesktopSettingsNavigationTarget.mcp);
-  }
+  void openTopicPosition() =>
+      _open(DesktopSettingsNavigationTarget.topicPosition);
+  void openBackup() => _open(DesktopSettingsNavigationTarget.backup);
+  void openMcp() => _open(DesktopSettingsNavigationTarget.mcp);
+  void openProviders() => _open(DesktopSettingsNavigationTarget.providers);
 }

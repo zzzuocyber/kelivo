@@ -232,30 +232,21 @@ class _DesktopSettingsPageState extends State<DesktopSettingsPage> {
     _settingsNavSub = DesktopSettingsNavigationBus.instance.stream.listen((
       target,
     ) {
-      if (!mounted) return;
-      switch (target) {
-        case DesktopSettingsNavigationTarget.topicPosition:
-          DesktopSettingsNavigationBus.instance.consumeTopicPositionRequest();
-          setState(() {
-            _selected = _SettingsMenuItem.display;
-            _showDetail = true;
-            _showTopicPosition = true;
-            _searchNavigation++;
-          });
-          break;
-        case DesktopSettingsNavigationTarget.backup:
-          setState(() {
-            _selected = _SettingsMenuItem.backup;
-            _showDetail = true;
-          });
-          break;
-        case DesktopSettingsNavigationTarget.mcp:
-          setState(() {
-            _selected = _SettingsMenuItem.mcp;
-            _showDetail = true;
-          });
-          break;
-      }
+      setState(() {
+        _showDetail = true;
+        _selected = switch (target) {
+          DesktopSettingsNavigationTarget.topicPosition =>
+            _SettingsMenuItem.display,
+          DesktopSettingsNavigationTarget.backup => _SettingsMenuItem.backup,
+          DesktopSettingsNavigationTarget.mcp => _SettingsMenuItem.mcp,
+          DesktopSettingsNavigationTarget.providers =>
+            _SettingsMenuItem.providers,
+        };
+        if (target == DesktopSettingsNavigationTarget.topicPosition) {
+          _showTopicPosition = true;
+          _searchNavigation++;
+        }
+      });
     });
   }
 
