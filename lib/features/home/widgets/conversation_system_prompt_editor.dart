@@ -197,40 +197,33 @@ class _ConversationSystemPromptEditorState
       confirmLabel: l10n.worldBookSave,
       onCancel: () => Navigator.of(context).pop(),
       onConfirm: () => Navigator.of(context).pop(_controller.text),
-      leading: _SquareAction(
-        key: const ValueKey('conversation-system-prompt-quote'),
-        icon: Lucide.Copy,
-        label: l10n.conversationSystemPromptQuote,
-        // 没有助手提示词可引用时置灰，点了也没内容。
-        enabled: _hasAssistantPrompt,
-        color: cs.primary,
-        onTap: _insertAssistantPrompt,
-      ),
-    );
-  }
-
-  Widget _clearRow(BuildContext context, AppLocalizations l10n) {
-    final cs = Theme.of(context).colorScheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: IosCardPress(
-        baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        onTap: () => Navigator.of(context).pop(''),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Lucide.RotateCcw, size: 15, color: cs.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                l10n.conversationSystemPromptClear,
-                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+      leadingFlex: 2,
+      leading: Row(
+        children: [
+          Expanded(
+            child: _SquareAction(
+              key: const ValueKey('conversation-system-prompt-quote'),
+              icon: Lucide.Copy,
+              label: l10n.conversationSystemPromptQuote,
+              // 没有助手提示词可引用时置灰，点了也没内容。
+              enabled: _hasAssistantPrompt,
+              color: cs.primary,
+              onTap: _insertAssistantPrompt,
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (widget.initial.trim().isNotEmpty)
+            Expanded(
+              child: _SquareAction(
+                key: const ValueKey('conversation-system-prompt-restore'),
+                icon: Lucide.RotateCcw,
+                label: l10n.conversationSystemPromptClear,
+                color: cs.onSurfaceVariant,
+                // 跟原来的「恢复助手提示词」一样：清空并关闭。
+                onTap: () => Navigator.of(context).pop(''),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -251,7 +244,7 @@ class _ConversationSystemPromptEditorState
       return IosFormTextField(
         key: const ValueKey('conversation-system-prompt-input'),
         label: '',
-        hintText: l10n.conversationSystemPromptPlaceholder,
+        hintText: l10n.conversationSystemPromptHint,
         controller: _controller,
         minLines: 8,
         maxLines: 20,
@@ -281,7 +274,7 @@ class _ConversationSystemPromptEditorState
         decoration: InputDecoration(
           isCollapsed: true,
           border: InputBorder.none,
-          hintText: l10n.conversationSystemPromptPlaceholder,
+          hintText: l10n.conversationSystemPromptHint,
           hintStyle: style.copyWith(
             color: cs.onSurface.withValues(alpha: 0.38),
           ),
@@ -335,23 +328,11 @@ class _ConversationSystemPromptEditorState
                             fontWeight: AppFontWeights.semibold,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n.conversationSystemPromptHint,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.4,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 12),
                   Expanded(child: _field(context, l10n, expanding: true)),
-                  if (widget.initial.trim().isNotEmpty)
-                    _clearRow(context, l10n),
                   const SizedBox(height: 10),
                   _actions(context, l10n),
                 ],
@@ -379,23 +360,7 @@ class _ConversationSystemPromptEditorState
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      l10n.conversationSystemPromptHint,
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.4,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _field(context, l10n, expanding: false),
-                  if (widget.initial.trim().isNotEmpty)
-                    _clearRow(context, l10n),
-                ],
+                children: [_field(context, l10n, expanding: false)],
               ),
             ),
           ),
