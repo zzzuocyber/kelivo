@@ -165,12 +165,14 @@ class BackupMergeReport {
     required this.skippedConversations,
     required this.remappedConversationIds,
     this.importedConversationIds = const <String>[],
+    this.mergedMessageIds = const {},
   });
 
   final int importedConversations;
   final int deduplicatedConversations;
   final int skippedConversations;
   final Map<String, String> remappedConversationIds;
+  final Map<String, String> mergedMessageIds;
 
   /// Target conversation ids newly inserted by this merge (post-remap ids).
   final List<String> importedConversationIds;
@@ -899,7 +901,9 @@ class ChatDatabaseRepository {
       throw StateError('foreign_key_check');
     }
 
-    return _readSnapshotInfo(database);
+    final info = _readSnapshotInfo(database);
+    MediaRepository.validateSnapshotPaths(database);
+    return info;
   }
 
   static ChatDatabaseSnapshotInfo _readSnapshotInfo(sqlite.Database database) {
@@ -6452,11 +6456,22 @@ ORDER BY m.message_order DESC LIMIT 20
         if (foreignKeyFailures.isNotEmpty) {
           throw StateError('foreign_key_check');
         }
+        final creationSources = await _db
+            .customSelect(
+              'SELECT DISTINCT message_id FROM merge_source.generation_batch_rows WHERE message_id IS NOT NULL',
+            )
+            .get();
         return BackupMergeReport(
           importedConversations: imported,
           deduplicatedConversations: deduplicated,
           skippedConversations: skipped,
           remappedConversationIds: Map.unmodifiable(remapped),
+          mergedMessageIds: Map.unmodifiable({
+            for (final row in creationSources)
+              if (allMessageIds[row.read<String>('message_id')]
+                  case final target?)
+                row.read<String>('message_id'): target,
+          }),
           importedConversationIds: List.unmodifiable(importedIds),
         );
       });
