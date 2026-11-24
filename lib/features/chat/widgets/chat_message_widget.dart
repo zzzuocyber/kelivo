@@ -11,7 +11,7 @@ import 'package:Kelivo/features/intelligent_ui/host/ui_generation_state.dart';
 import 'package:markstream/markstream_core.dart' show SourceSpan;
 import 'package:markstream/markstream.dart' show SelectableSpanAdapter;
 import '../../../shared/markdown/scroll_directive_block.dart'
-    show excludeScrollDirectiveHighlightRanges;
+    show excludeScrollDirectiveHighlightRanges, hasScrollDirective;
 import 'tool_permission_widgets.dart';
 import '../../provider/widgets/oauth_message_recovery.dart';
 import 'response_truncation_notice.dart';
@@ -2382,9 +2382,12 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       ...quoteRanges,
       ...?find?.ranges(FindPart.body, 0),
     ]);
-    final highlightColor = quoteRanges.isEmpty && highlights.isNotEmpty
-        ? context.appColors.searchHighlight
-        : Theme.of(context).colorScheme.primary.withValues(alpha: .22);
+    // 102：含 :::scroll 卡片的消息整条高亮色透明，杜绝切回会话时正文被刷灰。
+    final highlightColor = hasScrollDirective(visualText)
+        ? Colors.transparent
+        : quoteRanges.isEmpty && highlights.isNotEmpty
+            ? context.appColors.searchHighlight
+            : Theme.of(context).colorScheme.primary.withValues(alpha: .22);
 
     Widget content;
     if (enableUserMarkdown) {
@@ -2927,9 +2930,12 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         context,
       )?.ranges(FindPart.body, findBlock, paragraph: findParagraph),
     ]);
-    final highlightColor = quoteRanges.isEmpty && highlights.isNotEmpty
-        ? context.appColors.searchHighlight
-        : Theme.of(context).colorScheme.primary.withValues(alpha: .22);
+    // 102：含 :::scroll 卡片的消息整条高亮色透明，杜绝切回会话时正文被刷灰。
+    final highlightColor = hasScrollDirective(visualContent)
+        ? Colors.transparent
+        : quoteRanges.isEmpty && highlights.isNotEmpty
+            ? context.appColors.searchHighlight
+            : Theme.of(context).colorScheme.primary.withValues(alpha: .22);
 
     Widget assistantContent;
     if (enableAssistantMarkdown) {

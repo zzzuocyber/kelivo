@@ -23,6 +23,15 @@ const _border = Color(0xFFE4E4E7);
 ///
 /// 切回会话时引用高亮会被重新贴回正文，若区间覆盖 `:::scroll` 块，
 /// 卡片正文就会被刷成灰底浅字（100）。卡片自带复制按钮，不需要选中高亮。
+/// 这条正文里有没有 `:::scroll` 卡片（102）。
+///
+/// 有卡片的消息整条把高亮色设透明：切回会话时高亮重新贴上来，即使区间过滤
+/// 漏了，也再不会把钉死白底的卡片正文刷成灰底浅字。
+bool hasScrollDirective(String source) => RegExp(
+  r'(?:^|\n)[ \t]*:::scroll[^\n]*(?:\n|$)',
+  caseSensitive: false,
+).hasMatch(source);
+
 List<SourceSpan> excludeScrollDirectiveHighlightRanges(
   String source,
   Iterable<SourceSpan> ranges,
