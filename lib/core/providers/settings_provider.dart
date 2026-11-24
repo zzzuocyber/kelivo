@@ -302,6 +302,8 @@ class SettingsProvider extends ChangeNotifier {
       'display_enter_to_send_on_mobile_v1';
   // 「」 key in the composer: what a single tap inserts.
   static const String _composerQuickSymbolKey = 'composer_quick_symbol_v1';
+  // 镜像布局输入框：整条输入区左右翻转，文字方向不变（左手单手用）。
+  static const String _composerMirrorLayoutKey = 'composer_mirror_layout_v1';
   // 朋友圈：用哪本世界书、系统提示词、附加指令、跑哪个模型。
   static const String _momentBookIdKey = 'moment_book_id_v1';
   static const String _momentBookIdsKey = 'moment_book_ids_v1';
@@ -1234,6 +1236,7 @@ class SettingsProvider extends ChangeNotifier {
     } else {
       _enterToSendOnMobile = enterToSendPref;
     }
+    _composerMirrorLayout = prefs.getBool(_composerMirrorLayoutKey) ?? false;
     final quickSymbolPref = prefs.getString(_composerQuickSymbolKey);
     if (quickSymbolPref != null && quickSymbolPref.isNotEmpty) {
       _composerQuickSymbol = quickSymbolPref;
@@ -1934,6 +1937,7 @@ class SettingsProvider extends ChangeNotifier {
   String? get codeFontFamily => _effectiveCodeFontAlias ?? _codeFontFamily;
   String? get appFontLocalAlias => _appFontLocalAlias;
   String? get codeFontLocalAlias => _codeFontLocalAlias;
+
   /// Whether a bold face is attached to the current local app font.
   bool get hasAppFontBold => _appFontBoldLocalPath != null;
 
@@ -2044,7 +2048,10 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_displayAppFontFamilyKey, _appFontFamily!);
     await prefs.setString(_displayAppFontLocalAliasKey, _appFontLocalAlias!);
     await prefs.setString(_displayAppFontLocalPathKey, _appFontLocalPath!);
-    await prefs.setString(_displayAppFontBoldLocalPathKey, _appFontBoldLocalPath!);
+    await prefs.setString(
+      _displayAppFontBoldLocalPathKey,
+      _appFontBoldLocalPath!,
+    );
     await _deleteManagedFontFileIfUnused(previousBoldPath);
     return true;
   }
@@ -2370,11 +2377,7 @@ class SettingsProvider extends ChangeNotifier {
           final boldBytes = await boldFile.readAsBytes();
           if (_looksLikeFontBytes(boldBytes)) {
             final boldWithWeight = _fontBytesWithWeight(boldBytes, 500);
-            loader.addFont(
-              Future.value(
-                ByteData.sublistView(boldWithWeight),
-              ),
-            );
+            loader.addFont(Future.value(ByteData.sublistView(boldWithWeight)));
           }
         }
       }
@@ -3447,8 +3450,7 @@ class SettingsProvider extends ChangeNotifier {
       const ChatBubbleStyleOverrides();
   ChatBubbleStyleOverrides? _userChatBubbleStyleOverrides;
   ({bool enabled, ChatBubbleStyleOverrides overrides})? _thinkingToolCardStyle;
-  List<BubbleColorScheme> _bubbleColorSchemes =
-      const <BubbleColorScheme>[];
+  List<BubbleColorScheme> _bubbleColorSchemes = const <BubbleColorScheme>[];
 
   bool get canCustomizeThinkingToolCards =>
       _chatMessageBackgroundStyle != ChatMessageBackgroundStyle.defaultStyle;
@@ -3616,12 +3618,10 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<BubbleColorScheme> duplicateBubbleColorScheme(String id) async {
     final source = bubbleColorScheme(id);
-    if (source == null) return source ?? const BubbleColorScheme(id: '', name: '');
+    if (source == null)
+      return source ?? const BubbleColorScheme(id: '', name: '');
     return addBubbleColorScheme(
-      source.copyWith(
-        id: '',
-        name: '${source.name} 副本',
-      ),
+      source.copyWith(id: '', name: '${source.name} 副本'),
     );
   }
 
@@ -5824,6 +5824,16 @@ Requirements:
     await prefs.setString(_composerQuickSymbolKey, value);
   }
 
+  bool _composerMirrorLayout = false;
+  bool get composerMirrorLayout => _composerMirrorLayout;
+  Future<void> setComposerMirrorLayout(bool value) async {
+    if (_composerMirrorLayout == value) return;
+    _composerMirrorLayout = value;
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setBool(_composerMirrorLayoutKey, value);
+  }
+
   // 朋友圈：世界书 / 提示词 / 模型，全部跟着备份走。
   String _momentBookId = '';
   String get momentBookId => _momentBookId;
@@ -6148,7 +6158,8 @@ Requirements:
   }
 
   // Display: chat background mask style (linear gradient or radial vignette).
-  ChatBackgroundMaskMode _chatBackgroundMaskMode = ChatBackgroundMaskMode.linear;
+  ChatBackgroundMaskMode _chatBackgroundMaskMode =
+      ChatBackgroundMaskMode.linear;
   ChatBackgroundMaskMode get chatBackgroundMaskMode => _chatBackgroundMaskMode;
   Future<void> setChatBackgroundMaskMode(ChatBackgroundMaskMode mode) async {
     if (_chatBackgroundMaskMode == mode) return;

@@ -160,10 +160,7 @@ Future<void> showGroupChatSettingsSheet(
 }
 
 /// 群聊相关弹层统一走这里：同样的圆角、同样的底色。
-Future<T?> _showGroupChatSheet<T>(
-  BuildContext context,
-  WidgetBuilder builder,
-) {
+Future<T?> _showGroupChatSheet<T>(BuildContext context, WidgetBuilder builder) {
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
@@ -181,14 +178,13 @@ Future<void> _saveGroupChatConfig(
   String conversationId,
   GroupChatConfig next,
 ) {
-  return context.read<ChatService>().updateConversationExtras(
-    conversationId,
-    (current) {
-      final extras = Map<String, dynamic>.from(current);
-      extras[GroupChatConfig.extrasKey] = next.toJson();
-      return extras;
-    },
-  );
+  return context.read<ChatService>().updateConversationExtras(conversationId, (
+    current,
+  ) {
+    final extras = Map<String, dynamic>.from(current);
+    extras[GroupChatConfig.extrasKey] = next.toJson();
+    return extras;
+  });
 }
 
 // 三个二级入口的图标，三级页标题复用同一套。
@@ -321,9 +317,9 @@ class _ExtensionEntrySheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             ToolsSheetRow(
-              key: const ValueKey('extension-placeholder-entry'),
-              icon: Lucide.Box,
-              label: '占位符',
+              key: const ValueKey('extension-mirror-layout-entry'),
+              icon: Lucide.FlipHorizontal2,
+              label: '镜像布局输入框',
               trailing: ToolsSheetRow.chevron(context),
               onTap: () => _showExtensionPlaceholderSheet(context),
             ),
@@ -335,39 +331,48 @@ class _ExtensionEntrySheet extends StatelessWidget {
   }
 }
 
-/// 占位页：先空着，以后想到放什么再往里加。
+/// 镜像布局输入框开关：开 / 关二选一，界面不加任何说明文字。
 Future<void> _showExtensionPlaceholderSheet(BuildContext context) {
-  return _showGroupChatSheet<void>(
-    context,
-    (ctx) {
-      final cs = Theme.of(ctx).colorScheme;
-      return SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Center(child: _SheetHandle()),
-              const SizedBox(height: 14),
-              const _SheetHeader(icon: Lucide.Box, title: '占位符'),
-              const SizedBox(height: 10),
-              Text(
-                '这里先空着，以后想到要放什么，再往这儿加。',
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.5,
-                  color: cs.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+  return _showGroupChatSheet<void>(context, (ctx) {
+    final settings = ctx.watch<SettingsProvider>();
+    final cs = Theme.of(ctx).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Center(child: _SheetHandle()),
+            const SizedBox(height: 14),
+            const _SheetHeader(icon: Lucide.FlipHorizontal2, title: '镜像布局输入框'),
+            const SizedBox(height: 10),
+            ToolsSheetRow(
+              icon: Lucide.toggleRight,
+              label: '开启',
+              selected: settings.composerMirrorLayout,
+              trailing: settings.composerMirrorLayout
+                  ? Icon(Lucide.Check, size: 18, color: cs.primary)
+                  : const SizedBox(width: 18),
+              onTap: () => unawaited(settings.setComposerMirrorLayout(true)),
+            ),
+            const SizedBox(height: 8),
+            ToolsSheetRow(
+              icon: Lucide.Power,
+              label: '关闭',
+              selected: !settings.composerMirrorLayout,
+              trailing: !settings.composerMirrorLayout
+                  ? Icon(Lucide.Check, size: 18, color: cs.primary)
+                  : const SizedBox(width: 18),
+              onTap: () => unawaited(settings.setComposerMirrorLayout(false)),
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  });
 }
 
 // ============================================================================
@@ -521,9 +526,7 @@ class _GroupChatConfigSheetState extends State<_GroupChatConfigSheet> {
                 icon: Lucide.NotebookTabs,
                 label: '角色库（共 ${GroupChatRoleLibrary.instance.roles.length}）',
                 trailing: ToolsSheetRow.chevron(context),
-                onTap: () => _openChild(
-                  openGroupChatRoleLibraryPage(context),
-                ),
+                onTap: () => _openChild(openGroupChatRoleLibraryPage(context)),
               ),
               const SizedBox(height: 8),
             ],
@@ -661,9 +664,7 @@ class _GroupChatRoleMessageSheetState
               const SizedBox(height: 14),
               const _SheetHeader(icon: _roleMessageIcon, title: '角色消息设置'),
               const SizedBox(height: 16),
-              _sheetFieldLabel(
-                '接力上限（条，最多 ${GroupChatConfig.maxTurnsLimit}）',
-              ),
+              _sheetFieldLabel('接力上限（条，最多 ${GroupChatConfig.maxTurnsLimit}）'),
               TextField(
                 controller: _turns,
                 keyboardType: TextInputType.number,
@@ -888,7 +889,9 @@ class _GroupChatRolePickerSheetState extends State<_GroupChatRolePickerSheet> {
     _config = GroupChatConfig.fromConversation(
       context.read<ChatService>().getConversation(widget.conversationId),
     );
-    _selected = <String>[for (final role in resolveGroupChatRoles(_config)) role.id];
+    _selected = <String>[
+      for (final role in resolveGroupChatRoles(_config)) role.id,
+    ];
     _library.addListener(_onLibraryChanged);
     unawaited(_ensureLibrary());
   }
@@ -980,8 +983,9 @@ class _GroupChatRolePickerSheetState extends State<_GroupChatRolePickerSheet> {
                                 .rolesInFolder(folder.id)
                                 .isNotEmpty) ...[
                               _groupHeader(cs, folder.name),
-                              for (final role
-                                  in _library.rolesInFolder(folder.id))
+                              for (final role in _library.rolesInFolder(
+                                folder.id,
+                              ))
                                 _roleRow(cs, role),
                             ],
                           ],
@@ -1116,7 +1120,10 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
     chat.updateConversationExtras(conversationId, (extrasRaw) {
       final extras = Map<String, dynamic>.from(extrasRaw);
       extras[GroupChatConfig.extrasKey] = config
-          .copyWith(roles: roles, roleIds: <String>[for (final r in roles) r.id])
+          .copyWith(
+            roles: roles,
+            roleIds: <String>[for (final r in roles) r.id],
+          )
           .toJson();
       return extras;
     });
@@ -1155,9 +1162,9 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
     final conversation = chat.getConversation(conversationId);
     if (conversation != null) {
       final config = GroupChatConfig.fromConversation(conversation);
-      final roles = resolveGroupChatRoles(config)
-          .where((role) => role.id != _role.id)
-          .toList(growable: false);
+      final roles = resolveGroupChatRoles(
+        config,
+      ).where((role) => role.id != _role.id).toList(growable: false);
       await chat.updateConversationExtras(conversationId, (current) {
         final extras = Map<String, dynamic>.from(current);
         extras[GroupChatConfig.extrasKey] = config
@@ -1212,10 +1219,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
                   ),
                   TextButton(
                     onPressed: _deleteRole,
-                    child: Text(
-                      '删除角色',
-                      style: TextStyle(color: cs.error),
-                    ),
+                    child: Text('删除角色', style: TextStyle(color: cs.error)),
                   ),
                 ],
               ),
@@ -1332,9 +1336,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
   Future<void> _pickEntry() async {
     final result = await showWorldEntryPickerSheet(
       context,
-      selectedIds: _role.entryId.isEmpty
-          ? const <String>{}
-          : {_role.entryId},
+      selectedIds: _role.entryId.isEmpty ? const <String>{} : {_role.entryId},
       multiSelect: false,
       title: '绑定世界书条目',
     );
@@ -1386,8 +1388,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
   }
 
   String _reasoningSummary() {
-    if (_role.modelProviderKey.trim().isEmpty ||
-        _role.modelId.trim().isEmpty) {
+    if (_role.modelProviderKey.trim().isEmpty || _role.modelId.trim().isEmpty) {
       return '先选模型';
     }
     final name = _role.reasoningLevel.trim();
@@ -1485,8 +1486,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
                     subtitle:
                         reasoningLevelStopSubtitle(l10n, snapshot, row) ?? '',
                     trailing:
-                        (row.level?.name ??
-                                'auto') ==
+                        (row.level?.name ?? 'auto') ==
                             (current.isEmpty ? 'auto' : current)
                         ? Icon(
                             Lucide.Check,
@@ -1517,10 +1517,7 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
       isDense: true,
       filled: true,
       fillColor: cs.onSurface.withValues(alpha: 0.04),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -1530,12 +1527,12 @@ class _RoleManageSheetState extends State<_RoleManageSheet> {
   }
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    ),
+  );
 }
 
 // ============================================================================
@@ -1571,12 +1568,7 @@ class _EntryPickerRow extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: cs.onSurface.withValues(alpha: 0.7)),
             const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
             if (summary.isNotEmpty)
               Text(
                 summary,
@@ -1632,10 +1624,7 @@ class _RoleTile extends StatelessWidget {
             leading,
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                role.name,
-                style: const TextStyle(fontSize: 14),
-              ),
+              child: Text(role.name, style: const TextStyle(fontSize: 14)),
             ),
             Icon(
               Lucide.ChevronRight,
@@ -1896,10 +1885,7 @@ class _WorldEntryPickerSheetState extends State<_WorldEntryPickerSheet> {
               onTap: () => _toggle(entry.id),
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                 child: Row(
                   children: [
                     Icon(

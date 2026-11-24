@@ -823,6 +823,7 @@ class ChatInputBar extends StatefulWidget {
   final ReasoningRequest? reasoning;
   final bool reasoningCustomBudget;
   final bool supportsReasoning;
+
   /// Whether the composer sheet entry is shown. The sheet also hosts the
   /// per-conversation chat suggestion block, so it is offered even for models
   /// without reasoning levels.
@@ -3532,98 +3533,95 @@ class _ChatInputBarState extends State<ChatInputBar>
                   ),
                 ),
               ),
-              menu: DesktopContextMenuItem(
-                icon: Lucide.Box,
-                label: '占位符',
-              ),
+              menu: DesktopContextMenuItem(icon: Lucide.Box, label: '占位符'),
             ),
           );
         else
           // Search button
           actions.add(
-          _OverflowAction(
-            width: normalButtonW,
-            builder: () {
-              // Not enabled at all -> default globe
-              if (!appSearchEnabled && !builtinSearchActive) {
+            _OverflowAction(
+              width: normalButtonW,
+              builder: () {
+                // Not enabled at all -> default globe
+                if (!appSearchEnabled && !builtinSearchActive) {
+                  return _CompactIconButton(
+                    tooltip: l10n.chatInputBarOnlineSearchTooltip,
+                    icon: Lucide.Globe,
+                    active: false,
+                    onTap: lockTap(widget.onOpenSearch),
+                  );
+                }
+                // Built-in search -> magnifier icon in theme color
+                if (builtinSearchActive) {
+                  return _CompactIconButton(
+                    tooltip: l10n.chatInputBarOnlineSearchTooltip,
+                    icon: Lucide.Search,
+                    active: true,
+                    onTap: lockTap(widget.onOpenSearch),
+                  );
+                }
+                // External provider search -> brand icon
                 return _CompactIconButton(
                   tooltip: l10n.chatInputBarOnlineSearchTooltip,
                   icon: Lucide.Globe,
-                  active: false,
-                  onTap: lockTap(widget.onOpenSearch),
-                );
-              }
-              // Built-in search -> magnifier icon in theme color
-              if (builtinSearchActive) {
-                return _CompactIconButton(
-                  tooltip: l10n.chatInputBarOnlineSearchTooltip,
-                  icon: Lucide.Search,
                   active: true,
                   onTap: lockTap(widget.onOpenSearch),
-                );
-              }
-              // External provider search -> brand icon
-              return _CompactIconButton(
-                tooltip: l10n.chatInputBarOnlineSearchTooltip,
-                icon: Lucide.Globe,
-                active: true,
-                onTap: lockTap(widget.onOpenSearch),
-                childBuilder: (c) {
-                  final asset = brandAsset;
-                  if (asset != null) {
-                    if (asset.endsWith('.svg')) {
-                      return SvgPicture.asset(
-                        asset,
-                        width: 20,
-                        height: 20,
-                        colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
-                      );
+                  childBuilder: (c) {
+                    final asset = brandAsset;
+                    if (asset != null) {
+                      if (asset.endsWith('.svg')) {
+                        return SvgPicture.asset(
+                          asset,
+                          width: 20,
+                          height: 20,
+                          colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
+                        );
+                      } else {
+                        return Image.asset(
+                          asset,
+                          width: 20,
+                          height: 20,
+                          color: c,
+                          colorBlendMode: BlendMode.srcIn,
+                        );
+                      }
                     } else {
-                      return Image.asset(
-                        asset,
-                        width: 20,
-                        height: 20,
-                        color: c,
-                        colorBlendMode: BlendMode.srcIn,
-                      );
+                      return Icon(Lucide.Globe, size: 20, color: c);
                     }
-                  } else {
-                    return Icon(Lucide.Globe, size: 20, color: c);
-                  }
-                },
-              );
-            },
-            menu: () {
-              // Prefer vector icon if brandAsset is svg, otherwise pick reasonable default
-              if (!appSearchEnabled && !builtinSearchActive) {
+                  },
+                );
+              },
+              menu: () {
+                // Prefer vector icon if brandAsset is svg, otherwise pick reasonable default
+                if (!appSearchEnabled && !builtinSearchActive) {
+                  return DesktopContextMenuItem(
+                    icon: Lucide.Globe,
+                    label: l10n.chatInputBarOnlineSearchTooltip,
+                    onTap: lockTap(widget.onOpenSearch),
+                  );
+                }
+                if (builtinSearchActive) {
+                  return DesktopContextMenuItem(
+                    icon: Lucide.Search,
+                    label: l10n.chatInputBarOnlineSearchTooltip,
+                    onTap: lockTap(widget.onOpenSearch),
+                  );
+                }
+                if (brandAsset != null && brandAsset.endsWith('.svg')) {
+                  return DesktopContextMenuItem(
+                    svgAsset: brandAsset,
+                    label: l10n.chatInputBarOnlineSearchTooltip,
+                    onTap: lockTap(widget.onOpenSearch),
+                  );
+                }
                 return DesktopContextMenuItem(
                   icon: Lucide.Globe,
                   label: l10n.chatInputBarOnlineSearchTooltip,
                   onTap: lockTap(widget.onOpenSearch),
                 );
-              }
-              if (builtinSearchActive) {
-                return DesktopContextMenuItem(
-                  icon: Lucide.Search,
-                  label: l10n.chatInputBarOnlineSearchTooltip,
-                  onTap: lockTap(widget.onOpenSearch),
-                );
-              }
-              if (brandAsset != null && brandAsset.endsWith('.svg')) {
-                return DesktopContextMenuItem(
-                  svgAsset: brandAsset,
-                  label: l10n.chatInputBarOnlineSearchTooltip,
-                  onTap: lockTap(widget.onOpenSearch),
-                );
-              }
-              return DesktopContextMenuItem(
-                icon: Lucide.Globe,
-                label: l10n.chatInputBarOnlineSearchTooltip,
-                onTap: lockTap(widget.onOpenSearch),
-              );
-            }(),
-          ),
-        );
+              }(),
+            ),
+          );
 
         if (widget.supportsReasoning ||
             widget.showResponseSpeedAction ||
@@ -4846,559 +4844,601 @@ class _ChatInputBarState extends State<ChatInputBar>
                                 width: 1,
                               ),
                             ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (widget.mediaController != null) ...[
-                                  ValueListenableBuilder<ShareImportProgress?>(
-                                    valueListenable:
-                                        widget.mediaController!.shareImport,
-                                    builder: (context, progress, _) =>
-                                        progress == null
-                                        ? const SizedBox.shrink()
-                                        : ComposerImportProgress(
-                                            progress: progress,
-                                            onCancel: () => widget
-                                                .mediaController!
-                                                .cancelShareImport
-                                                ?.call(),
-                                          ),
-                                  ),
-                                  if (isMobileLayout &&
-                                      (hasText || hasDocs || hasImages))
-                                    ValueListenableBuilder<VoidCallback?>(
-                                      valueListenable: widget
-                                          .mediaController!
-                                          .sharedDraftAction,
-                                      builder: (context, onMove, _) =>
-                                          onMove == null
+                            child: Directionality(
+                              // 镜像布局：整条输入区左右翻转（发送键/图标/角标到左边）；
+                              // 编辑器内部单独设回 LTR，中文照常从左往右写。
+                              textDirection: settings.composerMirrorLayout
+                                  ? TextDirection.rtl
+                                  : TextDirection.ltr,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (widget.mediaController != null) ...[
+                                    ValueListenableBuilder<
+                                      ShareImportProgress?
+                                    >(
+                                      valueListenable:
+                                          widget.mediaController!.shareImport,
+                                      builder: (context, progress, _) =>
+                                          progress == null
                                           ? const SizedBox.shrink()
-                                          : Padding(
-                                              padding:
-                                                  const EdgeInsets.fromLTRB(
-                                                    12,
-                                                    8,
-                                                    8,
-                                                    0,
-                                                  ),
-                                              child: Row(
-                                                children: [
-                                                  Text(
-                                                    AppLocalizations.of(
-                                                      context,
-                                                    )!.incomingShareTitle,
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: theme
-                                                          .colorScheme
-                                                          .onSurfaceVariant,
+                                          : ComposerImportProgress(
+                                              progress: progress,
+                                              onCancel: () => widget
+                                                  .mediaController!
+                                                  .cancelShareImport
+                                                  ?.call(),
+                                            ),
+                                    ),
+                                    if (isMobileLayout &&
+                                        (hasText || hasDocs || hasImages))
+                                      ValueListenableBuilder<VoidCallback?>(
+                                        valueListenable: widget
+                                            .mediaController!
+                                            .sharedDraftAction,
+                                        builder: (context, onMove, _) =>
+                                            onMove == null
+                                            ? const SizedBox.shrink()
+                                            : Padding(
+                                                padding:
+                                                    const EdgeInsets.fromLTRB(
+                                                      12,
+                                                      8,
+                                                      8,
+                                                      0,
                                                     ),
-                                                  ),
-                                                  const Spacer(),
-                                                  IosCardPress(
-                                                    onTap: onMove,
-                                                    haptics: false,
-                                                    baseColor:
-                                                        Colors.transparent,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 6,
-                                                        ),
-                                                    child: Row(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        Text(
-                                                          AppLocalizations.of(
-                                                            context,
-                                                          )!.incomingShareMoveTo,
-                                                          style: TextStyle(
-                                                            fontSize: 12,
+                                                child: Row(
+                                                  children: [
+                                                    Text(
+                                                      AppLocalizations.of(
+                                                        context,
+                                                      )!.incomingShareTitle,
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: theme
+                                                            .colorScheme
+                                                            .onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                                    const Spacer(),
+                                                    IosCardPress(
+                                                      onTap: onMove,
+                                                      haptics: false,
+                                                      baseColor:
+                                                          Colors.transparent,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 6,
+                                                          ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Text(
+                                                            AppLocalizations.of(
+                                                              context,
+                                                            )!.incomingShareMoveTo,
+                                                            style: TextStyle(
+                                                              fontSize: 12,
+                                                              color: theme
+                                                                  .colorScheme
+                                                                  .primary,
+                                                              fontWeight:
+                                                                  AppFontWeights
+                                                                      .medium,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 4,
+                                                          ),
+                                                          Icon(
+                                                            Lucide.ArrowRight,
+                                                            size: 14,
                                                             color: theme
                                                                 .colorScheme
                                                                 .primary,
-                                                            fontWeight:
-                                                                AppFontWeights
-                                                                    .medium,
                                                           ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                      ),
+                                  ],
+                                  if (_uiContext case final attachment?)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsetsDirectional.fromSTEB(
+                                            AppSpacing.md,
+                                            AppSpacing.xs,
+                                            AppSpacing.md,
+                                            AppSpacing.xs,
+                                          ),
+                                      child: UiComposerContextChip(
+                                        attachment: attachment,
+                                        onRemove:
+                                            _composerLocked || _isSubmitting
+                                            ? null
+                                            : () {
+                                                setState(
+                                                  () => _uiContext = null,
+                                                );
+                                                widget
+                                                    .mediaController
+                                                    ?.onDraftChanged
+                                                    ?.call();
+                                              },
+                                      ),
+                                    ),
+                                  if (hasDocs || hasImages)
+                                    _buildInlineAttachmentPreviews(
+                                      context,
+                                      isDark,
+                                    ),
+                                  // Input field with expand/collapse button. The
+                                  // collapsed field may shrink when the host is short;
+                                  // the expanded one takes every spare pixel.
+                                  Flexible(
+                                    fit: expandedLayout
+                                        ? FlexFit.tight
+                                        : FlexFit.loose,
+                                    child: Stack(
+                                      key: _textAreaKey,
+                                      fit: expandedLayout
+                                          ? StackFit.expand
+                                          : StackFit.loose,
+                                      // The quick symbol key sits a fixed
+                                      // distance above the bottom edge, which
+                                      // can poke a pixel or two past the top
+                                      // edge of a single-line field. Let it
+                                      // paint instead of cutting the glyph.
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        _buildPaddedEditor(
+                                          padding:
+                                              EdgeInsetsDirectional.fromSTEB(
+                                                AppSpacing.md,
+                                                isDesktop
+                                                    ? AppSpacing.xs
+                                                    : AppSpacing.xxs,
+                                                _quickSymbolsEnabled
+                                                    ? _quickSymbolButtonExtent +
+                                                          AppSpacing.xs
+                                                    : expandedLayout ||
+                                                          _canExpand
+                                                    ? _expandButtonExtent +
+                                                          AppSpacing.xs
+                                                    : AppSpacing.md,
+                                                isDesktop
+                                                    ? AppSpacing.sm
+                                                    : AppSpacing.xs,
+                                              ),
+                                          child: Focus(
+                                            onKeyEvent: _handleKeyEvent,
+                                            child: Builder(
+                                              builder: (ctx) {
+                                                // Desktop: show a right-click context menu with paste/cut/copy/select all
+                                                // Future<void> _showDesktopContextMenu(Offset globalPos) async {
+                                                //   bool isDesktop = false;
+                                                //   try { isDesktop = Platform.isMacOS || Platform.isWindows || Platform.isLinux; } catch (_) {}
+                                                //   if (!isDesktop) return;
+                                                //   // Ensure input has focus so operations apply correctly
+                                                //   try { widget.focusNode?.requestFocus(); } catch (_) {}
+                                                //
+                                                //   final sel = _controller.selection;
+                                                //   final hasSelection = sel.isValid && !sel.isCollapsed;
+                                                //   final hasText = _controller.text.isNotEmpty;
+                                                //
+                                                //   final l10n = MaterialLocalizations.of(ctx);
+                                                //   await showDesktopContextMenuAt(
+                                                //     ctx,
+                                                //     globalPosition: globalPos,
+                                                //     items: [
+                                                //       DesktopContextMenuItem(
+                                                //         icon: Lucide.Clipboard,
+                                                //         label: l10n.pasteButtonLabel,
+                                                //         onTap: () async {
+                                                //           await _handlePasteFromClipboard();
+                                                //         },
+                                                //       ),
+                                                //       DesktopContextMenuItem(
+                                                //         icon: Lucide.Cut,
+                                                //         label: l10n.cutButtonLabel,
+                                                //         onTap: () async {
+                                                //           final s = _controller.selection;
+                                                //           if (s.isValid && !s.isCollapsed) {
+                                                //             final text = _controller.text.substring(s.start, s.end);
+                                                //             try { await Clipboard.setData(ClipboardData(text: text)); } catch (_) {}
+                                                //             final newText = _controller.text.replaceRange(s.start, s.end, '');
+                                                //             _controller.value = TextEditingValue(
+                                                //               text: newText,
+                                                //               selection: TextSelection.collapsed(offset: s.start),
+                                                //             );
+                                                //             setState(() {});
+                                                //           }
+                                                //         },
+                                                //       ),
+                                                //       DesktopContextMenuItem(
+                                                //         icon: Lucide.Copy,
+                                                //         label: l10n.copyButtonLabel,
+                                                //         onTap: () async {
+                                                //           final s2 = _controller.selection;
+                                                //           if (s2.isValid && !s2.isCollapsed) {
+                                                //             final text = _controller.text.substring(s2.start, s2.end);
+                                                //             try { await Clipboard.setData(ClipboardData(text: text)); } catch (_) {}
+                                                //           }
+                                                //         },
+                                                //       ),
+                                                //       // DesktopContextMenuItem(
+                                                //       //   // icon: Lucide.TextSelect,
+                                                //       //   label: l10n.selectAllButtonLabel,
+                                                //       //   onTap: () {
+                                                //       //     if (hasText) {
+                                                //       //       _controller.selection = TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
+                                                //       //       setState(() {});
+                                                //       //     }
+                                                //       //   },
+                                                //       // ),
+                                                //     ],
+                                                //   );
+                                                // }
+
+                                                final enterToSend = context
+                                                    .watch<SettingsProvider>()
+                                                    .enterToSendOnMobile;
+                                                return GestureDetector(
+                                                  behavior: HitTestBehavior
+                                                      .deferToChild,
+                                                  // onSecondaryTapDown: (details) {
+                                                  //   // _showDesktopContextMenu(details.globalPosition);
+                                                  // },
+                                                  child: Directionality(
+                                                    textDirection:
+                                                        TextDirection.ltr,
+                                                    child: LongMessageEditor(
+                                                      key: _longEditorKey,
+                                                      controller: _controller,
+                                                      focusNode:
+                                                          widget.focusNode,
+                                                      onChanged: _onTextChanged,
+                                                      contentInsertionConfiguration:
+                                                          ContentInsertionConfiguration(
+                                                            onContentInserted:
+                                                                _handleInsertedContent,
+                                                            allowedMimeTypes:
+                                                                const [
+                                                                  'image/png',
+                                                                  'image/jpeg',
+                                                                  'image/jpg',
+                                                                  'image/gif',
+                                                                  'image/webp',
+                                                                ],
+                                                          ),
+                                                      readOnly:
+                                                          _composerLocked ||
+                                                          _ownsVoiceSession,
+                                                      minLines: expandedLayout
+                                                          ? null
+                                                          : 1,
+                                                      maxLines: expandedLayout
+                                                          ? null
+                                                          : _collapsedMaxLines,
+                                                      expands: expandedLayout,
+                                                      // On mobile, optionally show "Send" on the return key and submit on tap.
+                                                      // Still keep multiline so pasted text preserves line breaks.
+                                                      textInputAction:
+                                                          enterToSend
+                                                          ? TextInputAction.send
+                                                          : TextInputAction
+                                                                .newline,
+                                                      onSubmitted: enterToSend
+                                                          ? (_) => unawaited(
+                                                              _handleSend(),
+                                                            )
+                                                          : null,
+                                                      // Custom context menu: use instance method to avoid flickering
+                                                      // caused by recreating the callback on every build.
+                                                      // See: https://github.com/flutter/flutter/issues/150551
+                                                      contextMenuBuilder:
+                                                          _buildMessageContextMenu,
+                                                      onKeyEvent:
+                                                          _handleKeyEvent,
+                                                      autofocus: false,
+                                                      decoration: InputDecoration(
+                                                        hintText: _hint(
+                                                          context,
                                                         ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
-                                                        Icon(
-                                                          Lucide.ArrowRight,
-                                                          size: 14,
+                                                        hintFadeDuration:
+                                                            Duration.zero,
+                                                        hintStyle: TextStyle(
                                                           color: theme
                                                               .colorScheme
-                                                              .primary,
+                                                              .onSurface
+                                                              .withValues(
+                                                                alpha: 0.45,
+                                                              ),
                                                         ),
-                                                      ],
+                                                        border:
+                                                            InputBorder.none,
+                                                        contentPadding:
+                                                            const EdgeInsets.symmetric(
+                                                              vertical: 2,
+                                                            ),
+                                                      ),
+                                                      style: TextStyle(
+                                                        color: theme
+                                                            .colorScheme
+                                                            .onSurface,
+                                                        fontSize:
+                                                            editorFontSize,
+                                                      ),
+                                                      cursorColor: theme
+                                                          .colorScheme
+                                                          .primary,
                                                     ),
                                                   ),
-                                                ],
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        if (expandedLayout || _canExpand)
+                                          PositionedDirectional(
+                                            top: 2,
+                                            end: 6,
+                                            // Inside both editors' tap regions, so
+                                            // a non-touch pointer (mouse,
+                                            // trackpad, stylus) or any desktop
+                                            // click here is not a "tap outside"
+                                            // that drops focus and bounces the
+                                            // keyboard.
+                                            child: CodeEditorTapRegion(
+                                              child: TextFieldTapRegion(
+                                                child: IosIconButton(
+                                                  icon: _isExpanded
+                                                      ? Lucide.Minimize2
+                                                      : Lucide.Maximize2,
+                                                  size: 16,
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.45),
+                                                  tooltip: _isExpanded
+                                                      ? AppLocalizations.of(
+                                                          context,
+                                                        )!.chatInputBarCollapse
+                                                      : AppLocalizations.of(
+                                                          context,
+                                                        )!.chatInputBarExpand,
+                                                  onTap: () => _setExpanded(
+                                                    !_isExpanded,
+                                                  ),
+                                                ),
                                               ),
                                             ),
+                                          ),
+                                        // Quick symbol key: pinned at a fixed
+                                        // height above the box's bottom edge,
+                                        // which is where the middle of a
+                                        // two-line box sits. The box grows
+                                        // upward, so this spot never moves --
+                                        // not on three lines, not in full
+                                        // screen editing -- and the expand
+                                        // button up at the top edge can never
+                                        // touch it. One tap inserts the stored
+                                        // symbol; a long press replaces it. Same
+                                        // TapRegion wrapping as above, so the tap
+                                        // never drops focus nor the keyboard.
+                                        if (_quickSymbolsEnabled)
+                                          PositionedDirectional(
+                                            bottom: 16,
+                                            end: 6,
+                                            child: CodeEditorTapRegion(
+                                              child: TextFieldTapRegion(
+                                                child: IosIconButton(
+                                                  padding: const EdgeInsets.all(
+                                                    4,
+                                                  ),
+                                                  onLongPress: _composerLocked
+                                                      ? null
+                                                      : () =>
+                                                            _editQuickSymbol(),
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.50),
+                                                  onTap: _composerLocked
+                                                      ? null
+                                                      : () => _insertQuickSymbol(
+                                                          settings
+                                                              .composerQuickSymbol,
+                                                        ),
+                                                  builder: (c) => Text(
+                                                    settings
+                                                        .composerQuickSymbol,
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    overflow: TextOverflow.clip,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      height: 1.15,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: -0.5,
+                                                      color: c,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                ],
-                                if (_uiContext case final attachment?)
+                                  ),
+                                  // Bottom buttons row (no divider)
                                   Padding(
-                                    padding:
-                                        const EdgeInsetsDirectional.fromSTEB(
-                                          AppSpacing.md,
-                                          AppSpacing.xs,
-                                          AppSpacing.md,
-                                          AppSpacing.xs,
-                                        ),
-                                    child: UiComposerContextChip(
-                                      attachment: attachment,
-                                      onRemove: _composerLocked || _isSubmitting
-                                          ? null
-                                          : () {
-                                              setState(() => _uiContext = null);
-                                              widget
-                                                  .mediaController
-                                                  ?.onDraftChanged
-                                                  ?.call();
-                                            },
+                                    padding: const EdgeInsets.fromLTRB(
+                                      AppSpacing.xs,
+                                      0,
+                                      AppSpacing.xs,
+                                      AppSpacing.xs,
                                     ),
-                                  ),
-                                if (hasDocs || hasImages)
-                                  _buildInlineAttachmentPreviews(
-                                    context,
-                                    isDark,
-                                  ),
-                                // Input field with expand/collapse button. The
-                                // collapsed field may shrink when the host is short;
-                                // the expanded one takes every spare pixel.
-                                Flexible(
-                                  fit: expandedLayout
-                                      ? FlexFit.tight
-                                      : FlexFit.loose,
-                                  child: Stack(
-                                    key: _textAreaKey,
-                                    fit: expandedLayout
-                                        ? StackFit.expand
-                                        : StackFit.loose,
-                                    // The quick symbol key sits a fixed
-                                    // distance above the bottom edge, which
-                                    // can poke a pixel or two past the top
-                                    // edge of a single-line field. Let it
-                                    // paint instead of cutting the glyph.
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      _buildPaddedEditor(
-                                        padding: EdgeInsetsDirectional.fromSTEB(
-                                          AppSpacing.md,
-                                          isDesktop
-                                              ? AppSpacing.xs
-                                              : AppSpacing.xxs,
-                                          _quickSymbolsEnabled
-                                              ? _quickSymbolButtonExtent +
-                                                    AppSpacing.xs
-                                              : expandedLayout || _canExpand
-                                              ? _expandButtonExtent +
-                                                    AppSpacing.xs
-                                              : AppSpacing.md,
-                                          isDesktop
-                                              ? AppSpacing.sm
-                                              : AppSpacing.xs,
-                                        ),
-                                        child: Focus(
-                                          onKeyEvent: _handleKeyEvent,
-                                          child: Builder(
-                                            builder: (ctx) {
-                                              // Desktop: show a right-click context menu with paste/cut/copy/select all
-                                              // Future<void> _showDesktopContextMenu(Offset globalPos) async {
-                                              //   bool isDesktop = false;
-                                              //   try { isDesktop = Platform.isMacOS || Platform.isWindows || Platform.isLinux; } catch (_) {}
-                                              //   if (!isDesktop) return;
-                                              //   // Ensure input has focus so operations apply correctly
-                                              //   try { widget.focusNode?.requestFocus(); } catch (_) {}
-                                              //
-                                              //   final sel = _controller.selection;
-                                              //   final hasSelection = sel.isValid && !sel.isCollapsed;
-                                              //   final hasText = _controller.text.isNotEmpty;
-                                              //
-                                              //   final l10n = MaterialLocalizations.of(ctx);
-                                              //   await showDesktopContextMenuAt(
-                                              //     ctx,
-                                              //     globalPosition: globalPos,
-                                              //     items: [
-                                              //       DesktopContextMenuItem(
-                                              //         icon: Lucide.Clipboard,
-                                              //         label: l10n.pasteButtonLabel,
-                                              //         onTap: () async {
-                                              //           await _handlePasteFromClipboard();
-                                              //         },
-                                              //       ),
-                                              //       DesktopContextMenuItem(
-                                              //         icon: Lucide.Cut,
-                                              //         label: l10n.cutButtonLabel,
-                                              //         onTap: () async {
-                                              //           final s = _controller.selection;
-                                              //           if (s.isValid && !s.isCollapsed) {
-                                              //             final text = _controller.text.substring(s.start, s.end);
-                                              //             try { await Clipboard.setData(ClipboardData(text: text)); } catch (_) {}
-                                              //             final newText = _controller.text.replaceRange(s.start, s.end, '');
-                                              //             _controller.value = TextEditingValue(
-                                              //               text: newText,
-                                              //               selection: TextSelection.collapsed(offset: s.start),
-                                              //             );
-                                              //             setState(() {});
-                                              //           }
-                                              //         },
-                                              //       ),
-                                              //       DesktopContextMenuItem(
-                                              //         icon: Lucide.Copy,
-                                              //         label: l10n.copyButtonLabel,
-                                              //         onTap: () async {
-                                              //           final s2 = _controller.selection;
-                                              //           if (s2.isValid && !s2.isCollapsed) {
-                                              //             final text = _controller.text.substring(s2.start, s2.end);
-                                              //             try { await Clipboard.setData(ClipboardData(text: text)); } catch (_) {}
-                                              //           }
-                                              //         },
-                                              //       ),
-                                              //       // DesktopContextMenuItem(
-                                              //       //   // icon: Lucide.TextSelect,
-                                              //       //   label: l10n.selectAllButtonLabel,
-                                              //       //   onTap: () {
-                                              //       //     if (hasText) {
-                                              //       //       _controller.selection = TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
-                                              //       //       setState(() {});
-                                              //       //     }
-                                              //       //   },
-                                              //       // ),
-                                              //     ],
-                                              //   );
-                                              // }
-
-                                              final enterToSend = context
-                                                  .watch<SettingsProvider>()
-                                                  .enterToSendOnMobile;
-                                              return GestureDetector(
-                                                behavior: HitTestBehavior
-                                                    .deferToChild,
-                                                // onSecondaryTapDown: (details) {
-                                                //   // _showDesktopContextMenu(details.globalPosition);
-                                                // },
-                                                child: LongMessageEditor(
-                                                  key: _longEditorKey,
-                                                  controller: _controller,
-                                                  focusNode: widget.focusNode,
-                                                  onChanged: _onTextChanged,
-                                                  contentInsertionConfiguration:
-                                                      ContentInsertionConfiguration(
-                                                        onContentInserted:
-                                                            _handleInsertedContent,
-                                                        allowedMimeTypes:
-                                                            const [
-                                                              'image/png',
-                                                              'image/jpeg',
-                                                              'image/jpg',
-                                                              'image/gif',
-                                                              'image/webp',
-                                                            ],
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 260,
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, anim) =>
+                                          FadeTransition(
+                                            opacity: anim,
+                                            child: SlideTransition(
+                                              position: Tween<Offset>(
+                                                begin: const Offset(0, 0.35),
+                                                end: Offset.zero,
+                                              ).animate(anim),
+                                              child: child,
+                                            ),
+                                          ),
+                                      child: _ownsVoiceSession
+                                          ? _buildVoiceRecordingRow(
+                                              context,
+                                              theme,
+                                            )
+                                          : Row(
+                                              key: const ValueKey('actions'),
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                // Responsive left action bar that overflows into a + menu on desktop
+                                                Expanded(
+                                                  child:
+                                                      _buildResponsiveLeftActions(
+                                                        context,
                                                       ),
-                                                  readOnly:
-                                                      _composerLocked ||
-                                                      _ownsVoiceSession,
-                                                  minLines: expandedLayout
-                                                      ? null
-                                                      : 1,
-                                                  maxLines: expandedLayout
-                                                      ? null
-                                                      : _collapsedMaxLines,
-                                                  expands: expandedLayout,
-                                                  // On mobile, optionally show "Send" on the return key and submit on tap.
-                                                  // Still keep multiline so pasted text preserves line breaks.
-                                                  textInputAction: enterToSend
-                                                      ? TextInputAction.send
-                                                      : TextInputAction.newline,
-                                                  onSubmitted: enterToSend
-                                                      ? (_) => unawaited(
-                                                          _handleSend(),
-                                                        )
-                                                      : null,
-                                                  // Custom context menu: use instance method to avoid flickering
-                                                  // caused by recreating the callback on every build.
-                                                  // See: https://github.com/flutter/flutter/issues/150551
-                                                  contextMenuBuilder:
-                                                      _buildMessageContextMenu,
-                                                  onKeyEvent: _handleKeyEvent,
-                                                  autofocus: false,
-                                                  decoration: InputDecoration(
-                                                    hintText: _hint(context),
-                                                    hintFadeDuration:
-                                                        Duration.zero,
-                                                    hintStyle: TextStyle(
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    if (widget
+                                                        .showMoreButton) ...[
+                                                      _CompactIconButton(
+                                                        tooltip:
+                                                            AppLocalizations.of(
+                                                              context,
+                                                            )!.chatInputBarMoreTooltip,
+                                                        icon: Lucide.Plus,
+                                                        active: widget.moreOpen,
+                                                        onTap: _composerLocked
+                                                            ? null
+                                                            : widget.onMore,
+                                                        childBuilder: (c) => AnimatedSwitcher(
+                                                          duration:
+                                                              const Duration(
+                                                                milliseconds:
+                                                                    200,
+                                                              ),
+                                                          transitionBuilder:
+                                                              (
+                                                                child,
+                                                                anim,
+                                                              ) => RotationTransition(
+                                                                turns:
+                                                                    Tween<
+                                                                          double
+                                                                        >(
+                                                                          begin:
+                                                                              0.85,
+                                                                          end:
+                                                                              1,
+                                                                        )
+                                                                        .animate(
+                                                                          anim,
+                                                                        ),
+                                                                child:
+                                                                    FadeTransition(
+                                                                      opacity:
+                                                                          anim,
+                                                                      child:
+                                                                          child,
+                                                                    ),
+                                                              ),
+                                                          child: Icon(
+                                                            widget.moreOpen
+                                                                ? Lucide.X
+                                                                : Lucide.Plus,
+                                                            key: ValueKey(
+                                                              widget.moreOpen
+                                                                  ? 'close'
+                                                                  : 'add',
+                                                            ),
+                                                            size: 20,
+                                                            color: c,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                    ],
+                                                    if (!isMobileLayout &&
+                                                        (widget
+                                                                .conversationId
+                                                                ?.isNotEmpty ??
+                                                            false))
+                                                      _ContextUsageInputControl(
+                                                        onTap: widget
+                                                            .onOpenContextUsage,
+                                                      ),
+                                                    if (showVoiceInput) ...[
+                                                      _CompactIconButton(
+                                                        tooltip:
+                                                            AppLocalizations.of(
+                                                              context,
+                                                            )!.chatInputBarVoiceInputTooltip,
+                                                        icon: Lucide.Mic,
+                                                        onTap:
+                                                            _composerLocked ||
+                                                                widget.loading
+                                                            ? null
+                                                            : () => unawaited(
+                                                                _startVoiceInput(),
+                                                              ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                    ],
+                                                    _CompactSendButton(
+                                                      enabled:
+                                                          hasInput &&
+                                                          !_composerLocked &&
+                                                          !_hasUnreadyAttachments,
+                                                      loading:
+                                                          widget.loading &&
+                                                          (!hasInput ||
+                                                              _composerLocked),
+                                                      onSend: _handleSend,
+                                                      onStop: widget.loading
+                                                          ? widget.onStop
+                                                          : null,
                                                       color: theme
                                                           .colorScheme
-                                                          .onSurface
-                                                          .withValues(
-                                                            alpha: 0.45,
-                                                          ),
+                                                          .primary,
+                                                      icon: Lucide.ArrowUp,
+                                                      tooltip: widget
+                                                          .sendButtonTooltip,
                                                     ),
-                                                    border: InputBorder.none,
-                                                    contentPadding:
-                                                        const EdgeInsets.symmetric(
-                                                          vertical: 2,
-                                                        ),
-                                                  ),
-                                                  style: TextStyle(
-                                                    color: theme
-                                                        .colorScheme
-                                                        .onSurface,
-                                                    fontSize: editorFontSize,
-                                                  ),
-                                                  cursorColor:
-                                                      theme.colorScheme.primary,
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                      if (expandedLayout || _canExpand)
-                                        PositionedDirectional(
-                                          top: 2,
-                                          end: 6,
-                                          // Inside both editors' tap regions, so
-                                          // a non-touch pointer (mouse,
-                                          // trackpad, stylus) or any desktop
-                                          // click here is not a "tap outside"
-                                          // that drops focus and bounces the
-                                          // keyboard.
-                                          child: CodeEditorTapRegion(
-                                            child: TextFieldTapRegion(
-                                              child: IosIconButton(
-                                                icon: _isExpanded
-                                                    ? Lucide.Minimize2
-                                                    : Lucide.Maximize2,
-                                                size: 16,
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withValues(alpha: 0.45),
-                                                tooltip: _isExpanded
-                                                    ? AppLocalizations.of(
-                                                        context,
-                                                      )!.chatInputBarCollapse
-                                                    : AppLocalizations.of(
-                                                        context,
-                                                      )!.chatInputBarExpand,
-                                                onTap: () =>
-                                                    _setExpanded(!_isExpanded),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      // Quick symbol key: pinned at a fixed
-                                      // height above the box's bottom edge,
-                                      // which is where the middle of a
-                                      // two-line box sits. The box grows
-                                      // upward, so this spot never moves --
-                                      // not on three lines, not in full
-                                      // screen editing -- and the expand
-                                      // button up at the top edge can never
-                                      // touch it. One tap inserts the stored
-                                      // symbol; a long press replaces it. Same
-                                      // TapRegion wrapping as above, so the tap
-                                      // never drops focus nor the keyboard.
-                                      if (_quickSymbolsEnabled)
-                                        PositionedDirectional(
-                                          bottom: 16,
-                                          end: 6,
-                                          child: CodeEditorTapRegion(
-                                            child: TextFieldTapRegion(
-                                              child: IosIconButton(
-                                                padding: const EdgeInsets.all(
-                                                  4,
-                                                ),
-                                                onLongPress: _composerLocked
-                                                    ? null
-                                                    : () => _editQuickSymbol(),
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withValues(alpha: 0.50),
-                                                onTap: _composerLocked
-                                                    ? null
-                                                    : () => _insertQuickSymbol(
-                                                        settings
-                                                            .composerQuickSymbol,
-                                                      ),
-                                                builder: (c) => Text(
-                                                  settings.composerQuickSymbol,
-                                                  maxLines: 1,
-                                                  softWrap: false,
-                                                  overflow: TextOverflow.clip,
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    height: 1.15,
-                                                    fontWeight: FontWeight.w600,
-                                                    letterSpacing: -0.5,
-                                                    color: c,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                // Bottom buttons row (no divider)
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    AppSpacing.xs,
-                                    0,
-                                    AppSpacing.xs,
-                                    AppSpacing.xs,
-                                  ),
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 260),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, anim) =>
-                                        FadeTransition(
-                                          opacity: anim,
-                                          child: SlideTransition(
-                                            position: Tween<Offset>(
-                                              begin: const Offset(0, 0.35),
-                                              end: Offset.zero,
-                                            ).animate(anim),
-                                            child: child,
-                                          ),
-                                        ),
-                                    child: _ownsVoiceSession
-                                        ? _buildVoiceRecordingRow(
-                                            context,
-                                            theme,
-                                          )
-                                        : Row(
-                                            key: const ValueKey('actions'),
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              // Responsive left action bar that overflows into a + menu on desktop
-                                              Expanded(
-                                                child:
-                                                    _buildResponsiveLeftActions(
-                                                      context,
-                                                    ),
-                                              ),
-                                              Row(
-                                                children: [
-                                                  if (widget
-                                                      .showMoreButton) ...[
-                                                    _CompactIconButton(
-                                                      tooltip: AppLocalizations.of(
-                                                        context,
-                                                      )!.chatInputBarMoreTooltip,
-                                                      icon: Lucide.Plus,
-                                                      active: widget.moreOpen,
-                                                      onTap: _composerLocked
-                                                          ? null
-                                                          : widget.onMore,
-                                                      childBuilder: (c) => AnimatedSwitcher(
-                                                        duration:
-                                                            const Duration(
-                                                              milliseconds: 200,
-                                                            ),
-                                                        transitionBuilder:
-                                                            (
-                                                              child,
-                                                              anim,
-                                                            ) => RotationTransition(
-                                                              turns:
-                                                                  Tween<double>(
-                                                                    begin: 0.85,
-                                                                    end: 1,
-                                                                  ).animate(
-                                                                    anim,
-                                                                  ),
-                                                              child:
-                                                                  FadeTransition(
-                                                                    opacity:
-                                                                        anim,
-                                                                    child:
-                                                                        child,
-                                                                  ),
-                                                            ),
-                                                        child: Icon(
-                                                          widget.moreOpen
-                                                              ? Lucide.X
-                                                              : Lucide.Plus,
-                                                          key: ValueKey(
-                                                            widget.moreOpen
-                                                                ? 'close'
-                                                                : 'add',
-                                                          ),
-                                                          size: 20,
-                                                          color: c,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
                                                   ],
-                                                  if (!isMobileLayout &&
-                                                      (widget
-                                                              .conversationId
-                                                              ?.isNotEmpty ??
-                                                          false))
-                                                    _ContextUsageInputControl(
-                                                      onTap: widget
-                                                          .onOpenContextUsage,
-                                                    ),
-                                                  if (showVoiceInput) ...[
-                                                    _CompactIconButton(
-                                                      tooltip: AppLocalizations.of(
-                                                        context,
-                                                      )!.chatInputBarVoiceInputTooltip,
-                                                      icon: Lucide.Mic,
-                                                      onTap:
-                                                          _composerLocked ||
-                                                              widget.loading
-                                                          ? null
-                                                          : () => unawaited(
-                                                              _startVoiceInput(),
-                                                            ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                  ],
-                                                  _CompactSendButton(
-                                                    enabled:
-                                                        hasInput &&
-                                                        !_composerLocked &&
-                                                        !_hasUnreadyAttachments,
-                                                    loading:
-                                                        widget.loading &&
-                                                        (!hasInput ||
-                                                            _composerLocked),
-                                                    onSend: _handleSend,
-                                                    onStop: widget.loading
-                                                        ? widget.onStop
-                                                        : null,
-                                                    color: theme
-                                                        .colorScheme
-                                                        .primary,
-                                                    icon: Lucide.ArrowUp,
-                                                    tooltip: widget
-                                                        .sendButtonTooltip,
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
+                                                ),
+                                              ],
+                                            ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
