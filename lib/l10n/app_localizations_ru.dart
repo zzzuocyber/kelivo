@@ -18393,6 +18393,13 @@ class AppLocalizationsRu extends AppLocalizations {
       'Общий размер референсных изображений не должен превышать 20 МБ.';
 
   @override
+  String get creationApiProtocol => 'Протокол API создания';
+
+  @override
+  String get creationApiProtocolHelp =>
+      'Авто использует API провайдера. Для пользовательского шлюза выберите протокол, указанный в его документации.';
+
+  @override
   String get creationAspectRatio => 'Соотношение сторон';
 
   @override
