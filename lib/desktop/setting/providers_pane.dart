@@ -7095,9 +7095,7 @@ class _ModelRow extends StatelessWidget {
                 children: [
                   _IconBtn(
                     key: ValueKey('desktop-provider-model-settings-$modelId'),
-                    icon: info.type.isMedia
-                        ? lucide.Lucide.SlidersHorizontal
-                        : lucide.Lucide.Settings2,
+                    icon: lucide.Lucide.Settings2,
                     onTap: () async {
                       await showDesktopModelSpecEditDialog(
                         context,

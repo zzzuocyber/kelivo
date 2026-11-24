@@ -3397,10 +3397,22 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
       reasoningSegments: effectiveReasoningSegments,
       sourceMap: mappedVisual.sourceMap,
     );
+    final inlineChatImages = context.select<SettingsProvider, bool>(
+      (s) => s.inlineChatImages,
+    );
     final creationAttachments = widget.message.parts
         .whereType<ImagePart>()
         .where((part) => part.generationItemId != null)
         .toList();
+    final imagePlacement = inlineChatImages
+        ? ChatImagePlacement.resolve(
+            context,
+            widget.message.id,
+            creationAttachments,
+            timelineProjection,
+          )
+        : null;
+    final imageOrdinals = imagePlacement?.atCall.keys.toSet() ?? const <int>{};
     final mediaPreview = _buildAttachmentPreview(
       context,
       parts: timelineProjection.fromParts
@@ -3514,6 +3526,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                   null;
               final visibleBlocks = _timelineVisibility.project(
                 timelineProjection,
+                imageCallOrdinals: imageOrdinals,
                 showThinkingCards: showThinkingCards,
                 showToolCards: showToolCards,
                 isPendingApproval: isPending,
@@ -3591,7 +3604,9 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                       ? 'text'
                       : block.isImage
                       ? block.imageKey
-                      : block.thinkingSteps.first.sourceOrdinal,
+                      : block.imageCallOrdinal == null
+                      ? block.thinkingSteps.first.sourceOrdinal
+                      : ('creation', block.imageCallOrdinal),
                 );
               }
 
@@ -3634,6 +3649,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                   structureToken: (
                     widget.message.id,
                     visibleBlocks.length,
+                    inlineChatImages,
                     showThinkingCards,
                     showToolCards,
                   ),
@@ -3646,7 +3662,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                   ),
                   estimateExtent: (index, width) {
                     final block = visibleBlocks[index];
-                    if (block.isImage) {
+                    if (block.isImage || block.imageCallOrdinal != null) {
                       return estimateTimelineImageHeight(
                         maxWidth: width,
                         aspectRatio: block.aspectRatio,
@@ -3662,6 +3678,14 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                   },
                   itemBuilder: (context, index) {
                     final block = visibleBlocks[index];
+                    if (block.imageCallOrdinal case final ordinal?) {
+                      return ChatCreationImages.forSlots(
+                        messageId: widget.message.id,
+                        key: ValueKey(blockKey(index)),
+                        slots: imagePlacement!.atCall[ordinal]!,
+                        streaming: widget.message.isStreaming,
+                      );
+                    }
                     if (block.isImage) {
                       return _buildAssistantImageBlock(
                         context,
@@ -3741,12 +3765,20 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
               }
               return widgets;
             }(),
-            ChatCreationImages(
-              key: ValueKey(('creation-images', widget.message.id)),
-              messageId: widget.message.id,
-              attachments: creationAttachments,
-              streaming: widget.message.isStreaming,
-            ),
+            if (imagePlacement != null)
+              ChatCreationImages.forSlots(
+                messageId: widget.message.id,
+                key: ValueKey(('creation-images', widget.message.id)),
+                slots: imagePlacement.footer,
+                streaming: widget.message.isStreaming,
+              )
+            else
+              ChatCreationImages(
+                key: ValueKey(('creation-images', widget.message.id)),
+                messageId: widget.message.id,
+                attachments: creationAttachments,
+                streaming: widget.message.isStreaming,
+              ),
             if (showProducedFiles &&
                 _producedWorkspaceParts(widget.toolParts).isNotEmpty) ...[
               const SizedBox(height: 8),

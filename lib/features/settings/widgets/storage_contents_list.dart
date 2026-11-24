@@ -14,6 +14,10 @@ import '../../../shared/widgets/ios_checkbox.dart';
 import '../../../shared/widgets/ios_settings_rows.dart';
 import '../../../shared/widgets/ios_tactile.dart';
 import '../../../shared/widgets/section_card.dart';
+import '../../../core/models/media_creation.dart';
+import '../../../utils/sandbox_path_resolver.dart';
+import '../../media/providers/media_creation_controller.dart';
+import '../../media/widgets/creation_lightbox.dart';
 import '../../workspace/widgets/files/file_browser.dart';
 import '../../workspace/widgets/preview/file_preview.dart';
 import '../../workspace/workspace_layout.dart';
@@ -41,6 +45,7 @@ class StorageContentsList extends StatelessWidget {
   final ValueChanged<String>? onToggleSelection;
 
   static bool supports(StorageUsageCategoryKey key) => const {
+    StorageUsageCategoryKey.creations,
     StorageUsageCategoryKey.workspaceFiles,
     StorageUsageCategoryKey.sessionFiles,
     StorageUsageCategoryKey.skills,
@@ -54,9 +59,16 @@ class StorageContentsList extends StatelessWidget {
     final chat = context.watch<ChatService?>();
     final skills = context.watch<SkillsService?>()?.skills;
 
+    final media = category.key == StorageUsageCategoryKey.creations
+        ? context.watch<MediaCreationController?>()
+        : null;
+
     String label(StorageUsageSubcategory entry) {
       if (!entry.isDirectory) return entry.id;
       switch (category.key) {
+        case StorageUsageCategoryKey.creations:
+          final prompt = media?.batch(entry.id)?.prompt.trim();
+          if (prompt != null && prompt.isNotEmpty) return prompt;
         case StorageUsageCategoryKey.workspaceFiles:
           for (final workspace in workspaces ?? []) {
             if (workspace.id == entry.id) return workspace.name;
@@ -86,32 +98,38 @@ class StorageContentsList extends StatelessWidget {
       itemBuilder: (context, index) {
         final entry = category.subcategories[index];
         final title = label(entry);
-        final row = IosNavRow(
-          key: ValueKey('storage-content-${entry.id}'),
-          icon: entry.isDirectory ? Lucide.Folder : Lucide.File,
-          label: title,
-          subtitle: fmtBytes(entry.stats.bytes),
-          onTap: () => _open(context, entry, title),
-        );
-        if (!selectable) return SectionCard(child: row);
+        final items = media?.itemsFor(entry.id);
+        final cover = items
+            ?.where((item) => item.status == GenerationItemStatus.ready)
+            .firstOrNull;
         return SectionCard(
-          child: Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 12, right: 2),
-                child: IosCheckbox(
-                  value: selection!.contains(entry.id),
-                  size: 20,
-                  hitTestSize: 22,
-                  borderWidth: 1.6,
-                  activeColor: cs.primary,
-                  borderColor: cs.primary.withValues(alpha: 0.55),
-                  onChanged: (_) => onToggleSelection!(entry.id),
-                  enableHaptics: false,
-                ),
-              ),
-              Expanded(child: row),
-            ],
+          child: IosNavRow(
+            key: ValueKey('storage-content-${entry.id}'),
+            icon: entry.isDirectory ? Lucide.Folder : Lucide.File,
+            leading: cover == null
+                ? null
+                : SizedBox.square(
+                    dimension: 36,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: CreationMediaCover(
+                        cover,
+                        thumbnail: true,
+                        playOverlay: false,
+                        cacheWidth:
+                            (36 * MediaQuery.devicePixelRatioOf(context))
+                                .ceil(),
+                      ),
+                    ),
+                  ),
+            label: title,
+            subtitle: category.key == StorageUsageCategoryKey.creations
+                ? [
+                    l10n.creationStorageFileCount(entry.stats.fileCount),
+                    fmtBytes(entry.stats.bytes),
+                  ].join(' · ')
+                : fmtBytes(entry.stats.bytes),
+            onTap: () => _open(context, entry, title),
           ),
         );
       },
@@ -136,6 +154,35 @@ class StorageContentsList extends StatelessWidget {
       // These include application-owned metadata and live environment files.
       // Workspace/skill/environment lifecycle changes stay in their managers.
       readOnly: true,
+      onOpenFile: category.key != StorageUsageCategoryKey.creations
+          ? null
+          : (file) async {
+              final items = context.read<MediaCreationController?>()?.itemsFor(
+                entry.id,
+              );
+              final artwork = items
+                  ?.where(
+                    (item) =>
+                        item.status == GenerationItemStatus.ready &&
+                        SandboxPathResolver.resolveForIo(item.path) ==
+                            file.path,
+                  )
+                  .firstOrNull;
+              if (artwork != null) {
+                await showCreationLightbox(
+                  context,
+                  artwork,
+                  desktop: useDesktopWorkspaceLayout(context),
+                  gallery: items!
+                      .where(
+                        (item) => item.status == GenerationItemStatus.ready,
+                      )
+                      .toList(),
+                );
+              } else {
+                await showFilePreview(context, file);
+              }
+            },
     );
     if (useDesktopWorkspaceLayout(context)) {
       await showAppDialog<void>(
