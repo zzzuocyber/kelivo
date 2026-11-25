@@ -50,12 +50,19 @@ final class AttachmentFileLock {
   /// after acquiring it so a queued cleanup cannot use an obsolete snapshot.
   static void registerTransientOwner(
     Object owner, {
-    required AttachmentReferenceReader? Function() capture,
+    AttachmentReferenceReader? Function()? capture,
+    Map<String, Map<String, String>> Function()? references,
     required bool Function() active,
   }) {
-    _transientOwners[owner] = (capture: capture, active: active);
+    final reader =
+        capture ?? (references == null ? null : () => references);
+    _transientOwners[owner] = (capture: reader, active: active);
     notifyTransientChanged();
   }
+
+  /// Compatibility getter for callers that read the merged snapshot directly.
+  static Map<String, Map<String, String>> get transientReferences =>
+      captureTransient().resolve();
 
   static void unregisterTransientOwner(Object owner) {
     if (_transientOwners.remove(owner) != null) notifyTransientChanged();

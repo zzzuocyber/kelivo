@@ -18,7 +18,14 @@ import '../../../utils/app_directories.dart';
 import '../../../utils/kelivo_file_uri.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 
-enum StorageImageKind { chat, tool, avatar }
+enum StorageImageKind {
+  chat,
+  tool,
+  avatar,
+  temporaryBackground,
+  phone,
+  groupChatAvatar,
+}
 
 /// One persisted snapshot for association labels and deletion protection.
 /// Message parts cover references whose asset-index backfill is still pending.
