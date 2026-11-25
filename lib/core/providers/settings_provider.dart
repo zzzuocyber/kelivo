@@ -320,9 +320,6 @@ class SettingsProvider extends ChangeNotifier {
       'composer_translate_input_v1';
   static const String _composerTranslateIncludeOriginalKey =
       'composer_translate_include_original_v1';
-  // 创作输入框翻译：开关，只管创作页输入框，与聊天输入框翻译独立。
-  static const String _composerCreationTranslateKey =
-      'composer_creation_translate_v1';
   // 朋友圈：用哪本世界书、系统提示词、附加指令、跑哪个模型。
   static const String _momentBookIdKey = 'moment_book_id_v1';
   static const String _momentBookIdsKey = 'moment_book_ids_v1';
@@ -1297,8 +1294,6 @@ class SettingsProvider extends ChangeNotifier {
         prefs.getBool(_composerTranslateInputKey) ?? false;
     _composerTranslateIncludeOriginal =
         prefs.getBool(_composerTranslateIncludeOriginalKey) ?? false;
-    _composerCreationTranslate =
-        prefs.getBool(_composerCreationTranslateKey) ?? false;
     final quickSymbolPref = prefs.getString(_composerQuickSymbolKey);
     if (quickSymbolPref != null && quickSymbolPref.isNotEmpty) {
       _composerQuickSymbol = quickSymbolPref;
@@ -6031,16 +6026,6 @@ Requirements:
     notifyListeners();
     final prefs = _preferences;
     await prefs.setBool(_composerTranslateInputKey, value);
-  }
-
-  bool _composerCreationTranslate = false;
-  bool get composerCreationTranslate => _composerCreationTranslate;
-  Future<void> setComposerCreationTranslate(bool value) async {
-    if (_composerCreationTranslate == value) return;
-    _composerCreationTranslate = value;
-    notifyListeners();
-    final prefs = _preferences;
-    await prefs.setBool(_composerCreationTranslateKey, value);
   }
 
   bool _composerTranslateIncludeOriginal = false;

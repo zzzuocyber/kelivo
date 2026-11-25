@@ -13,8 +13,6 @@ import '../../../core/models/media_creation.dart';
 import '../../../core/models/model_spec.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/api/chat_api_service.dart';
-import '../../../core/services/api/stream/stream_chunk.dart';
-import '../../../core/models/translation_language.dart';
 import '../../../core/services/media/creation_prompt_enhancer.dart';
 import '../../../core/services/media/media_models.dart';
 import '../../../core/services/media/media_request.dart';
@@ -73,9 +71,6 @@ class _CreationComposerState extends State<CreationComposer> {
   late final TextEditingController _prompt;
   final _focus = FocusNode();
   _Enhancement? _enhancement;
-  // 创作输入框翻译：翻译中标记 + 上次译文（用于按钮翻完变回发送）。
-  bool _isTranslating = false;
-  String _translatedText = '';
   // 创作页闪电快捷比例：固定中文短语，点一下插到光标处，走自动模式出比例。
   static const _ratioPhrases = [
     '9比16',
@@ -193,80 +188,6 @@ class _CreationComposerState extends State<CreationComposer> {
           },
         );
       }
-    }
-  }
-
-  /// 把创作输入框的文字用 Kelivo 自带翻译配置译成目标语言，成功后替换输入框文本。
-  /// 复用聊天输入框翻译的取配置逻辑，但不依赖 assistant（创作页没有当前助手）。
-  Future<void> _translatePrompt() async {
-    final text = _prompt.text.trim();
-    if (text.isEmpty || _isTranslating) return;
-    final ctx = context;
-    final settings = ctx.read<SettingsProvider>();
-    final providerKey =
-        settings.translateModelProvider ?? settings.currentModelProvider;
-    final modelId = settings.translateModelId ?? settings.currentModelId;
-    if (providerKey == null || modelId == null) {
-      showAppSnackBar(
-        ctx,
-        message: '未配置翻译模型',
-        type: NotificationType.warning,
-      );
-      return;
-    }
-    final target = standaloneTranslationLanguage(
-      settings.visibleTranslationLanguages,
-      selectedCode: settings.translateTargetLang,
-      localeLanguageCode: Localizations.localeOf(ctx).languageCode,
-    );
-    final prompt = settings.translatePrompt
-        .replaceAll('{source_text}', text)
-        .replaceAll('{target_lang}', target.displayName);
-    final config = settings.getProviderConfig(providerKey);
-    final requestId =
-        'translate-creation-${DateTime.now().microsecondsSinceEpoch}';
-    setState(() => _isTranslating = true);
-    final buffer = StringBuffer();
-    try {
-      final stream = ChatApiService.sendMessageStream(
-        conversationId: null,
-        config: config,
-        modelId: modelId,
-        messages: [
-          {'role': 'user', 'content': prompt},
-        ],
-        reasoning: settings.translateGenerationReasoningFor(null),
-        requestId: requestId,
-        parseMarkdownImageLinks: settings.sendMarkdownImageLinksAsImages,
-      );
-      await for (final chunk in stream) {
-        if (chunk is! TextDelta || chunk.text.isEmpty) continue;
-        buffer.write(chunk.text);
-      }
-      final translated = buffer.toString().trim();
-      if (translated.isEmpty) {
-        showAppSnackBar(
-          ctx,
-          message: '翻译结果为空',
-          type: NotificationType.warning,
-        );
-        return;
-      }
-      _translatedText = translated;
-      _prompt.value = TextEditingValue(
-        text: translated,
-        selection: TextSelection.collapsed(offset: translated.length),
-      );
-      _controller.updatePrompt(widget.topicId, translated);
-      if (mounted) setState(() {});
-    } catch (e) {
-      showAppSnackBar(
-        ctx,
-        message: '翻译失败：$e',
-        type: NotificationType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _isTranslating = false);
     }
   }
 
@@ -719,23 +640,11 @@ class _CreationComposerState extends State<CreationComposer> {
                                         ValueListenableBuilder(
                                           valueListenable: _prompt,
                                           builder: (context, value, _) {
-                                            final hasText =
-                                                value.text.trim().isNotEmpty;
                                             final enabled =
-                                                (hasText ||
+                                                (value.text.trim().isNotEmpty ||
                                                     caps?.requiresPrompt ==
                                                         false) &&
-                                                state.canSubmit(widget.topicId) &&
-                                                !_isTranslating;
-                                            // 创作输入框翻译：开关开 + 有字 + 当前文字不是刚译文时，
-                                            // 发送键变成翻译键；翻完自动变回发送，手改字又变回翻译。
-                                            final showTranslate =
-                                                context
-                                                    .watch<SettingsProvider>()
-                                                    .composerCreationTranslate &&
-                                                hasText &&
-                                                value.text.trim() !=
-                                                    _translatedText;
+                                                state.canSubmit(widget.topicId);
                                             return IosCardPress(
                                               focusable: true,
                                               borderRadius:
@@ -745,21 +654,13 @@ class _CreationComposerState extends State<CreationComposer> {
                                                   : context
                                                         .appColors
                                                         .surfaceFill,
-                                              onTap: enabled
-                                                  ? showTranslate
-                                                      ? _translatePrompt
-                                                      : _send
-                                                  : null,
+                                              onTap: enabled ? _send : null,
                                               child: Tooltip(
-                                                message: showTranslate
-                                                    ? '翻译'
-                                                    : l10n.creationGenerate,
+                                                message: l10n.creationGenerate,
                                                 child: SizedBox.square(
                                                   dimension: buttonSize,
                                                   child: Icon(
-                                                    showTranslate
-                                                        ? Lucide.Languages
-                                                        : Lucide.ArrowUp,
+                                                    Lucide.ArrowUp,
                                                     size: 19,
                                                     color: enabled
                                                         ? cs.onPrimary
