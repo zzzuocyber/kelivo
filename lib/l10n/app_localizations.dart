@@ -1534,6 +1534,9 @@ abstract class AppLocalizations {
   /// **'Delete Other Versions'**
   String get homePageDeleteOtherVersions;
 
+  /// Two-character selection-bar label: keep the displayed version, delete the other versions.
+  String get chatSelectionTrimOtherVersions;
+
   /// Confirmation dialog body for deleting the other versions of one chat message. The version on screen is kept. Count is the number of other versions being permanently deleted.
   ///
   /// In en, this message translates to:

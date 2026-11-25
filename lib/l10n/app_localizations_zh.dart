@@ -763,6 +763,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get homePageDeleteOtherVersions => '删除其他版本';
+  String get chatSelectionTrimOtherVersions => '删余';
 
   @override
   String homePageDeleteOtherVersionsConfirm(int count) {
@@ -17532,6 +17533,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get homePageDeleteOtherVersions => '删除其他版本';
+  String get chatSelectionTrimOtherVersions => '删余';
 
   @override
   String homePageDeleteOtherVersionsConfirm(int count) {
@@ -34280,6 +34282,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get homePageDeleteOtherVersions => '刪除其他版本';
+  String get chatSelectionTrimOtherVersions => '刪餘';
 
   @override
   String homePageDeleteOtherVersionsConfirm(int count) {

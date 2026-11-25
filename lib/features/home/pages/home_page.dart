@@ -1302,17 +1302,31 @@ class _HomePageState extends State<HomePage>
       hasSelection: _controller.selectedCount > 0,
       hasMultiVersionSelection:
           _controller.selectedMessagesIncludeMultipleVersions,
-      onShare: _controller.exportSelectedMessages,
+      onDeleteOtherVersions: () {
+        unawaited(
+          _handleDeleteSelectedMessages(
+            context,
+            scope: SelectedMessagesDeleteScope.others,
+          ),
+        );
+      },
       onDeleteCurrentVersions: () {
         unawaited(
-          _handleDeleteSelectedMessages(context, deleteAllVersions: false),
+          _handleDeleteSelectedMessages(
+            context,
+            scope: SelectedMessagesDeleteScope.current,
+          ),
         );
       },
       onDeleteAllVersions: () {
         unawaited(
-          _handleDeleteSelectedMessages(context, deleteAllVersions: true),
+          _handleDeleteSelectedMessages(
+            context,
+            scope: SelectedMessagesDeleteScope.all,
+          ),
         );
       },
+      onShare: _controller.exportSelectedMessages,
     );
   }
 
@@ -2521,7 +2535,7 @@ class _HomePageState extends State<HomePage>
 
   Future<void> _handleDeleteSelectedMessages(
     BuildContext context, {
-    required bool deleteAllVersions,
+    required SelectedMessagesDeleteScope scope,
   }) async {
     final l10n = AppLocalizations.of(context)!;
     if (_controller.selectedItems.isEmpty) {
@@ -2533,16 +2547,21 @@ class _HomePageState extends State<HomePage>
       return;
     }
 
+    if (scope == SelectedMessagesDeleteScope.others) {
+      await _controller.deleteSelectedMessages(scope: scope);
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          deleteAllVersions
+          scope == SelectedMessagesDeleteScope.all
               ? l10n.homePageDeleteAllVersions
               : l10n.chatSelectionDeleteSelected,
         ),
         content: Text(
-          deleteAllVersions
+          scope == SelectedMessagesDeleteScope.all
               ? l10n.chatSelectionDeleteSelectedAllVersionsConfirm(
                   _controller.selectedItems.length,
                 )
@@ -2567,9 +2586,7 @@ class _HomePageState extends State<HomePage>
     );
     if (confirm != true) return;
 
-    await _controller.deleteSelectedMessages(
-      deleteAllVersions: deleteAllVersions,
-    );
+    await _controller.deleteSelectedMessages(scope: scope);
   }
 
   /// Deletes the messages picked inside the mini map.
@@ -2580,7 +2597,10 @@ class _HomePageState extends State<HomePage>
   Future<bool> _deleteMessagesFromMiniMap(Set<String> ids) async {
     if (ids.isEmpty || !mounted) return false;
     _controller.replaceSelection(ids);
-    await _handleDeleteSelectedMessages(context, deleteAllVersions: false);
+    await _handleDeleteSelectedMessages(
+      context,
+      scope: SelectedMessagesDeleteScope.current,
+    );
     final deleted = _controller.selectedItems.isEmpty;
     _controller.cancelSelection();
     return deleted;

@@ -104,6 +104,9 @@ typedef RevealMessageMatch =
       required bool waitForMount,
     });
 
+/// Delete scope for the message-selection action bar.
+enum SelectedMessagesDeleteScope { current, others, all }
+
 /// Controller that manages all state and service wiring for HomePage.
 ///
 /// This controller extracts the non-UI logic from _HomePageState to:
@@ -2349,7 +2352,9 @@ class HomePageController extends ChangeNotifier {
     return MediaQuery.maybeDisableAnimationsOf(context) ?? false;
   }
 
-  Future<void> deleteSelectedMessages({required bool deleteAllVersions}) async {
+  Future<void> deleteSelectedMessages({
+    required SelectedMessagesDeleteScope scope,
+  }) async {
     final selectedMessageIds = Set<String>.of(_selectedItems);
     if (selectedMessageIds.isEmpty) return;
 
@@ -2366,6 +2371,39 @@ class HomePageController extends ChangeNotifier {
       conversationId,
       groups,
     );
+    if (!_context.mounted) return;
+
+    if (scope == SelectedMessagesDeleteScope.others) {
+      final otherVersionIds = {
+        for (final version in versions)
+          if (!selectedMessageIds.contains(version.id)) version.id,
+      };
+      if (otherVersionIds.isEmpty) return;
+      final confirmed = await confirmMessageVersionDeletion(
+        _context,
+        MessageVersionDeleteScope.others,
+        otherVersionIds.length,
+      );
+      if (!confirmed || !_context.mounted) return;
+      final keepAtBottomOthers = _scrollCtrl.isNearBottom();
+      _selectionEpoch++;
+      for (final id in otherVersionIds) {
+        _translations.remove(id);
+      }
+      await _viewModel.deleteMessages(
+        expectedContextState: null,
+        messageIds: otherVersionIds,
+        deleteAllVersions: false,
+      );
+      _selecting = false;
+      _selectedItems.clear();
+      _selectableProjectionIds = null;
+      if (keepAtBottomOthers) _scrollCtrl.positionAtBottomOnNextLayout();
+      notifyListeners();
+      return;
+    }
+
+    final deleteAllVersions = scope == SelectedMessagesDeleteScope.all;
     final removedGroups = deleteAllVersions
         ? groups
         : {
@@ -2375,7 +2413,6 @@ class HomePageController extends ChangeNotifier {
                   .every((m) => selectedMessageIds.contains(m.id)))
                 group,
           };
-    if (!_context.mounted) return;
     final approved = await confirmContextSourceMutation(
       _context,
       deleting: true,

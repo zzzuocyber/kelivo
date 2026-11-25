@@ -794,6 +794,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homePageDeleteOtherVersions => 'Delete Other Versions';
+  String get chatSelectionTrimOtherVersions => 'Trim';
 
   @override
   String homePageDeleteOtherVersionsConfirm(int count) {

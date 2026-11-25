@@ -811,6 +811,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get homePageDeleteOtherVersions => 'Удалить другие версии';
+  String get chatSelectionTrimOtherVersions => 'Удалить прочие';
 
   @override
   String homePageDeleteOtherVersionsConfirm(int count) {

@@ -15,6 +15,7 @@ class ChatSelectionActionBar extends StatelessWidget {
     required this.hasSelection,
     required this.hasMultiVersionSelection,
     required this.onShare,
+    required this.onDeleteOtherVersions,
     required this.onDeleteCurrentVersions,
     required this.onDeleteAllVersions,
   });
@@ -22,6 +23,7 @@ class ChatSelectionActionBar extends StatelessWidget {
   final bool hasSelection;
   final bool hasMultiVersionSelection;
   final VoidCallback onShare;
+  final VoidCallback onDeleteOtherVersions;
   final VoidCallback onDeleteCurrentVersions;
   final VoidCallback onDeleteAllVersions;
 
@@ -101,10 +103,10 @@ class ChatSelectionActionBar extends StatelessWidget {
                       children: [
                         Expanded(
                           child: _ActionButton(
-                            icon: Lucide.Share,
-                            label: l10n.messageMoreSheetShare,
-                            color: cs.primary,
-                            onTap: hasSelection ? onShare : null,
+                            icon: Lucide.Trash,
+                            label: l10n.chatSelectionTrimOtherVersions,
+                            color: cs.error,
+                            onTap: hasSelection ? onDeleteOtherVersions : null,
                             dense: compact,
                           ),
                         ),
@@ -115,6 +117,16 @@ class ChatSelectionActionBar extends StatelessWidget {
                             label: l10n.homePageDelete,
                             color: cs.error,
                             onTap: hasSelection ? () => _delete(context) : null,
+                            dense: compact,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _ActionButton(
+                            icon: Lucide.Share,
+                            label: l10n.messageMoreSheetShare,
+                            color: cs.primary,
+                            onTap: hasSelection ? onShare : null,
                             dense: compact,
                           ),
                         ),

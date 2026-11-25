@@ -777,6 +777,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get homePageDeleteOtherVersions => '다른 버전 삭제';
+  String get chatSelectionTrimOtherVersions => '나머지 삭제';
 
   @override
   String homePageDeleteOtherVersionsConfirm(int count) {

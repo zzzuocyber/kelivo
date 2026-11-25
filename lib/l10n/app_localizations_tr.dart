@@ -798,6 +798,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get homePageDeleteOtherVersions => 'Diğer Sürümleri Sil';
+  String get chatSelectionTrimOtherVersions => 'Diğerleri';
 
   @override
   String homePageDeleteOtherVersionsConfirm(int count) {
