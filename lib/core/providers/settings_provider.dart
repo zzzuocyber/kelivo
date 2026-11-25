@@ -304,6 +304,11 @@ class SettingsProvider extends ChangeNotifier {
   static const String _composerQuickSymbolKey = 'composer_quick_symbol_v1';
   // 镜像布局输入框：整条输入区左右翻转，文字方向不变（左手单手用）。
   static const String _composerMirrorLayoutKey = 'composer_mirror_layout_v1';
+  // 翻译输入框文本：开关 + 发送时是否带原文（译文在上、原文在下）。
+  static const String _composerTranslateInputKey =
+      'composer_translate_input_v1';
+  static const String _composerTranslateIncludeOriginalKey =
+      'composer_translate_include_original_v1';
   // 朋友圈：用哪本世界书、系统提示词、附加指令、跑哪个模型。
   static const String _momentBookIdKey = 'moment_book_id_v1';
   static const String _momentBookIdsKey = 'moment_book_ids_v1';
@@ -1237,6 +1242,10 @@ class SettingsProvider extends ChangeNotifier {
       _enterToSendOnMobile = enterToSendPref;
     }
     _composerMirrorLayout = prefs.getBool(_composerMirrorLayoutKey) ?? false;
+    _composerTranslateInput =
+        prefs.getBool(_composerTranslateInputKey) ?? false;
+    _composerTranslateIncludeOriginal =
+        prefs.getBool(_composerTranslateIncludeOriginalKey) ?? false;
     final quickSymbolPref = prefs.getString(_composerQuickSymbolKey);
     if (quickSymbolPref != null && quickSymbolPref.isNotEmpty) {
       _composerQuickSymbol = quickSymbolPref;
@@ -5832,6 +5841,27 @@ Requirements:
     notifyListeners();
     final prefs = _preferences;
     await prefs.setBool(_composerMirrorLayoutKey, value);
+  }
+
+  bool _composerTranslateInput = false;
+  bool get composerTranslateInput => _composerTranslateInput;
+  Future<void> setComposerTranslateInput(bool value) async {
+    if (_composerTranslateInput == value) return;
+    _composerTranslateInput = value;
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setBool(_composerTranslateInputKey, value);
+  }
+
+  bool _composerTranslateIncludeOriginal = false;
+  bool get composerTranslateIncludeOriginal =>
+      _composerTranslateIncludeOriginal;
+  Future<void> setComposerTranslateIncludeOriginal(bool value) async {
+    if (_composerTranslateIncludeOriginal == value) return;
+    _composerTranslateIncludeOriginal = value;
+    notifyListeners();
+    final prefs = _preferences;
+    await prefs.setBool(_composerTranslateIncludeOriginalKey, value);
   }
 
   // 朋友圈：世界书 / 提示词 / 模型，全部跟着备份走。

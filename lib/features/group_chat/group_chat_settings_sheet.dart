@@ -324,6 +324,14 @@ class _ExtensionEntrySheet extends StatelessWidget {
               onTap: () => _showExtensionPlaceholderSheet(context),
             ),
             const SizedBox(height: 4),
+            ToolsSheetRow(
+              key: const ValueKey('extension-translate-input-entry'),
+              icon: Lucide.Languages,
+              label: '翻译输入框文本',
+              trailing: ToolsSheetRow.chevron(context),
+              onTap: () => _showExtensionTranslateInputSheet(context),
+            ),
+            const SizedBox(height: 4),
           ],
         ),
       ),
@@ -366,6 +374,60 @@ Future<void> _showExtensionPlaceholderSheet(BuildContext context) {
                   ? Icon(Lucide.Check, size: 18, color: cs.primary)
                   : const SizedBox(width: 18),
               onTap: () => unawaited(settings.setComposerMirrorLayout(false)),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  });
+}
+
+/// 翻译输入框文本：开 / 关二选一 + 发送时带原文开关。界面不加说明文字。
+Future<void> _showExtensionTranslateInputSheet(BuildContext context) {
+  return _showGroupChatSheet<void>(context, (ctx) {
+    final settings = ctx.watch<SettingsProvider>();
+    final cs = Theme.of(ctx).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Center(child: _SheetHandle()),
+            const SizedBox(height: 14),
+            const _SheetHeader(icon: Lucide.Languages, title: '翻译输入框文本'),
+            const SizedBox(height: 10),
+            ToolsSheetRow(
+              icon: Lucide.toggleRight,
+              label: '开启',
+              selected: settings.composerTranslateInput,
+              trailing: settings.composerTranslateInput
+                  ? Icon(Lucide.Check, size: 18, color: cs.primary)
+                  : const SizedBox(width: 18),
+              onTap: () => unawaited(settings.setComposerTranslateInput(true)),
+            ),
+            const SizedBox(height: 8),
+            ToolsSheetRow(
+              icon: Lucide.Power,
+              label: '关闭',
+              selected: !settings.composerTranslateInput,
+              trailing: !settings.composerTranslateInput
+                  ? Icon(Lucide.Check, size: 18, color: cs.primary)
+                  : const SizedBox(width: 18),
+              onTap: () => unawaited(settings.setComposerTranslateInput(false)),
+            ),
+            const SizedBox(height: 8),
+            ToolsSheetRow(
+              icon: Lucide.ListChecks,
+              label: '发送带原文',
+              trailing: IosSwitch(
+                value: settings.composerTranslateIncludeOriginal,
+                onChanged: (v) =>
+                    unawaited(settings.setComposerTranslateIncludeOriginal(v)),
+              ),
             ),
             const SizedBox(height: 16),
           ],

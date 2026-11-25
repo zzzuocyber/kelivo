@@ -53,6 +53,8 @@ import '../../../core/providers/assistant_provider.dart';
 import '../../../core/services/search/search_service.dart';
 import '../../../core/services/api/builtin_tools.dart';
 import '../../../core/services/api/chat_api_service.dart';
+import '../../../core/services/api/stream/stream_chunk.dart';
+import '../../../core/models/translation_language.dart';
 import '../../../core/services/api/native_input_attachments.dart';
 import '../../../core/services/asr/asr_service_options.dart';
 import '../../../core/utils/multimodal_input_utils.dart';
@@ -992,6 +994,10 @@ class _ChatInputBarState extends State<ChatInputBar>
   bool _suppressContextMenu = false;
   UiContextAttachment? _uiContext;
   bool _isSubmitting = false;
+  // 翻译输入框文本：是否正在翻译 + 上次译文对应的原文（发送时带原文用）。
+  bool _isTranslatingInput = false;
+  String? _translatedOriginalText;
+  String _translatedResultText = '';
   int _submitSerial = 0;
   String? _imageModeModelKey;
   String? _lastImageModeModelKey;
@@ -2373,6 +2379,76 @@ class _ChatInputBarState extends State<ChatInputBar>
     );
   }
 
+  /// 把输入框已有文字用 Kelivo 自带翻译配置译成目标语言（默认模型回退链），
+  /// 成功后直接替换输入框文本；原文缓存起来供「发送带原文」使用。
+  Future<void> _handleTranslateComposer() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _isTranslatingInput || _composerLocked) return;
+    final ctx = context;
+    final settings = ctx.read<SettingsProvider>();
+    final assistant = ctx.read<AssistantProvider>().currentAssistant;
+    final providerKey =
+        settings.translateModelProvider ??
+        assistant?.chatModelProvider ??
+        settings.currentModelProvider;
+    final modelId =
+        settings.translateModelId ??
+        assistant?.chatModelId ??
+        settings.currentModelId;
+    if (providerKey == null || modelId == null) {
+      showAppSnackBar(ctx, message: '未配置翻译模型', type: NotificationType.warning);
+      return;
+    }
+    final languages = settings.visibleTranslationLanguages;
+    final target = standaloneTranslationLanguage(
+      languages,
+      selectedCode: settings.translateTargetLang,
+      localeLanguageCode: Localizations.localeOf(ctx).languageCode,
+    );
+    final prompt = settings.translatePrompt
+        .replaceAll('{source_text}', text)
+        .replaceAll('{target_lang}', target.displayName);
+    final config = settings.getProviderConfig(providerKey);
+    final requestId =
+        'translate-composer-${DateTime.now().microsecondsSinceEpoch}';
+    setState(() => _isTranslatingInput = true);
+    final buffer = StringBuffer();
+    try {
+      final stream = ChatApiService.sendMessageStream(
+        conversationId: widget.conversationId,
+        config: config,
+        modelId: modelId,
+        messages: [
+          {'role': 'user', 'content': prompt},
+        ],
+        reasoning: settings.translateGenerationReasoningFor(assistant),
+        requestId: requestId,
+        parseMarkdownImageLinks: settings.sendMarkdownImageLinksAsImages,
+      );
+      await for (final chunk in stream) {
+        if (chunk is! TextDelta || chunk.text.isEmpty) continue;
+        buffer.write(chunk.text);
+      }
+      final translated = buffer.toString().trim();
+      if (translated.isEmpty) {
+        showAppSnackBar(ctx, message: '翻译结果为空', type: NotificationType.warning);
+        return;
+      }
+      _translatedOriginalText = text;
+      _translatedResultText = translated;
+      _controller.value = TextEditingValue(
+        text: translated,
+        selection: TextSelection.collapsed(offset: translated.length),
+        composing: TextRange.empty,
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      showAppSnackBar(ctx, message: '翻译失败：$e', type: NotificationType.error);
+    } finally {
+      if (mounted) setState(() => _isTranslatingInput = false);
+    }
+  }
+
   Future<void> _handleSend({TextEditingValue? orderedValue}) async {
     final controller = _controller;
     if (orderedValue == null && controller is MessageEditingController) {
@@ -2413,7 +2489,19 @@ class _ChatInputBarState extends State<ChatInputBar>
     }
     final submittedText = submittedValue.text;
     final send = widget.onSend;
-    final text = submittedText.trim();
+    final trimmedText = submittedText.trim();
+    // 翻译输入框文本：勾选带原文时，发出的文本是「译文在上、原文在下」两行。
+    final includeOriginal = context
+        .read<SettingsProvider>()
+        .composerTranslateIncludeOriginal;
+    final text =
+        includeOriginal &&
+            _translatedOriginalText != null &&
+            trimmedText == _translatedResultText
+        ? '${trimmedText}\n${_translatedOriginalText}'
+        : trimmedText;
+    _translatedOriginalText = null;
+    _translatedResultText = '';
     if (text.isEmpty &&
         _images.isEmpty &&
         _docs.isEmpty &&
@@ -4719,6 +4807,11 @@ class _ChatInputBarState extends State<ChatInputBar>
       darkOpacity: widget.inputBackgroundOpacityDark,
     );
     final hasText = _controller.text.trim().isNotEmpty;
+    // 翻译输入框文本：当前文字不是刚翻译出的译文时，发送键显示为翻译键。
+    final showTranslateButton =
+        settings.composerTranslateInput &&
+        hasText &&
+        _controller.text.trim() != _translatedResultText;
     final hasImages = _images.isNotEmpty;
     final hasDocs = _docs.isNotEmpty;
     final hasInput = hasText || hasImages || hasDocs || _uiContext != null;
@@ -5415,19 +5508,27 @@ class _ChatInputBarState extends State<ChatInputBar>
                                                       enabled:
                                                           hasInput &&
                                                           !_composerLocked &&
-                                                          !_hasUnreadyAttachments,
+                                                          !_hasUnreadyAttachments &&
+                                                          !_isTranslatingInput,
                                                       loading:
                                                           widget.loading &&
                                                           (!hasInput ||
                                                               _composerLocked),
-                                                      onSend: _handleSend,
+                                                      onSend:
+                                                          showTranslateButton
+                                                          ? () => unawaited(
+                                                              _handleTranslateComposer(),
+                                                            )
+                                                          : _handleSend,
                                                       onStop: widget.loading
                                                           ? widget.onStop
                                                           : null,
                                                       color: theme
                                                           .colorScheme
                                                           .primary,
-                                                      icon: Lucide.ArrowUp,
+                                                      icon: showTranslateButton
+                                                          ? Lucide.Languages
+                                                          : Lucide.ArrowUp,
                                                       tooltip: widget
                                                           .sendButtonTooltip,
                                                     ),
