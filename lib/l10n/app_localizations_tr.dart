@@ -18489,6 +18489,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get falNoAdditionalSettings => 'Bu modelin ek ayarı yok.';
 
   @override
+  String get falCopyDraftId => 'Taslak kimliğini kopyala';
+
+  @override
+  String get falOptionalPrompt => 'İstem (isteğe bağlı)';
+
+  @override
   String get falWatermark => 'Filigran';
 
   @override
