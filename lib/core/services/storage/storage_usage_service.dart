@@ -100,9 +100,8 @@ class StorageFileEntry {
   final DateTime modifiedAt;
   final StorageImageKind? imageKind;
 
-  /// Null until the reference scan has confirmed the file's status.
-  final bool? isInUse;
-  bool get canDelete => isInUse == false;
+  final bool isInUse;
+  bool get canDelete => !isInUse;
   final Map<String, String> conversations;
   final DateTime? pendingDeletionAt;
   const StorageFileEntry({
@@ -111,7 +110,7 @@ class StorageFileEntry {
     required this.bytes,
     required this.modifiedAt,
     this.imageKind,
-    this.isInUse,
+    required this.isInUse,
     this.conversations = const {},
     this.pendingDeletionAt,
   });
@@ -968,6 +967,7 @@ abstract final class StorageUsageService {
       name: p.basename(file.path),
       bytes: bytes,
       modifiedAt: modified,
+      isInUse: true,
     );
   }
 

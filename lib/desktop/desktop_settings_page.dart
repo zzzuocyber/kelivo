@@ -225,14 +225,7 @@ class _DesktopSettingsPageState extends State<DesktopSettingsPage> {
       _showDetail = true;
       _selected = _SettingsMenuItem.providers;
     }
-    // The settings pane is lazy. Preserve a topic-position request delivered
-    // before this first mount, then consume later requests from the stream.
-    if (DesktopSettingsNavigationBus.instance.consumeTopicPositionRequest()) {
-      _selected = _SettingsMenuItem.display;
-      _showDetail = true;
-      _showTopicPosition = true;
-    }
-    _settingsNavSub = DesktopSettingsNavigationBus.instance.stream.listen((
+    _settingsNavSub = DesktopSettingsNavigationBus.instance.listenForPane((
       target,
     ) {
       setState(() {

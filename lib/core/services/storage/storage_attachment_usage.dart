@@ -18,14 +18,7 @@ import '../../../utils/app_directories.dart';
 import '../../../utils/kelivo_file_uri.dart';
 import '../../../utils/sandbox_path_resolver.dart';
 
-enum StorageImageKind {
-  chat,
-  tool,
-  avatar,
-  temporaryBackground,
-  phone,
-  groupChatAvatar,
-}
+enum StorageImageKind { chat, tool, avatar }
 
 /// One persisted snapshot for association labels and deletion protection.
 /// Message parts cover references whose asset-index backfill is still pending.
@@ -34,9 +27,6 @@ class StorageAttachmentUsage {
     _appearance = _resolveSet(_references.appearance);
     _tools = _resolveSet(_references.tools);
     _chat = _resolveSet(_references.chat);
-    _temporaryBackground = _resolveSet(_references.temporaryBackgrounds);
-    _phone = _resolveSet(_references.phone);
-    _groupChatAvatars = _resolveSet(_references.groupChatAvatars);
     _protected = _resolveSet(_references.protected);
     for (final entry in _references.conversations.entries) {
       for (final path in _paths(entry.key, _root)) {
@@ -52,13 +42,7 @@ class StorageAttachmentUsage {
 
   final String _root;
   final _AttachmentReferences _references;
-  late final Set<String> _appearance,
-      _tools,
-      _chat,
-      _temporaryBackground,
-      _phone,
-      _groupChatAvatars,
-      _protected;
+  late final Set<String> _appearance, _tools, _chat, _protected;
   final _conversations = <String, Map<String, String>>{};
   final _pending = <String, DateTime>{};
 
@@ -74,17 +58,22 @@ class StorageAttachmentUsage {
       (await AppDirectories.getAppDataDirectory()).path,
       AppDatabase.databaseFileName,
     );
-    final usage = await Isolate.run(
-      () => _load(databasePath, root, includeMessages),
+    final transient = AttachmentFileLock.captureTransient();
+    return Isolate.run(
+      () => readInWorker(databasePath, root, includeMessages: includeMessages)
+        ..includeConversations(
+          transient.resolve(),
+          generationActive: transient.generationActive,
+        ),
     );
-    usage.includeConversations(
-      AttachmentFileLock.transientReferences,
-      generationActive: AttachmentFileLock.hasActiveTransientGeneration,
-    );
-    return usage;
   }
 
-  static StorageAttachmentUsage _load(String path, String root, bool messages) {
+  /// Synchronous read for callers already running on a worker isolate.
+  static StorageAttachmentUsage readInWorker(
+    String path,
+    String root, {
+    bool includeMessages = true,
+  }) {
     if (!File(path).existsSync()) {
       return StorageAttachmentUsage._(root, _AttachmentReferences());
     }
@@ -93,7 +82,7 @@ class StorageAttachmentUsage {
       database.execute('BEGIN');
       return StorageAttachmentUsage._(
         root,
-        _readReferences(database, messages, root),
+        _readReferences(database, includeMessages, root),
       );
     } finally {
       database.close();
@@ -124,18 +113,12 @@ class StorageAttachmentUsage {
       return true;
     }
     return _appearance.contains(normalized) ||
-        _temporaryBackground.contains(normalized) ||
-        _phone.contains(normalized) ||
-        _groupChatAvatars.contains(normalized) ||
         _protected.contains(normalized) ||
         _conversations.containsKey(normalized);
   }
 
   bool hasReferencesWithin(String directory) => {
     ..._appearance,
-    ..._temporaryBackground,
-    ..._phone,
-    ..._groupChatAvatars,
     ..._protected,
     ..._conversations.keys,
   }.any((path) => p.equals(directory, path) || p.isWithin(directory, path));
@@ -155,15 +138,14 @@ class StorageAttachmentUsage {
     bool generationActive = false,
     bool force = false,
   }) async {
+    final targets = paths.toSet();
+    if (targets.isEmpty) return {};
     final root = (await AppDirectories.getContentDirectory()).path;
     final databasePath = p.join(
       (await AppDirectories.getAppDataDirectory()).path,
       AppDatabase.databaseFileName,
     );
-    final transient = AttachmentFileLock.transientReferences;
-    generationActive |= AttachmentFileLock.hasActiveTransientGeneration;
-    final targets = paths.toSet();
-    if (targets.isEmpty) return {};
+    final transient = AttachmentFileLock.captureTransient();
     return Isolate.run(() {
       final database = File(databasePath).existsSync()
           ? sqlite3.open(databasePath, mode: OpenMode.readWrite)
@@ -178,8 +160,8 @@ class StorageAttachmentUsage {
               : _readReferences(database, true, root),
         );
         usage.includeConversations(
-          transient,
-          generationActive: generationActive,
+          transient.resolve(),
+          generationActive: generationActive || transient.generationActive,
         );
         final protected = usage._resolveSet(protectedPaths);
         final roots = [
@@ -235,8 +217,9 @@ class StorageAttachmentUsage {
       (await AppDirectories.getAppDataDirectory()).path,
       AppDatabase.databaseFileName,
     );
-    final transient = AttachmentFileLock.transientReferences;
-    final generationActive = AttachmentFileLock.hasActiveTransientGeneration;
+    final transient = includeOrphans
+        ? AttachmentFileLock.captureTransient()
+        : null;
     return WorkspaceFileCoordinator.run(
       sessions.path,
       () => Isolate.run(() {
@@ -260,8 +243,8 @@ class StorageAttachmentUsage {
                 : _readReferences(database, true, root),
           );
           usage.includeConversations(
-            transient,
-            generationActive: generationActive,
+            transient!.resolve(),
+            generationActive: transient.generationActive,
           );
           usage._protected.addAll(usage._resolveSet(protectedPaths));
           final ids = database == null
@@ -324,25 +307,6 @@ class StorageAttachmentUsage {
     bool contains(Set<String> paths) =>
         paths.contains(normalized) ||
         (realPath != null && paths.contains(p.normalize(realPath)));
-    // 临时背景单独成类，必须先于头像与背景判断。
-    if (contains(_temporaryBackground)) {
-      return StorageImageKind.temporaryBackground;
-    }
-    // 群聊头像（090）：目录 + 文件名前缀双保险，抢在小手机和头像规则前。
-    if (contains(_groupChatAvatars) ||
-        p.isWithin(p.join(_root, 'avatars', 'group_chat'), normalized) ||
-        p.basename(normalized).startsWith('group_avatar_')) {
-      return StorageImageKind.groupChatAvatar;
-    }
-    if (p.isWithin(p.join(_root, 'images'), normalized)) {
-      final name = p.basename(normalized);
-      if (name.startsWith('conversation_background_')) {
-        return StorageImageKind.temporaryBackground;
-      }
-    }
-    // 小手机（朋友圈 / 微信）的图也落在 avatars 目录，必须抢在头像规则前面，
-    // 否则会被按目录判成「头像与背景」。
-    if (contains(_phone)) return StorageImageKind.phone;
     if (contains(_appearance) ||
         p.isWithin(p.join(_root, 'avatars'), normalized)) {
       return StorageImageKind.avatar;
@@ -399,12 +363,6 @@ class _AttachmentReferences {
   final appearance = <String>{};
   final tools = <String>{};
   final chat = <String>{};
-  final temporaryBackgrounds = <String>{};
-
-  /// 小手机（朋友圈 / 微信，以及以后同类功能）用的图。
-  final phone = <String>{};
-  /// 群聊角色头像（090，从对话 extras 的 groupChat.config 收集）。
-  final groupChatAvatars = <String>{};
   final protected = <String>{};
   final conversations = <String, Map<String, String>>{};
   final pending = <String, int>{};
@@ -444,42 +402,6 @@ String resolveStorageSessionReference(
     );
   }
   return uri;
-}
-
-const _imageFileExtensions = {
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.webp',
-  '.gif',
-  '.bmp',
-  '.heic',
-  '.heif',
-};
-
-/// Collects every string inside a stored extras payload that looks like an
-/// image path. Used by the 小手机 scan, where features keep their own key names
-/// (moment.assets, wechat.*, …) and only the value shape is shared.
-Iterable<String> _imageReferencesIn(Object? value) sync* {
-  if (value is String) {
-    final text = value.trim();
-    if (text.isEmpty) return;
-    final lower = text.toLowerCase();
-    if (!_imageFileExtensions.any(lower.endsWith)) return;
-    yield text;
-    return;
-  }
-  if (value is Map) {
-    for (final entry in value.values) {
-      yield* _imageReferencesIn(entry);
-    }
-    return;
-  }
-  if (value is Iterable) {
-    for (final item in value) {
-      yield* _imageReferencesIn(item);
-    }
-  }
 }
 
 Iterable<String> _paths(String uri, String root) sync* {
@@ -679,85 +601,6 @@ _AttachmentReferences _readReferences(
         .isNotEmpty;
     void associate(String uri, String id, String title) {
       result.conversations.putIfAbsent(uri, () => {})[id] = title;
-    }
-
-    // 临时背景：对话自己设定的背景图。键名与 ConversationBackground 保持一致
-    // （background.path / background.mode），此处只读字符串，避免服务层互相引用。
-    // 记进引用表有两个用处：单独归类成「临时背景」；算作使用中，
-    // 免得「清理未使用」把正在用的背景图删掉。
-    for (final row in database.select(
-      'SELECT id, title, extras_json FROM conversation_rows '
-      "WHERE instr(extras_json, 'background.path') > 0",
-    )) {
-      Object? decoded;
-      try {
-        decoded = jsonDecode(row['extras_json'] as String);
-      } on FormatException {
-        continue;
-      }
-      if (decoded is! Map) continue;
-      if (decoded['background.mode'] == 'assistant') continue;
-      final background = decoded['background.path'];
-      if (background is! String) continue;
-      final path = background.trim();
-      if (path.isEmpty) continue;
-      result.temporaryBackgrounds.add(path);
-      associate(path, row['id'] as String, row['title'] as String);
-    }
-
-    // 小手机：朋友圈回、微信用两条隐藏对话的 extras 存图片路径（moment.assets 等）。
-    // 这些图落在 avatars 目录，只按目录判会归成「头像与背景」，引用表里也没有它们，
-    // 会被当成未使用清掉。这里把这类对话存档里所有像图片路径的值都收进「小手机」，
-    // 以后新加的小手机功能只要复用这两条对话，就自动算进来。
-    // 只扫带 moment./wechat. 键的对话，普通对话的临时背景不在此列。
-    for (final row in database.select(
-      'SELECT id, title, extras_json FROM conversation_rows '
-      "WHERE instr(extras_json, '\"moment.') > 0 "
-      "OR instr(extras_json, '\"wechat.') > 0",
-    )) {
-      Object? decoded;
-      try {
-        decoded = jsonDecode(row['extras_json'] as String);
-      } on FormatException {
-        continue;
-      }
-      if (decoded is! Map) continue;
-      final id = row['id'] as String;
-      final title = (row['title'] as String?) ?? '';
-      for (final path in _imageReferencesIn(decoded)) {
-        result.phone.add(path);
-        associate(path, id, title);
-      }
-    }
-
-    // 群聊头像（090）：对话 extras 的 groupChat.config 里各角色的头像路径。
-    // 收进引用表：单独归类成「群聊头像」；算作使用中，免得被清理删掉。
-    for (final row in database.select(
-      'SELECT id, title, extras_json FROM conversation_rows '
-      "WHERE instr(extras_json, 'groupChat.config') > 0",
-    )) {
-      Object? decoded;
-      try {
-        decoded = jsonDecode(row['extras_json'] as String);
-      } on FormatException {
-        continue;
-      }
-      if (decoded is! Map) continue;
-      final config = decoded['groupChat.config'];
-      if (config is! Map) continue;
-      final roles = config['roles'];
-      if (roles is! List) continue;
-      final id = row['id'] as String;
-      final title = (row['title'] as String?) ?? '';
-      for (final role in roles) {
-        if (role is! Map) continue;
-        final avatar = role['avatar'];
-        if (avatar is! String) continue;
-        final path = avatar.trim();
-        if (path.isEmpty) continue;
-        result.groupChatAvatars.add(path);
-        associate(path, id, title);
-      }
     }
 
     // Read every version and fork one row at a time. Tool payloads can be large.

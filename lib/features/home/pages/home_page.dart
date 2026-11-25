@@ -2086,6 +2086,7 @@ class _HomePageState extends State<HomePage>
       }
     }
 
+    String? selectedId;
     if (PlatformUtils.isDesktop) {
       selectedId = await showDesktopMiniMapPopover(
         context,

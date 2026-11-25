@@ -39,6 +39,18 @@ import '../widgets/windows_data_directory_tile.dart';
 import 'package:Kelivo/theme/app_semantic_colors.dart';
 import 'package:Kelivo/shared/widgets/section_card.dart';
 
+Set<String>? _conversationIdsOrNull(BuildContext context) {
+  try {
+    return context
+        .read<ChatService>()
+        .getAllConversations()
+        .map((conversation) => conversation.id)
+        .toSet();
+  } catch (_) {
+    return null;
+  }
+}
+
 class StorageSpacePage extends StatefulWidget {
   const StorageSpacePage({
     super.key,
