@@ -168,7 +168,7 @@ class _CreationComposerState extends State<CreationComposer> {
       text: next,
       selection: TextSelection.collapsed(offset: start + text.length),
     );
-    state.updatePrompt(widget.topicId, next);
+    _controller.updatePrompt(widget.topicId, next);
   }
 
   Future<void> _send() async {
@@ -257,7 +257,7 @@ class _CreationComposerState extends State<CreationComposer> {
         text: translated,
         selection: TextSelection.collapsed(offset: translated.length),
       );
-      state.updatePrompt(widget.topicId, translated);
+      _controller.updatePrompt(widget.topicId, translated);
       if (mounted) setState(() {});
     } catch (e) {
       showAppSnackBar(
@@ -679,7 +679,7 @@ class _CreationComposerState extends State<CreationComposer> {
                                               TextCapitalization.sentences,
                                           onChanged: (value) {
                                             _dismissEnhancement();
-                                            state.updatePrompt(
+                                            _controller.updatePrompt(
                                               widget.topicId,
                                               value,
                                             );
