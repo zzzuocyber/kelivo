@@ -3,7 +3,7 @@ import 'package:markstream/markstream_core.dart';
 
 import '../../../core/models/assistant.dart';
 import '../../../core/models/assistant_regex.dart';
-import '../../../core/database/generation_run.dart';
+import '../../../shared/cache/byte_lru_cache.dart';
 import '../../../utils/assistant_regex.dart';
 import '../../../utils/protected_text.dart';
 import '../../../utils/source_text_map.dart';
@@ -92,7 +92,73 @@ class ConversationFindService {
     return result;
   }
 
-  List<ConversationFindHit> _match(
+  /// One snippet per matching message, in timeline order.
+  Stream<List<ConversationFindPreview>> searchPreviews(
+    Stream<List<ConversationFindCandidate>> candidates,
+    String query, {
+    ConversationFindCache? cache,
+    bool Function()? isCurrent,
+    ConversationFindCandidate Function(ConversationFindCandidate)?
+    liveCandidate,
+  }) => _searchBatches(
+    candidates,
+    query.trim(),
+    defaultFindOptions,
+    cache: cache,
+    previewsOnly: true,
+    isCurrent: isCurrent,
+    liveCandidate: liveCandidate,
+  ).map((batch) => batch.previews).where((batch) => batch.isNotEmpty);
+  /// Release each batch after processing it. Superseded queries stop reading
+  /// pages, and preview callers can display results as soon as a page matches.
+  Stream<_FindBatch> _searchBatches(
+    Stream<List<ConversationFindCandidate>> candidates,
+    String query,
+    FindOptions options, {
+    required ConversationFindCache? cache,
+    required bool previewsOnly,
+    bool Function()? isCurrent,
+    ConversationFindCandidate Function(ConversationFindCandidate)?
+    liveCandidate,
+  }) async* {
+    if (query.trim().isEmpty || isCurrent?.call() == false) return;
+    final entries = cache?._forPresentation(this);
+    _FindCacheKey key(ConversationFindCandidate row) =>
+        (row.id, options.matchCase, options.thinking);
+    await for (final batch in candidates) {
+      if (isCurrent?.call() == false) return;
+      final rows = liveCandidate == null
+          ? batch
+          : batch.map(liveCandidate).toList();
+      final inputs = [
+        for (final row in rows)
+          (row: row, cached: row.streaming ? null : entries?.get(key(row))),
+      ];
+      final matches = await compute(_matchBatch, (
+        service: this,
+        rows: inputs,
+        query: query,
+        options: options,
+        previewsOnly: previewsOnly,
+        projectionBudget: entries == null ? 0 : _findCacheBytes - entries.bytes,
+      ));
+      if (isCurrent?.call() == false) return;
+      if (entries != null) {
+        for (final row in rows) {
+          if (matches.projections[row.id] case final projection?) {
+            // A full timeline scan must not evict every reusable entry on
+            // each keystroke in a conversation larger than the budget.
+            if (entries.bytes + projection.bytes <= _findCacheBytes) {
+              entries.put(key(row), _CachedFindText(row, projection));
+            }
+          }
+        }
+      }
+      yield matches;
+      if (isCurrent?.call() == false) return;
+    }
+  }
+  Iterable<_FindText> _project(
     ConversationFindCandidate row,
     _FindPattern pattern,
     bool thinking,
@@ -263,11 +329,8 @@ class ConversationFindService {
     );
     late final semantic = uiSearchableText(
       message,
-      row.surfaces.isEmpty &&
-              !message.isStreaming &&
-              message.generationState == GenerationRunState.completed
-          ? initialUiSearchText(message)
-          : row.surfaces,
+      row.surfaces,
+      projectMissingSurfaces: true,
     );
     late final surfaces = {
       for (final surface in semantic.surfaces) surface.surfaceKey: surface,
