@@ -23095,6 +23095,7 @@
   "displaySettingsGroupAppearance": "Appearance",
   "displaySettingsGroupBackgroundInput": "Background & Input",
   "displaySettingsGroupChatBehavior": "Chat Behavior",
+  "displaySettingsGroupFonts": "Fonts",
   "displaySettingsGroupSystem": "System",
 
   "@displaySettingsGroupAppearance": {

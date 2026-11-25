@@ -17276,6 +17276,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get displaySettingsGroupChatBehavior => '聊天行为';
 
   @override
+  @override
+  String get displaySettingsGroupFonts => '字体';
+
   String get displaySettingsGroupSystem => '系统';
 
   @override

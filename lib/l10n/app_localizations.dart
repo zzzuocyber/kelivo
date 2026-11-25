@@ -31067,6 +31067,11 @@ abstract class AppLocalizations {
   /// Group title for system-level settings.
   ///
   /// In en, this message translates to:/n  /// **'System'**
+  /// Group title for font settings.
+  ///
+  /// In en, this message translates to:/n  /// **'Fonts'**
+  String get displaySettingsGroupFonts;
+
   String get displaySettingsGroupSystem;
 
   /// Group title for model and service provider settings.

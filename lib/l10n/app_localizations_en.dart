@@ -17818,6 +17818,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get displaySettingsGroupChatBehavior => 'Chat Behavior';
 
   @override
+  @override
+  String get displaySettingsGroupFonts => 'Fonts';
+
   String get displaySettingsGroupSystem => 'System';
 
   @override

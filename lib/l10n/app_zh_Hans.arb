@@ -6421,6 +6421,7 @@
   "displaySettingsGroupAppearance": "外观",
   "displaySettingsGroupBackgroundInput": "背景与输入",
   "displaySettingsGroupChatBehavior": "聊天行为",
+  "displaySettingsGroupFonts": "字体",
   "displaySettingsGroupSystem": "系统",
   "settingsPageGroupModelInterfaces": "模型与接口",
   "settingsPageGroupAssistantCapabilities": "助手能力",
