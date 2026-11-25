@@ -1030,11 +1030,18 @@ abstract final class StorageUsageService {
       (await AppDirectories.getAppDataDirectory()).path,
       AppDatabase.databaseFileName,
     );
+    // TransientAttachmentSnapshot holds function readers, which are not
+    // sendable to an isolate. Resolve them into plain maps here (on the main
+    // isolate) before spawning, otherwise Isolate.run throws
+    // "Illegal argument in isolate message: object is unsendable - _Future".
+    final transientReferences = transient.resolve();
+    final effectiveGenerationActive =
+        generationActive || transient.generationActive;
     return Isolate.run(() {
       final usage = StorageAttachmentUsage.readInWorker(databasePath, root)
         ..includeConversations(
-          transient.resolve(),
-          generationActive: generationActive || transient.generationActive,
+          transientReferences,
+          generationActive: effectiveGenerationActive,
         )
         ..includeConversations(additionalReferences);
       StorageFileEntry inspect(StorageFileEntry file, {required bool image}) {

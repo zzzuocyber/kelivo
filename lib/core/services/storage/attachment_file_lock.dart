@@ -79,7 +79,9 @@ final class AttachmentFileLock {
   static Future<Map<String, Map<String, String>>>
   readTransientReferences() async {
     final snapshot = captureTransient();
-    return snapshot._readers.isEmpty ? {} : Isolate.run(snapshot.resolve);
+    // The readers are closures and cannot be sent to an isolate (they capture
+    // Futures). Resolving is a cheap in-memory map merge, so do it here.
+    return snapshot.resolve();
   }
 
   final Completer<void> _released;

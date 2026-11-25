@@ -66,11 +66,14 @@ class StorageAttachmentUsage {
       AppDatabase.databaseFileName,
     );
     final transient = AttachmentFileLock.captureTransient();
+    // Readers are closures (unsendable to an isolate). Resolve on the caller.
+    final transientReferences = transient.resolve();
+    final transientGenerationActive = transient.generationActive;
     return Isolate.run(
       () => readInWorker(databasePath, root, includeMessages: includeMessages)
         ..includeConversations(
-          transient.resolve(),
-          generationActive: transient.generationActive,
+          transientReferences,
+          generationActive: transientGenerationActive,
         ),
     );
   }
@@ -153,6 +156,10 @@ class StorageAttachmentUsage {
       AppDatabase.databaseFileName,
     );
     final transient = AttachmentFileLock.captureTransient();
+    // Readers are closures (unsendable to an isolate). Resolve on the caller.
+    final transientReferences = transient.resolve();
+    final transientGenerationActive =
+        generationActive || transient.generationActive;
     return Isolate.run(() {
       final database = File(databasePath).existsSync()
           ? sqlite3.open(databasePath, mode: OpenMode.readWrite)
@@ -167,8 +174,8 @@ class StorageAttachmentUsage {
               : _readReferences(database, true, root),
         );
         usage.includeConversations(
-          transient.resolve(),
-          generationActive: generationActive || transient.generationActive,
+          transientReferences,
+          generationActive: transientGenerationActive,
         );
         final protected = usage._resolveSet(protectedPaths);
         final roots = [
@@ -227,6 +234,9 @@ class StorageAttachmentUsage {
     final transient = includeOrphans
         ? AttachmentFileLock.captureTransient()
         : null;
+    // Readers are closures (unsendable to an isolate). Resolve on the caller.
+    final transientReferences = transient?.resolve() ?? const {};
+    final transientGenerationActive = transient?.generationActive ?? false;
     return WorkspaceFileCoordinator.run(
       sessions.path,
       () => Isolate.run(() {
@@ -250,8 +260,8 @@ class StorageAttachmentUsage {
                 : _readReferences(database, true, root),
           );
           usage.includeConversations(
-            transient!.resolve(),
-            generationActive: transient.generationActive,
+            transientReferences,
+            generationActive: transientGenerationActive,
           );
           usage._protected.addAll(usage._resolveSet(protectedPaths));
           final ids = database == null
