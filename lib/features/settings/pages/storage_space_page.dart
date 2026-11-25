@@ -18,6 +18,10 @@ import '../../../core/services/media/media_generation_runner.dart';
 import '../../../core/services/native_file_save.dart';
 import '../../../core/services/storage/storage_usage_service.dart';
 import '../../../core/services/storage/storage_attachment_usage.dart';
+import '../../../core/models/media_creation.dart';
+import '../../../core/database/app_database.dart';
+import '../../media/providers/media_creation_controller.dart';
+import '../../media/widgets/creation_lightbox.dart';
 import '../../../icons/lucide_adapter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/ios_checkbox.dart';
@@ -1651,6 +1655,252 @@ class _CreationStorageCleanupState extends State<_CreationStorageCleanup> {
   }
 }
 
+/// Creation artwork manager: check individual generations and force-delete
+/// them, mirroring the file page's checkbox + `force: true` delete flow.
+/// "In use" (referenced by a chat/batch) does not protect an explicitly
+/// selected artwork — deleting it leaves a broken image in that chat, same as
+/// the file page warning.
+class _CreationUploadManager extends StatefulWidget {
+  const _CreationUploadManager({
+    super.key,
+    required this.category,
+    required this.title,
+    required this.subtitle,
+    required this.hint,
+    required this.fmtBytes,
+    required this.refreshReport,
+    this.actions,
+  });
+
+  final StorageUsageCategory category;
+  final String title;
+  final String subtitle;
+  final String hint;
+  final String Function(int) fmtBytes;
+  final Future<void> Function() refreshReport;
+  final Widget? actions;
+
+  @override
+  State<_CreationUploadManager> createState() => _CreationUploadManagerState();
+}
+
+class _CreationUploadManagerState extends State<_CreationUploadManager> {
+  bool _deleting = false;
+  final Set<String> _selected = <String>{};
+
+  bool get _selectMode => _selected.isNotEmpty;
+
+  List<GenerationItemRow> _currentItems() {
+    final media = context.read<MediaCreationController?>();
+    return media == null
+        ? const <GenerationItemRow>[]
+        : media.galleryItems(CreationGalleryFilter.all, '');
+  }
+
+  void _toggle(String id) {
+    if (_deleting) return;
+    setState(() {
+      if (!_selected.remove(id)) _selected.add(id);
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(_currentItems().map((e) => e.id));
+    });
+  }
+
+  void _clearSelection() {
+    setState(() => _selected.clear());
+  }
+
+  Future<void> _deleteSelected() async {
+    final runner = context.read<MediaGenerationRunner?>();
+    if (_selected.isEmpty || _deleting || runner == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    final targets = _currentItems()
+        .where((e) => _selected.contains(e.id))
+        .toList();
+    final count = targets.length;
+    if (count == 0) return;
+    final ok = await showAppDialog<bool>(
+      context,
+      maxWidth: 420,
+      child: Builder(
+        builder: (ctx) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.storageAttachmentDeleteConfirm(count)),
+              const SizedBox(height: 8),
+              Text(
+                '标着「使用中」的创作图也会一起删掉。删掉后，聊天记录里对应的图片会显示图片破损。',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  IosTileButton(
+                    label: l10n.homePageCancel,
+                    icon: Lucide.X,
+                    onTap: () => Navigator.of(ctx).pop(false),
+                  ),
+                  IosTileButton(
+                    label: l10n.homePageDelete,
+                    icon: Lucide.Trash2,
+                    backgroundColor: Theme.of(ctx).colorScheme.error,
+                    onTap: () => Navigator.of(ctx).pop(true),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      final deleted = await StorageUsageService.deleteCreationItems(
+        runner,
+        items: targets,
+      );
+      if (!mounted) return;
+      _clearSelection();
+      showAppSnackBar(
+        context,
+        message: deleted < count
+            ? l10n.storageSpaceDeletedUploadsPartial(deleted, count - deleted)
+            : l10n.storageSpaceDeletedUploadsDone(deleted),
+        type: NotificationType.success,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        message: l10n.storageSpaceClearFailed(error.toString()),
+        type: NotificationType.error,
+      );
+    }
+    if (mounted) setState(() => _deleting = false);
+    await widget.refreshReport();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch the controller so the grid refreshes when generation items change.
+    context.watch<MediaCreationController?>();
+    final items = _currentItems();
+    final ids = items.map((e) => e.id).toSet();
+    _selected.retainWhere(ids.contains);
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.title,
+          style: TextStyle(fontSize: 16, fontWeight: AppFontWeights.emphasis),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          widget.subtitle,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.hint,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (widget.actions != null) widget.actions!,
+        if (widget.actions != null) const SizedBox(height: 14),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            IosTileButton(
+              label: _selectMode
+                  ? l10n.storageSpaceClearSelection
+                  : l10n.storageSpaceSelectAll,
+              icon: _selectMode ? Lucide.XCircle : Lucide.CheckSquare,
+              backgroundColor: cs.primary,
+              enabled: !_deleting && items.isNotEmpty,
+              onTap: _selectMode ? _clearSelection : _selectAll,
+            ),
+            IosTileButton(
+              label: l10n.homePageDelete,
+              icon: Lucide.Trash2,
+              backgroundColor: cs.error,
+              enabled: !_deleting && _selected.isNotEmpty,
+              onTap: _deleteSelected,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: items.isEmpty
+              ? Center(child: Text(l10n.workspaceFilesEmpty))
+              : GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    final selected = _selected.contains(item.id);
+                    return GestureDetector(
+                      onTap: () => _toggle(item.id),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CreationMediaCover(
+                              item,
+                              thumbnail: true,
+                              playOverlay: false,
+                            ),
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: IosCheckbox(
+                                value: selected,
+                                size: 20,
+                                hitTestSize: 22,
+                                borderWidth: 1.6,
+                                activeColor: cs.primary,
+                                borderColor: cs.primary.withValues(alpha: 0.55),
+                                onChanged: (_) => _toggle(item.id),
+                                enableHaptics: false,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CategoryDetail extends StatelessWidget {
   const _CategoryDetail({
     required this.category,
@@ -1850,6 +2100,19 @@ class _CategoryDetail extends StatelessWidget {
         fmtBytes: fmtBytes,
         clearing: clearing,
         refreshReport: refreshReport,
+      );
+    }
+
+    if (category.key == StorageUsageCategoryKey.creations) {
+      return _CreationUploadManager(
+        key: ValueKey(category.key),
+        category: category,
+        title: title,
+        subtitle: subtitle,
+        hint: hint,
+        fmtBytes: fmtBytes,
+        refreshReport: refreshReport,
+        actions: actions,
       );
     }
 

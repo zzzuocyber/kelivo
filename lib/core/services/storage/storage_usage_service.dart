@@ -837,6 +837,36 @@ abstract final class StorageUsageService {
     return removed;
   }
 
+  /// Force-delete the given creation items by id, regardless of whether they
+  /// are still referenced by a chat or a batch. Mirrors the file page's
+  /// `deleteUploadFiles(force: true)`: the user explicitly picked these, so
+  /// "in use" does not protect them. Uses the same locked, recoverable
+  /// per-item delete as the creation gallery.
+  static Future<int> deleteCreationItems(
+    MediaGenerationRunner runner, {
+    required List<GenerationItemRow> items,
+  }) async {
+    await runner.initialized;
+    await runner.recoverBatchDeletions();
+    final repository = runner.repository;
+    final version = repository.replacementVersion;
+    var removed = 0;
+    for (final item in items) {
+      await AttachmentFileLock.synchronized(() async {
+        if (!repository.canWrite || version != repository.replacementVersion) {
+          throw StateError('Creation history changed during cleanup');
+        }
+        if (!await repository.hasItem(item.id)) return;
+        await runner.files.deleteItemAndRecord(
+          item,
+          () => repository.deleteItem(item.id),
+        );
+        removed++;
+      });
+    }
+    return removed;
+  }
+
   static Future<void> clearCache({required bool avatarsOnly}) async {
     await AvatarCache.clearCache(() async {
       if (avatarsOnly) {
