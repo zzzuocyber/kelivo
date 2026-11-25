@@ -18,9 +18,8 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/backup_reminder_provider.dart';
 import '../../../core/models/chat_item.dart';
 import '../../../core/providers/user_provider.dart';
-import '../../translate/pages/translate_page.dart';
-import '../../moment/moment_phone_page.dart';
 import '../../backup/pages/backup_page.dart';
+import 'sidebar_tools_sheet.dart';
 import '../../../core/providers/assistant_provider.dart';
 import '../../../core/providers/update_provider.dart';
 import '../../../core/models/assistant.dart';
@@ -2229,9 +2228,7 @@ class _SideDrawerState extends State<SideDrawer> with TickerProviderStateMixin {
       case SidebarEntry.history:
         unawaited(_openHistory(desktop: false));
       case SidebarEntry.translate:
-        Navigator.of(
-          context,
-        ).push<void>(MaterialPageRoute(builder: (_) => const TranslatePage()));
+        showSidebarToolsSheet(context);
       case SidebarEntry.search:
       case SidebarEntry.storage:
         break;

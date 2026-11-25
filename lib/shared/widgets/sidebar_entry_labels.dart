@@ -16,7 +16,7 @@ extension SidebarEntryLabels on SidebarEntry {
     SidebarEntry.search => Lucide.Search,
     SidebarEntry.media => Lucide.Palette,
     SidebarEntry.history => Lucide.History,
-    SidebarEntry.translate => Lucide.Languages,
+    SidebarEntry.translate => Lucide.Wrench,
     SidebarEntry.storage => Lucide.Folder,
   };
 }
