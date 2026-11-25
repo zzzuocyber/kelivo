@@ -23,7 +23,6 @@ final class BusinessKeyRegistry {
   static const balanceRefreshIntervalKey = 'balance_refresh_interval_v1';
   static const balanceRefreshOnReplyKey = 'balance_refresh_on_reply_v1';
   static const codexClientVersionCacheKey = 'codex_client_version_v1';
-  static const modelListMetadataCacheKey = 'model_list_metadata_v1';
   static const mobileSidebarStyleKey = 'mobile_sidebar_style_v1';
   static const mobileSidebarBlockOrderKey = 'mobile_sidebar_block_order_v1';
   static const mobileSidebarEntriesKey = 'mobile_sidebar_entries_v1';

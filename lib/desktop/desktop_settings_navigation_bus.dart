@@ -33,12 +33,11 @@ class DesktopSettingsNavigationBus {
     _controller.add(DesktopSettingsNavigationTarget.topicPosition);
   }
 
-  void openTopicPosition() =>
-      _open(DesktopSettingsNavigationTarget.topicPosition);
-  void openBackup() => _open(DesktopSettingsNavigationTarget.backup);
-  void openMcp() => _open(DesktopSettingsNavigationTarget.mcp);
-  void openProviders() => _open(DesktopSettingsNavigationTarget.providers);
-  void openFal() => _open(DesktopSettingsNavigationTarget.fal);
-  void openDefaultModel() =>
-      _open(DesktopSettingsNavigationTarget.defaultModel);
+  void openBackup() {
+    _controller.add(DesktopSettingsNavigationTarget.backup);
+  }
+
+  void openMcp() {
+    _controller.add(DesktopSettingsNavigationTarget.mcp);
+  }
 }

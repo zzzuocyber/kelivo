@@ -38,6 +38,7 @@ import '../../../core/providers/quick_phrase_provider.dart';
 import '../../../core/models/memory_entry.dart';
 import '../../../core/providers/memory_provider.dart';
 import '../../../core/providers/memory_provider_v2.dart';
+import '../../settings/widgets/bubble_scheme_widgets.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/media/media_models.dart';
 import '../../../core/services/chat/chat_service.dart';

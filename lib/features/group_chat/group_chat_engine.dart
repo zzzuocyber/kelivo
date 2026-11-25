@@ -75,7 +75,6 @@ class GroupChatEngine {
       ],
       builtInToolMode: BuiltInToolMode.none,
       skipImageParsing: true,
-      allowImagesApiRouting: false,
       textOnly: true,
       reasoning: _reasoningFor(role),
       requestTimeout: const Duration(minutes: 5),

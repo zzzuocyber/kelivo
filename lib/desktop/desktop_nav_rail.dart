@@ -9,6 +9,7 @@ import '../core/providers/settings_provider.dart';
 import 'user_profile_dialog.dart';
 import '../icons/lucide_adapter.dart' as lucide;
 import '../shared/widgets/avatar_image.dart';
+import '../utils/sandbox_path_resolver.dart';
 import '../shared/widgets/sliding_segmented_tabs.dart';
 import '../theme/app_font_weights.dart';
 import 'widgets/desktop_pane_surface.dart';

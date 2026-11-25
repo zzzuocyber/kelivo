@@ -217,10 +217,6 @@ class ChatInputBarController {
     _state = null;
   }
 
-  bool get allowImagesApiRouting =>
-      _state?._allowImagesApiRouting ??
-      _pendingDraft?.allowImagesApiRouting ??
-      true;
   bool get isAttached => _state != null;
   bool get hasDraftMedia =>
       _state?._hasDraftMedia ??

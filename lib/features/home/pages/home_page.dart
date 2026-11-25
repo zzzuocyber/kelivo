@@ -2086,28 +2086,6 @@ class _HomePageState extends State<HomePage>
       }
     }
 
-    Stream<List<ConversationFindPreview>> search(
-      String query,
-      ConversationFindWorker worker,
-    ) {
-      bool current() => worker.isCurrent && inConversation();
-      if (!current()) return const Stream.empty();
-      final finder = _findService();
-      return finder.searchPreviews(
-        context.read<ChatService>().conversationFindCandidates(
-          conversation,
-          isCurrent: current,
-          prefilter: finder.previewPrefilter(query),
-          worker: worker,
-        ),
-        query,
-        worker: worker,
-        cache: _findCache,
-        isCurrent: current,
-        liveCandidate: _findSnapshot,
-      );
-    }
-    MiniMapSelection? selected;
     if (PlatformUtils.isDesktop) {
       selectedId = await showDesktopMiniMapPopover(
         context,

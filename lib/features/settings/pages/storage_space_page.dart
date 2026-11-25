@@ -40,9 +40,14 @@ import 'package:Kelivo/theme/app_semantic_colors.dart';
 import 'package:Kelivo/shared/widgets/section_card.dart';
 
 class StorageSpacePage extends StatefulWidget {
-  const StorageSpacePage({super.key, this.embedded = false});
+  const StorageSpacePage({
+    super.key,
+    this.embedded = false,
+    this.active = true,
+  });
 
   final bool embedded;
+  final bool active;
 
   @override
   State<StorageSpacePage> createState() => _StorageSpacePageState();
