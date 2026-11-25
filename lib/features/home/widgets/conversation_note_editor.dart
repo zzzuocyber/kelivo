@@ -27,6 +27,9 @@ const conversationNoteAssistantStoreKey = 'note.assistant.v1';
 /// 面板上有几格笔记。
 const conversationNoteSlotCount = 4;
 
+/// 上次打开的笔记格号，按对话存；只看格号，不看格子里有没有内容。
+const conversationNoteLastSlotKey = 'note.last_slot_v1';
+
 String _slotKey(int index) =>
     index == 0 ? conversationNoteKey : '$conversationNoteKey.${index + 1}';
 
@@ -56,10 +59,7 @@ String conversationNoteText(Map<String, dynamic> extras) {
 }
 
 /// 读某个助手名下的四格笔记（跟随助手时用）。
-List<String> readAssistantNotes(
-  BusinessPreferences prefs,
-  String assistantId,
-) {
+List<String> readAssistantNotes(BusinessPreferences prefs, String assistantId) {
   // 必须是可增长的：调用方会直接改其中一格。
   final empty = List<String>.filled(
     conversationNoteSlotCount,
@@ -127,6 +127,13 @@ Future<void> editConversationNote(
           ?.id ??
       '';
   final extras = chat.getConversation(conversationId)?.extras ?? const {};
+  final storedSlot = extras[conversationNoteLastSlotKey];
+  final initialSlot =
+      storedSlot is int &&
+          storedSlot >= 0 &&
+          storedSlot < conversationNoteSlotCount
+      ? storedSlot
+      : 0;
   final initialFollow =
       conversationNoteFollowsAssistant(extras) && assistantId.isNotEmpty;
   await prefs.load();
@@ -178,14 +185,28 @@ Future<void> editConversationNote(
     });
   }
 
+  Future<void> saveLastSlot(int index) async {
+    try {
+      await chat.updateConversationExtras(conversationId, (extras) {
+        final next = Map<String, dynamic>.from(extras);
+        next[conversationNoteLastSlotKey] = index;
+        return next;
+      });
+    } catch (_) {
+      // 记不住页签不影响笔记，静默。
+    }
+  }
+
   await showConversationNoteSheet(
     context,
     initialSlots: await loadSlots(initialFollow),
+    initialSlot: initialSlot,
     followAssistant: initialFollow,
     canFollowAssistant: assistantId.isNotEmpty,
     onToggleFollow: toggleFollow,
     loadSlots: loadSlots,
     onChanged: saveSlot,
+    onSlotChanged: saveLastSlot,
   );
 }
 
@@ -213,11 +234,13 @@ Future<void> _persistNote(
 Future<void> showConversationNoteSheet(
   BuildContext context, {
   required List<String> initialSlots,
+  required int initialSlot,
   required bool followAssistant,
   required bool canFollowAssistant,
   required Future<void> Function(bool follow) onToggleFollow,
   required Future<List<String>> Function(bool follow) loadSlots,
   required Future<void> Function(bool follow, int index, String text) onChanged,
+  required Future<void> Function(int index) onSlotChanged,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -231,11 +254,13 @@ Future<void> showConversationNoteSheet(
     ),
     builder: (_) => _ConversationNoteSheet(
       initialSlots: initialSlots,
+      initialSlot: initialSlot,
       followAssistant: followAssistant,
       canFollowAssistant: canFollowAssistant,
       onToggleFollow: onToggleFollow,
       loadSlots: loadSlots,
       onChanged: onChanged,
+      onSlotChanged: onSlotChanged,
     ),
   );
 }
@@ -251,11 +276,13 @@ class _ConversationNoteSheet extends StatefulWidget {
   });
 
   final List<String> initialSlots;
+  final int initialSlot;
   final bool followAssistant;
   final bool canFollowAssistant;
   final Future<void> Function(bool follow) onToggleFollow;
   final Future<List<String>> Function(bool follow) loadSlots;
   final Future<void> Function(bool follow, int index, String text) onChanged;
+  final Future<void> Function(int index) onSlotChanged;
 
   @override
   State<_ConversationNoteSheet> createState() => _ConversationNoteSheetState();
@@ -273,17 +300,9 @@ class _ConversationNoteSheetState extends State<_ConversationNoteSheet> {
   late bool _follow = widget.followAssistant;
   // builder 给的是内容滚动控制器；面板伸缩要单独建一个。
   final _sheetController = DraggableScrollableController();
-  late int _slot = _firstFilledSlot(widget.initialSlots);
+  late int _slot = widget.initialSlot;
   bool _switching = false;
   Timer? _timer;
-
-  /// 打开时直接落在第一格有内容的笔记上，四格都空才停在 1。
-  static int _firstFilledSlot(List<String> slots) {
-    for (var i = 0; i < slots.length; i++) {
-      if (slots[i].trim().isNotEmpty) return i;
-    }
-    return 0;
-  }
 
   @override
   void dispose() {
@@ -315,6 +334,7 @@ class _ConversationNoteSheetState extends State<_ConversationNoteSheet> {
     // 切走之前先把当前这格存下来，不然刚打的字会跟着计时器丢掉。
     _commit(_slot, _controllers[_slot].text);
     setState(() => _slot = index);
+    widget.onSlotChanged(index);
   }
 
   Future<void> _toggleFollow() async {
@@ -334,7 +354,6 @@ class _ConversationNoteSheetState extends State<_ConversationNoteSheet> {
           _controllers[i].text = text;
           _saved[i] = text;
         }
-        _slot = _firstFilledSlot(slots);
       });
     } finally {
       _switching = false;
