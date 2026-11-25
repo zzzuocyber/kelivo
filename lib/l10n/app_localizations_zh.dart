@@ -17003,6 +17003,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get creationLastFrame => '尾帧';
 
   @override
+  String get creationBothFramesRequired => '请选择首帧和尾帧。';
+
+  @override
   String get creationFirstFrameRequired => '首帧必填，尾帧可选。';
 
   @override
@@ -17200,6 +17203,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get creationFalCatalogHint => '点「获取」浏览 fal 在线模型目录，或点「＋」按端点 ID 手动添加。';
+
+  @override
+  String falUnsupportedInput(String field) {
+    return '此模型需要创作暂不支持的输入字段 $field。';
+  }
+
+  @override
+  String get falUnsupportedOutput => '此模型的返回结果无法保存为创作支持的图片或视频。';
+
+  @override
+  String get falCheckingModel => '正在核对模型…';
+
+  @override
+  String get falInvalidEndpointId => '请输入 fal 端点 ID，例如 fal-ai/flux/dev。';
+
+  @override
+  String get creationOptionalTitle => '为作品命名（可选）';
 
   @override
   String get falCatalogMore => '加载更多模型';
@@ -34778,6 +34798,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get creationLastFrame => '尾帧';
 
   @override
+  String get creationBothFramesRequired => '请选择首帧和尾帧。';
+
+  @override
   String get creationFirstFrameRequired => '首帧必填，尾帧可选。';
 
   @override
@@ -34975,6 +34998,23 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get creationFalCatalogHint => '点「获取」浏览 fal 在线模型目录，或点「＋」按端点 ID 手动添加。';
+
+  @override
+  String falUnsupportedInput(String field) {
+    return '此模型需要创作暂不支持的输入字段 $field。';
+  }
+
+  @override
+  String get falUnsupportedOutput => '此模型的返回结果无法保存为创作支持的图片或视频。';
+
+  @override
+  String get falCheckingModel => '正在核对模型…';
+
+  @override
+  String get falInvalidEndpointId => '请输入 fal 端点 ID，例如 fal-ai/flux/dev。';
+
+  @override
+  String get creationOptionalTitle => '为作品命名（可选）';
 
   @override
   String get falCatalogMore => '加载更多模型';
@@ -52734,6 +52774,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get creationLastFrame => '尾幀';
 
   @override
+  String get creationBothFramesRequired => '請選擇首幀和尾幀。';
+
+  @override
   String get creationFirstFrameRequired => '首幀必填，尾幀可選。';
 
   @override
@@ -52931,6 +52974,23 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get creationFalCatalogHint => '點「取得」瀏覽 fal 線上模型目錄，或點「＋」依端點 ID 手動新增。';
+
+  @override
+  String falUnsupportedInput(String field) {
+    return '此模型需要 $field，但創作功能無法提供。';
+  }
+
+  @override
+  String get falUnsupportedOutput => '此模型不會回傳創作功能可儲存的圖片或影片。';
+
+  @override
+  String get falCheckingModel => '正在檢查模型…';
+
+  @override
+  String get falInvalidEndpointId => '請輸入 fal 端點 ID，例如 fal-ai/flux/dev。';
+
+  @override
+  String get creationOptionalTitle => '為作品命名（選填）';
 
   @override
   String get falCatalogMore => '載入更多模型';
