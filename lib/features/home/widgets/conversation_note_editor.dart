@@ -268,11 +268,13 @@ Future<void> showConversationNoteSheet(
 class _ConversationNoteSheet extends StatefulWidget {
   const _ConversationNoteSheet({
     required this.initialSlots,
+    required this.initialSlot,
     required this.followAssistant,
     required this.canFollowAssistant,
     required this.onToggleFollow,
     required this.loadSlots,
     required this.onChanged,
+    required this.onSlotChanged,
   });
 
   final List<String> initialSlots;
