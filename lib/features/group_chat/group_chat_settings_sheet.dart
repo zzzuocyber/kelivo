@@ -332,6 +332,14 @@ class _ExtensionEntrySheet extends StatelessWidget {
               onTap: () => _showExtensionTranslateInputSheet(context),
             ),
             const SizedBox(height: 4),
+            ToolsSheetRow(
+              key: const ValueKey('extension-creation-translate-entry'),
+              icon: Lucide.WandSparkles,
+              label: '创作输入框翻译',
+              trailing: ToolsSheetRow.chevron(context),
+              onTap: () => _showExtensionCreationTranslateSheet(context),
+            ),
+            const SizedBox(height: 4),
           ],
         ),
       ),
@@ -428,6 +436,55 @@ Future<void> _showExtensionTranslateInputSheet(BuildContext context) {
                 onChanged: (v) =>
                     unawaited(settings.setComposerTranslateIncludeOriginal(v)),
               ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  });
+}
+
+/// 创作输入框翻译：开 / 关二选一，界面不加说明文字。只管创作页输入框。
+Future<void> _showExtensionCreationTranslateSheet(BuildContext context) {
+  return _showGroupChatSheet<void>(context, (ctx) {
+    final settings = ctx.watch<SettingsProvider>();
+    final cs = Theme.of(ctx).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Center(child: _SheetHandle()),
+            const SizedBox(height: 14),
+            const _SheetHeader(
+              icon: Lucide.WandSparkles,
+              title: '创作输入框翻译',
+            ),
+            const SizedBox(height: 10),
+            ToolsSheetRow(
+              icon: Lucide.toggleRight,
+              label: '开启',
+              selected: settings.composerCreationTranslate,
+              trailing: settings.composerCreationTranslate
+                  ? Icon(Lucide.Check, size: 18, color: cs.primary)
+                  : const SizedBox(width: 18),
+              onTap: () =>
+                  unawaited(settings.setComposerCreationTranslate(true)),
+            ),
+            const SizedBox(height: 8),
+            ToolsSheetRow(
+              icon: Lucide.Power,
+              label: '关闭',
+              selected: !settings.composerCreationTranslate,
+              trailing: !settings.composerCreationTranslate
+                  ? Icon(Lucide.Check, size: 18, color: cs.primary)
+                  : const SizedBox(width: 18),
+              onTap: () =>
+                  unawaited(settings.setComposerCreationTranslate(false)),
             ),
             const SizedBox(height: 16),
           ],
