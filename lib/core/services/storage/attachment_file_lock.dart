@@ -54,8 +54,8 @@ final class AttachmentFileLock {
     Map<String, Map<String, String>> Function()? references,
     required bool Function() active,
   }) {
-    final reader =
-        capture ?? (references == null ? null : () => references);
+    final AttachmentReferenceReader? Function() reader =
+        capture ?? (references == null ? () => null : () => references);
     _transientOwners[owner] = (capture: reader, active: active);
     notifyTransientChanged();
   }
