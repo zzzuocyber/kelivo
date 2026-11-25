@@ -76,6 +76,17 @@ class _CreationComposerState extends State<CreationComposer> {
   // 创作输入框翻译：翻译中标记 + 上次译文（用于按钮翻完变回发送）。
   bool _isTranslating = false;
   String _translatedText = '';
+  // 创作页闪电快捷比例：固定中文短语，点一下插到光标处，走自动模式出比例。
+  static const _ratioPhrases = [
+    '9比16',
+    '9比20',
+    '16比9',
+    '20比9',
+    '4比3',
+    '3比2',
+    '1比2',
+    '2比1',
+  ];
 
   MediaCreationController get _controller =>
       context.read<MediaCreationController>();
@@ -103,6 +114,61 @@ class _CreationComposerState extends State<CreationComposer> {
     _prompt.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  /// 闪电快捷比例：弹固定比例列表，选中把中文短语插到光标处。[anchor] 是按钮 context。
+  Future<void> _showRatioQuickMenu(BuildContext anchor) async {
+    if (!mounted) return;
+    _focus.unfocus();
+    if (anchor.findRenderObject() == null) return;
+    final picked = await showCreationPicker<String>(
+      anchor,
+      desktop: false,
+      title: '快捷比例',
+      builder: (sheet) {
+        final cs = Theme.of(sheet).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final phrase in _ratioPhrases)
+              IosCardPress(
+                focusable: true,
+                onTap: () => Navigator.of(sheet).pop(phrase),
+                baseColor: Colors.transparent,
+                pressedBlendStrength: .055,
+                borderRadius: BorderRadius.circular(12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 42),
+                  child: Row(
+                    children: [
+                      Icon(Lucide.Zap, size: 18, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      Text(phrase, style: const TextStyle(fontSize: 15)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+    if (!mounted || picked == null) return;
+    _insertAtCursor(picked);
+  }
+
+  /// 把 [text] 插到光标处（有选区则替换）。
+  void _insertAtCursor(String text) {
+    final value = _prompt.value;
+    final start = value.selection.start;
+    final end = value.selection.end;
+    final next = value.text.replaceRange(start, end, text);
+    _prompt.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    state.updatePrompt(widget.topicId, next);
   }
 
   Future<void> _send() async {
@@ -486,7 +552,10 @@ class _CreationComposerState extends State<CreationComposer> {
     final unavailable =
         model == null &&
         state.modelsFor(video ? MediaMode.image : MediaMode.video).isEmpty;
-    return ExcludeFocus(
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ExcludeFocus(
       excluding: unavailable,
       child: IgnorePointer(
         ignoring: unavailable,
@@ -996,6 +1065,22 @@ class _CreationComposerState extends State<CreationComposer> {
           ),
         ),
       ),
+    ),
+        // 闪电快捷比例：贴着输入框右上角外侧，跟随输入框长高。
+        PositionedDirectional(
+          top: -13,
+          end: 6,
+          child: Builder(
+            builder: (anchor) => IosIconButton(
+              icon: Lucide.Zap,
+              size: 17,
+              tooltip: '快捷比例',
+              minSize: 30,
+              onTap: () => unawaited(_showRatioQuickMenu(anchor)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
