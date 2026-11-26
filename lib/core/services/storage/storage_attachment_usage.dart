@@ -147,14 +147,19 @@ class StorageAttachmentUsage {
     bool sessionCopies = false,
     bool generationActive = false,
     bool force = false,
+    File? referenceDatabase,
+    Set<String> creationReferenceCopies = const {},
   }) async {
     final targets = paths.toSet();
     if (targets.isEmpty) return {};
     final root = (await AppDirectories.getContentDirectory()).path;
-    final databasePath = p.join(
-      (await AppDirectories.getAppDataDirectory()).path,
-      AppDatabase.databaseFileName,
-    );
+    final databasePath =
+        referenceDatabase?.path ??
+        p.join(
+          (await AppDirectories.getAppDataDirectory()).path,
+          AppDatabase.databaseFileName,
+        );
+    final requireDatabase = referenceDatabase != null;
     final transient = AttachmentFileLock.captureTransient();
     // Readers are closures (unsendable to an isolate). Resolve on the caller.
     final transientReferences = transient.resolve();
@@ -164,6 +169,7 @@ class StorageAttachmentUsage {
       final database = File(databasePath).existsSync()
           ? sqlite3.open(databasePath, mode: OpenMode.readWrite)
           : null;
+      if (requireDatabase && database == null) return <String>{};
       try {
         database?.execute('PRAGMA busy_timeout = 5000');
         database?.execute('BEGIN IMMEDIATE');
@@ -178,6 +184,31 @@ class StorageAttachmentUsage {
           generationActive: transientGenerationActive,
         );
         final protected = usage._resolveSet(protectedPaths);
+        final snapshots = <String>{
+          if (requireDatabase)
+            for (final uri in creationReferenceCopies)
+              if (KelivoFileUri.isGenerationReferenceSnapshot(uri))
+                KelivoFileUri.resolveToAbsolute(uri, root: root)!,
+        };
+        if (snapshots.isNotEmpty) {
+          // A newer edit may have acquired this reference between maintenance passes.
+          final retained = database!.select(
+            r"""
+            SELECT DISTINCT json_extract(r.value,'$.path') AS path
+            FROM generation_batch_rows b,json_each(b.references_json) r
+            WHERE json_extract(r.value,'$.path') IN (SELECT value FROM json_each(?))
+          """,
+            [jsonEncode(creationReferenceCopies.toList())],
+          );
+          for (final row in retained) {
+            snapshots.remove(
+              KelivoFileUri.resolveToAbsolute(
+                row['path'] as String,
+                root: root,
+              ),
+            );
+          }
+        }
         final roots = [
           for (final dir
               in (sessionCopies
@@ -193,14 +224,26 @@ class StorageAttachmentUsage {
         final removed = <String>{};
         for (final path in targets) {
           final normalized = p.normalize(p.absolute(path));
-          if (!roots.any((dir) => p.isWithin(dir, normalized))) continue;
+          final snapshot = snapshots.contains(normalized);
+          if (!snapshot && !roots.any((dir) => p.isWithin(dir, normalized))) {
+            continue;
+          }
           if (FileSystemEntity.typeSync(normalized, followLinks: false) !=
               FileSystemEntityType.file) {
             continue;
           }
           final real = File(normalized).resolveSymbolicLinksSync();
-          if (!realRoots.any((dir) => p.isWithin(dir, real))) continue;
-          if ((!force && (usage.isInUse(normalized) || usage.isInUse(real))) ||
+          if (snapshot) {
+            final expected = p.join(
+              Directory(root).resolveSymbolicLinksSync(),
+              p.relative(normalized, from: root),
+            );
+            if (!p.equals(real, expected)) continue;
+          } else if (!realRoots.any((dir) => p.isWithin(dir, real))) {
+            continue;
+          }
+          if ((!force &&
+                  (usage.isInUse(normalized) || usage.isInUse(real))) ||
               protected.contains(normalized) ||
               protected.contains(real)) {
             continue;
